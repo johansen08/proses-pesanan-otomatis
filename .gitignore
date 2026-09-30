@@ -9,5 +9,5 @@ __pycache__/
 sniff/sniff_output/
 *.cookies.json
 sniff/profil_browser/
-label/
+label-pengiriman/
 riwayat_picklist.*

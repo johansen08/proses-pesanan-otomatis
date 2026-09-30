@@ -1,8 +1,7 @@
 # Standar Struktur & Penamaan Project
 
 Aturan ini dipakai supaya nama folder/file di project ini konsisten dan langsung
-menjelaskan isinya tanpa perlu buka dulu. Berlaku untuk penamaan **baru** ke depan;
-lihat bagian "Kenapa ada yang belum sesuai" untuk pengecualian yang sudah ada.
+menjelaskan isinya tanpa perlu buka dulu. Berlaku untuk penamaan **baru** ke depan.
 
 ## 1. Folder
 
@@ -15,6 +14,7 @@ lihat bagian "Kenapa ada yang belum sesuai" untuk pengecualian yang sudah ada.
     kebetulan formatnya `.xlsx` — nama folder tidak perlu menyebut format file)
   - `laporan/` → **`laporan-sku-spesial/`** (isinya PDF ringkasan SKU spesial, dipisah
     jelas dari `laporan-siap-proses/` supaya tidak tertukar)
+  - `label/` → **`label-pengiriman/`** (isinya PDF label pengiriman per picklist)
 - Folder 1 kata (`docs`, `logs`, `tests`, `sniff`) tidak butuh tanda hubung — aturan
   kebab-case otomatis terpenuhi kalau cuma 1 kata.
 
@@ -49,8 +49,8 @@ aturan kebab-case di atas dan **sengaja tidak diubah** oleh standarisasi ini, ka
   **logika program**, bukan sekadar rapikan folder — mengubahnya berarti mengubah kode
   di `main.py`/`jubelio.py`/`proses_label.py`.
 - Beberapa nama folder di antaranya di-parse ulang oleh kode (mis. `sesi_label_baru()`
-  di `main.py` mencari pola `YYYY-MM-DD_N` di `label/`) — ganti pemisah bisa merusak
-  fungsi itu.
+  di `main.py` mencari pola `YYYY-MM-DD_N` di dalam `label-pengiriman/`) — ganti
+  pemisah bisa merusak fungsi itu.
 
 Kalau suatu saat pola ini mau distandarkan juga, lakukan sebagai perubahan kode
 tersendiri (bukan bagian dari rapi-rapi struktur folder), dan uji dulu lewat
@@ -73,25 +73,7 @@ proses-pesanan-otomatis/
 ├─ sniff/                         # perekam alur Jubelio (tools dev)
 ├─ laporan-siap-proses/           # Excel hasil download Jubelio (dibuat otomatis)
 ├─ laporan-sku-spesial/           # PDF ringkasan SKU spesial (dibuat otomatis)
-├─ label/                         # PDF label pengiriman per picklist (dibuat otomatis)
+├─ label-pengiriman/              # PDF label pengiriman per picklist (dibuat otomatis)
 ├─ logs/                          # log tiap eksekusi (dibuat otomatis)
 └─ riwayat_picklist.xlsx          # riwayat semua picklist
 ```
-
-## 7. Kenapa ada yang belum sesuai
-
-- **`label/`** seharusnya jadi `label-pengiriman/` (biar konsisten dengan
-  `laporan-siap-proses/`/`laporan-sku-spesial/`), tapi rename ini **ditunda** karena
-  saat standarisasi ini dibuat folder tersebut sedang dipakai proses `python.exe`/
-  `menu.bat` yang masih berjalan (tidak aman dipindah sambil ada proses yang mungkin
-  sedang menulis PDF ke dalamnya). Untuk menyelesaikan setelah proses yang berjalan
-  selesai:
-
-  ```powershell
-  cd C:\proses-pesanan-otomatis
-  Rename-Item label label-pengiriman
-  ```
-
-  Lalu di `main.py`, ganti baris `FOLDER_LABEL = ROOT / "label"` menjadi
-  `FOLDER_LABEL = ROOT / "label-pengiriman"` (baris ini sudah ditandai `# TODO`) dan
-  hapus catatan bagian ini setelah selesai.

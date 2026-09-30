@@ -50,7 +50,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label) |
 
 Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
-label per picklist di `label/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
+label per picklist di `label-pengiriman/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
 reguler) di `riwayat_picklist.xlsx`. Lihat [docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md)
 untuk aturan penamaan folder/file.
 
@@ -129,8 +129,8 @@ SESI SORE) = `run.bat --urgent --channel lazada --jalankan` lalu
 (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),
-  bukan SKU — mis. `label/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
-  `label/PICK-000155231_GTL-SICEPAT_2026-09-29_150612.pdf`. Tercatat juga di
+  bukan SKU — mis. `label-pengiriman/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
+  `label-pengiriman/PICK-000155231_GTL-SICEPAT_2026-09-29_150612.pdf`. Tercatat juga di
   `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` / `GTL-SICEPAT`.
 
 ## 2. Proses SKU spesial sampai label pengiriman (`--label`, `proses_label.py`)
@@ -181,7 +181,7 @@ sesi JAM 13.00/SESI SORE, langkah "J&T SPESIAL"/"SPX SPESIAL" = `run.bat --label
 --tanpa-reguler --jalankan` / `run.bat --label --kurir spx --tanpa-reguler --jalankan`
 (satu konfirmasi Y/N per sesi). `uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
-- Label PDF: `label/<PICK-no>_<SKU>_<tanggal>_<jam>.pdf`, mis. `PICK-000155085_BM-AKS27-1_2026-09-29_090947.pdf`
+- Label PDF: `label-pengiriman/<PICK-no>_<SKU>_<tanggal>_<jam>.pdf`, mis. `PICK-000155085_BM-AKS27-1_2026-09-29_090947.pdf`
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
   File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
 - SKU dilewati jika pesanan tersisa < 3, stok kurang, pesanan dari lokasi berbeda,
@@ -231,8 +231,8 @@ REGULER"/"SPX KOMBINASI" = perintah yang sama ditambah `--kurir jnt`/`--kurir sp
 `1QTY-REGULER` / `KOMBINASI-REGULER` (digabung), atau `J&T-1QTY-REGULER` / `SPX-1QTY-REGULER`
 / `J&T-KOMBINASI-REGULER` / `SPX-KOMBINASI-REGULER` (dipisah lewat `--kurir`). Nama file PDF
 tidak boleh memuat simbol `&` (dibuang otomatis), jadi khusus nama file J&T dituliskan `JNT`
-tanpa simbol, mis. `label/PICK-000155300_1QTY-REGULER_...pdf` atau
-`label/PICK-000155301_JNT-1QTY-REGULER_...pdf`.
+tanpa simbol, mis. `label-pengiriman/PICK-000155300_1QTY-REGULER_...pdf` atau
+`label-pengiriman/PICK-000155301_JNT-1QTY-REGULER_...pdf`.
 
 Tiap sesi `menu.bat` (SESI PAGI, JAM 13.00, SESI SORE) menjalankan seluruh langkahnya secara
 berurut dalam satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap sesi ada di
@@ -254,7 +254,7 @@ run.bat --shopee-pagi --jalankan    # sungguhan
 `menu.bat` sesi JAM 13.00, langkah "SPX PAGI (RESI SHOPEE <= 12.00)" = `run.bat --shopee-pagi
 --jalankan` (dijalankan cukup 1x sehari, jangan diulang di SESI SORE). `uji.bat` = versi mode
 uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat: `SHOPEE-PAGI`, mis.
-`label/PICK-000155400_SHOPEE-PAGI_...pdf`.
+`label-pengiriman/PICK-000155400_SHOPEE-PAGI_...pdf`.
 
 ## Jadwal otomatis (Windows Task Scheduler)
 

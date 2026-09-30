@@ -67,10 +67,10 @@ ROOT = Path(__file__).resolve().parent
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
 FOLDER_PDF = ROOT / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
-FOLDER_LABEL = ROOT / "label"    # TODO: rename ke "label-pengiriman" (lihat docs/standar-struktur-proyek.md)
+FOLDER_LABEL = ROOT / "label-pengiriman"
 FILE_RIWAYAT = ROOT / "riwayat_picklist.xlsx"
 
-# Folder sesi aktif di dalam FOLDER_LABEL, mis. "label/2026-09-30_4". Diisi sekali oleh
+# Folder sesi aktif di dalam FOLDER_LABEL, mis. "label-pengiriman/2026-09-30_4". Diisi sekali oleh
 # main() lewat folder_label_sesi() sebelum menu mana pun dijalankan, supaya semua pilihan
 # menu.bat (1-7) dalam 1x jalan menu.bat menyimpan label ke folder sesi yang sama - baru
 # ganti sesi saat menu.bat ditutup & dijalankan ulang (lihat menu.bat: LABEL_SESI_DIR).
