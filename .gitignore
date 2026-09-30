@@ -1,0 +1,12 @@
+.env
+.venv/
+sniff_*.json
+excel/
+laporan/
+logs/
+__pycache__/
+sniff/sniff_output/
+*.cookies.json
+sniff/profil_browser/
+label/
+riwayat_picklist.*
