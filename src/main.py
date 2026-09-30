@@ -104,6 +104,21 @@ def folder_label_sesi() -> Path:
     return folder
 
 
+def dalam_jam_menu(menu: str) -> bool:
+    """Cek apakah jam sekarang ada dalam jendela jam menu proses-harian.bat:
+    "1"=SESI PAGI (07.00-13.00), "2"=JAM 13.00 (13.01-14.00), "3"=SESI SORE
+    (14.01-16.00). Dipakai proses-harian.bat untuk menanyakan konfirmasi kalau
+    menu dijalankan di luar jam yang seharusnya (lihat docs/jadwal-proses.md)."""
+    sekarang = datetime.now().hour * 60 + datetime.now().minute
+    jendela = {
+        "1": (7 * 60, 13 * 60),
+        "2": (13 * 60 + 1, 14 * 60),
+        "3": (14 * 60 + 1, 16 * 60),
+    }
+    awal, akhir = jendela[menu]
+    return awal <= sekarang <= akhir
+
+
 def muat_env(path: Path) -> None:
     """Baca file .env sederhana (KUNCI=nilai) ke environment."""
     if not path.exists():
@@ -121,6 +136,7 @@ def siapkan_log() -> logging.Logger:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M",
         handlers=[
             logging.FileHandler(FOLDER_LOG / f"run_{datetime.now():%Y-%m}.log", encoding="utf-8"),
             logging.StreamHandler(sys.stdout),

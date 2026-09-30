@@ -30,6 +30,8 @@ rem SESI PAGI: J&T dan SPX digabung (seperti semula, dipakai jam
 rem 07.00-11.xx & 18.00-23.00 - lihat JADWAL-PROSES.md)
 rem ============================================================
 :sesi_pagi
+call :cek_jam 1 "SESI PAGI (07.00-13.00)"
+if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio.
 set "yakin="
@@ -60,6 +62,8 @@ rem JAM 13.00: SPX Resi Pagi (resi Shopee <= 12.00) + J&T dan SPX
 rem DIPISAH saat pembuatan picklist (lihat JADWAL-PROSES.md)
 rem ============================================================
 :jam_1300
+call :cek_jam 2 "JAM 13.00 (13.01-14.00)"
+if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio. SPX RESI PAGI cuma 1x sehari.
 set "yakin="
@@ -102,6 +106,8 @@ rem SESI SORE: sama seperti JAM 13.00 tapi TANPA SPX Resi Pagi
 rem (sudah dijalankan jam 13.00, cukup 1x sehari)
 rem ============================================================
 :sesi_sore
+call :cek_jam 3 "SESI SORE (14.01-16.00)"
+if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio.
 set "yakin="
@@ -135,3 +141,20 @@ echo.
 echo SESI SORE selesai.
 pause
 goto menu
+
+rem ============================================================
+rem Cek jam sekarang vs jendela jam menu yang dipilih (lihat
+rem dalam_jam_menu() di src\main.py & docs\jadwal-proses.md).
+rem %1 = kode menu ("1"/"2"/"3"), %2 = label jendela untuk pesan.
+rem errorlevel 1 -> user pilih batal (kembali ke menu).
+rem ============================================================
+:cek_jam
+set "JAM_OK="
+for /f "delims=" %%i in ('".venv\Scripts\python.exe" -c "import sys; sys.path.insert(0, 'src'); from main import dalam_jam_menu; print(1 if dalam_jam_menu('%~1') else 0)"') do set "JAM_OK=%%i"
+if "%JAM_OK%"=="1" exit /b 0
+echo.
+echo PERINGATAN: sekarang di luar jam %~2.
+set "lanjut_jam="
+set /p "lanjut_jam=Apakah anda tidak salah memilih menu? (Y/N): "
+if /i "%lanjut_jam%"=="Y" exit /b 0
+exit /b 1
