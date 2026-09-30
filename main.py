@@ -64,10 +64,10 @@ from proses_label import durasi
 from sku_spesial import baca_excel, buat_pdf, hitung_sku_spesial, resi_kandidat
 
 ROOT = Path(__file__).resolve().parent
-FOLDER_EXCEL = ROOT / "excel"
-FOLDER_PDF = ROOT / "laporan"
+FOLDER_EXCEL = ROOT / "laporan-siap-proses"
+FOLDER_PDF = ROOT / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
-FOLDER_LABEL = ROOT / "label"
+FOLDER_LABEL = ROOT / "label"    # TODO: rename ke "label-pengiriman" (lihat docs/standar-struktur-proyek.md)
 FILE_RIWAYAT = ROOT / "riwayat_picklist.xlsx"
 
 # Folder sesi aktif di dalam FOLDER_LABEL, mis. "label/2026-09-30_4". Diisi sekali oleh

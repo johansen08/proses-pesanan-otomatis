@@ -88,7 +88,7 @@ pesanan yang sudah "diambil" urgent tidak ikut terhitung sebagai kandidat
 SKU spesial (kebijakan operasional tim, `menu.bat` sudah mengikuti urutan
 ini).
 
-Detail masing-masing alur & opsi `--kurir`: lihat [README.md](README.md).
+Detail masing-masing alur & opsi `--kurir`: lihat [README.md](../README.md).
 
 ## Jadwal harian (pagi–sore, sudah berjalan pakai program)
 
@@ -141,7 +141,7 @@ jalan (tidak ada pengulangan "setelah transfer").
   Pagi) — baik saat J&T/SPX digabung (SESI PAGI) maupun dipisah (JAM 13.00,
   SESI SORE). Ini sudah diimplementasikan di kode (`TIPE_PESANAN_FILTER`,
   otomatis aktif setiap kali filter kurir SPX atau channel Shopee dipakai —
-  lihat bagian 3 [README.md](README.md)). Setiap pengembangan baru wajib
+  lihat bagian 3 [README.md](../README.md)). Setiap pengembangan baru wajib
   mempertahankan aturan ini.
 - **Penentuan SKU "spesial"** (dari Excel, `hitung_sku_spesial` di
   `sku_spesial.py`) **selalu** menggabung resi J&T+SPX (minimal 3 resi

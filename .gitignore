@@ -1,10 +1,11 @@
 .env
 .venv/
 sniff_*.json
-excel/
-laporan/
+laporan-siap-proses/
+laporan-sku-spesial/
 logs/
 __pycache__/
+.pytest_cache/
 sniff/sniff_output/
 *.cookies.json
 sniff/profil_browser/

@@ -143,7 +143,7 @@ PDF **hanya** berisi (sesuai implementasi saat ini di `sku_spesial.py::buat_pdf`
 Tanpa judul, nama file sumber, keterangan syarat, atau ringkasan penyaringan
 (ringkasan penyaringan dicatat di file log saja).
 
-Nama file: `laporan/SKU_Spesial_YYYY-MM-DD_HHMM.pdf`.
+Nama file: `laporan-sku-spesial/SKU_Spesial_YYYY-MM-DD_HHMM.pdf`.
 
 > **Sumber angka di tabel** (implementasi di `main.py`, bukan bagian 8 di bawah): dasarnya
 > **kandidat** hasil algoritma bagian 4 (langkah 1-8 dokumen ini) untuk `main.py` biasa dan
@@ -274,7 +274,7 @@ Setelah download, cek: file ada, ukuran > 0, bisa dibuka `pandas.read_excel`.
 
 Sudah diuji terhadap data acuan bagian 6 (hasil 19 SKU / 207 resi) dan kasus uji kecil.
 
-> **Kode di bawah adalah versi AWAL** (lihat juga catatan di [README.md](README.md)).
+> **Kode di bawah adalah versi AWAL** (lihat juga catatan di [README.md](../README.md)).
 > Kode yang sungguhan dipakai adalah `sku_spesial.py` di folder ini, yang sudah berkembang
 > dari versi ini dengan tambahan (tidak semuanya tercermin di kode contoh bawah):
 > - Baris header dicari otomatis, bukan selalu baris 1 (lihat bagian 2).

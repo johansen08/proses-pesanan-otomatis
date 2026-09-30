@@ -16,6 +16,9 @@ berurutan (otomatis, satu kali jalan):
 menu SKU spesial/reguler sesuai kebutuhan. Ketiganya (`--urgent`, `--label`, `--reguler`) juga
 bisa dijalankan berdiri sendiri — lihat bagian masing-masing di bawah.
 
+Struktur folder & aturan penamaan file di project ini: lihat
+[docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md).
+
 Di luar alur lengkap itu, ada **Picklist SPX Resi Pagi** (`--shopee-pagi`) — **bukan** bagian
 `--label --jalankan`, dijalankan manual 1x sehari (mis. jam 13:00): channel Shopee saja,
 pesanan yang jam pesannya (WIB) maksimal jam 12:00 siang hari ini. Lihat bagian 4 di bawah.
@@ -25,10 +28,10 @@ pesanan yang jam pesannya (WIB) maksimal jam 12:00 siang hari ini. Lihat bagian 
 Tanpa `--kurir` (default), J&T dan SPX tetap digabung seperti semula. Penentuan SKU mana yang
 "spesial" (dari Excel, `hitung_sku_spesial`) **selalu** menggabung J&T+SPX — `--kurir` cuma
 membatasi resi mana yang benar-benar dipicklist saat itu. Dipakai `menu.bat` sesi **JAM 13.00**
-dan **SESI SORE** (lihat `menu.bat`/[JADWAL-PROSES.md](JADWAL-PROSES.md)); sesi **SESI PAGI**
+dan **SESI SORE** (lihat `menu.bat`/[docs/jadwal-proses.md](docs/jadwal-proses.md)); sesi **SESI PAGI**
 tetap menggabung J&T+SPX seperti sebelumnya.
 
-Aturan SKU spesial dan data uji: lihat [panduan-sku-spesial.md](panduan-sku-spesial.md)
+Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/panduan-sku-spesial.md)
 (kode di bagian 8 panduan adalah versi awal; kode yang dipakai adalah file `.py` di folder ini).
 
 ## File
@@ -40,13 +43,16 @@ Aturan SKU spesial dan data uji: lihat [panduan-sku-spesial.md](panduan-sku-spes
 | `sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi per channel), catat riwayat |
 | `run.bat` | Menjalankan `main.py` dengan Python di `.venv` |
-| `menu.bat` | Menu interaktif SUNGGUHAN (klik 2x), 3 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE — tiap sesi menjalankan urutan langkahnya sendiri (lihat [JADWAL-PROSES.md](JADWAL-PROSES.md)) dalam satu kali konfirmasi Y/N |
+| `menu.bat` | Menu interaktif SUNGGUHAN (klik 2x), 3 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE — tiap sesi menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `menu.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
+| `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label) |
 
-Hasil: Excel di `excel/`, PDF di `laporan/`, label per picklist di `label/`, log di `logs/`,
-riwayat semua picklist (SKU spesial, urgent, reguler) di `riwayat_picklist.xlsx`.
+Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
+label per picklist di `label/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
+reguler) di `riwayat_picklist.xlsx`. Lihat [docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md)
+untuk aturan penamaan folder/file.
 
 ## Instalasi (sekali saja)
 
@@ -56,14 +62,14 @@ python -m venv .venv
 ```
 
 Buat file `.env` berisi `JUBELIO_EMAIL` dan `JUBELIO_PASSWORD` (lihat contoh isi di
-`.env` yang sudah ada, atau [INSTALASI.md](INSTALASI.md) bagian 5 kalau mulai dari nol —
+`.env` yang sudah ada, atau [docs/instalasi.md](docs/instalasi.md) bagian 5 kalau mulai dari nol —
 tidak ada file `.env.example` di proyek ini).
 
-Pindah ke PC lain? Lihat panduan lengkap di [INSTALASI.md](INSTALASI.md) (versi
+Pindah ke PC lain? Lihat panduan lengkap di [docs/instalasi.md](docs/instalasi.md) (versi
 Python, semua library yang perlu di-install, dan konfigurasi `.env`).
 
 Jadwal operasional harian tim resi (jam berapa menu apa dijalankan, plus
-rencana pengembangan ke depan): lihat [JADWAL-PROSES.md](JADWAL-PROSES.md).
+rencana pengembangan ke depan): lihat [docs/jadwal-proses.md](docs/jadwal-proses.md).
 
 ## Menjalankan
 
@@ -132,7 +138,7 @@ SESI SORE) = `run.bat --urgent --channel lazada --jalankan` lalu
 **Langkah pertama** dari alur `--label --jalankan` (sebelum picklist sisa reguler — picklist
 urgent **tidak** termasuk, lihat catatan di bagian 1): per SKU dibuat picklist, picking
 diselesaikan, resi diminta, lalu label PDF diunduh. Detail alur:
-[analisa-alur-cetak-label.md](analisa-alur-cetak-label.md).
+[docs/analisa-alur-cetak-label.md](docs/analisa-alur-cetak-label.md).
 
 **Tanpa `--jalankan` selalu mode uji**: hanya membaca data Jubelio dan menampilkan pesanan yang
 akan diproses / dibuang beserta alasannya. Tidak ada yang berubah di Jubelio.
@@ -230,7 +236,7 @@ tanpa simbol, mis. `label/PICK-000155300_1QTY-REGULER_...pdf` atau
 
 Tiap sesi `menu.bat` (SESI PAGI, JAM 13.00, SESI SORE) menjalankan seluruh langkahnya secara
 berurut dalam satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap sesi ada di
-[JADWAL-PROSES.md](JADWAL-PROSES.md).
+[docs/jadwal-proses.md](docs/jadwal-proses.md).
 
 ## 4. Picklist SPX Resi Pagi (`--shopee-pagi`)
 

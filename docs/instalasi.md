@@ -17,9 +17,9 @@ tetap perlu ikut dipindahkan supaya konfigurasi & riwayat tidak hilang:
 - `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang
-di PC baru (langkah 3). Folder `excel/`, `laporan/`, `label/`, `logs/` boleh
-disalin kalau mau menyimpan histori file lama, tapi tidak wajib (dibuat otomatis
-saat program pertama kali jalan).
+di PC baru (langkah 3). Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label/`,
+`logs/` boleh disalin kalau mau menyimpan histori file lama, tapi tidak wajib (dibuat
+otomatis saat program pertama kali jalan).
 
 ## 2. Prasyarat: Install Python
 
@@ -97,9 +97,9 @@ menu.bat
 ```
 
 Program akan menampilkan menu 3 sesi (SESI PAGI, JAM 13.00, SESI SORE) +
-Keluar seperti di [README.md](README.md)/[JADWAL-PROSES.md](JADWAL-PROSES.md).
-Folder `excel/`, `laporan/`, `label/`, `logs/` akan dibuat otomatis saat
-dibutuhkan.
+Keluar seperti di [README.md](../README.md)/[jadwal-proses.md](jadwal-proses.md).
+Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label/`, `logs/` akan dibuat
+otomatis saat dibutuhkan.
 
 **Disarankan**: coba dulu `uji.bat` (mode uji, struktur menu sama seperti
 `menu.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
