@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 rem Sesi folder label dihitung SEKALI di sini (bertahan selama menu.bat ini berjalan).
 rem Ditutup lalu dijalankan ulang -> sesi baru (angka lanjut dari yang terbesar hari ini).
-for /f "delims=" %%i in ('".venv\Scripts\python.exe" -c "from main import sesi_label_baru; print(sesi_label_baru())"') do set "LABEL_SESI_DIR=%%i"
+for /f "delims=" %%i in ('".venv\Scripts\python.exe" -c "import sys; sys.path.insert(0, 'src'); from main import sesi_label_baru; print(sesi_label_baru())"') do set "LABEL_SESI_DIR=%%i"
 echo Sesi label: %LABEL_SESI_DIR%
 
 :menu
@@ -37,19 +37,19 @@ set /p "yakin=Lanjutkan SESI PAGI? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/5 URGENT LAZADA ===
-".venv\Scripts\python.exe" main.py --urgent --channel lazada --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
 echo.
 echo === 2/5 URGENT GTL ^& SICEPAT ===
-".venv\Scripts\python.exe" main.py --urgent --channel gtl-sicepat --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 echo.
 echo === 3/5 SPX - J^&T SPESIAL ===
-".venv\Scripts\python.exe" main.py --label --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan
 echo.
 echo === 4/5 SPX - J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" main.py --reguler --bagian 1qty --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan
 echo.
 echo === 5/5 SPX - J^&T KOMBINASI ===
-".venv\Scripts\python.exe" main.py --reguler --bagian kombinasi --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan
 echo.
 echo SESI PAGI selesai.
 pause
@@ -67,31 +67,31 @@ set /p "yakin=Lanjutkan JAM 13.00? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/9 URGENT LAZADA ===
-".venv\Scripts\python.exe" main.py --urgent --channel lazada --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
 echo.
 echo === 2/9 URGENT GTL ^& SICEPAT ===
-".venv\Scripts\python.exe" main.py --urgent --channel gtl-sicepat --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 echo.
 echo === 3/9 SPX PAGI (RESI SHOPEE ^<= 12.00) ===
-".venv\Scripts\python.exe" main.py --shopee-pagi --jalankan
+".venv\Scripts\python.exe" src\main.py --shopee-pagi --jalankan
 echo.
 echo === 4/9 J^&T SPESIAL ===
-".venv\Scripts\python.exe" main.py --label --kurir jnt --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
 echo.
 echo === 5/9 J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" main.py --reguler --bagian 1qty --kurir jnt --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
 echo.
 echo === 6/9 J^&T KOMBINASI ===
-".venv\Scripts\python.exe" main.py --reguler --bagian kombinasi --kurir jnt --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
 echo.
 echo === 7/9 SPX SPESIAL ===
-".venv\Scripts\python.exe" main.py --label --kurir spx --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan
 echo.
 echo === 8/9 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" main.py --reguler --bagian 1qty --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan
 echo.
 echo === 9/9 SPX KOMBINASI ===
-".venv\Scripts\python.exe" main.py --reguler --bagian kombinasi --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
 echo.
 echo JAM 13.00 selesai.
 pause
@@ -109,28 +109,28 @@ set /p "yakin=Lanjutkan SESI SORE? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/8 URGENT LAZADA ===
-".venv\Scripts\python.exe" main.py --urgent --channel lazada --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
 echo.
 echo === 2/8 URGENT GTL ^& SICEPAT ===
-".venv\Scripts\python.exe" main.py --urgent --channel gtl-sicepat --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 echo.
 echo === 3/8 J^&T SPESIAL ===
-".venv\Scripts\python.exe" main.py --label --kurir jnt --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
 echo.
 echo === 4/8 J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" main.py --reguler --bagian 1qty --kurir jnt --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
 echo.
 echo === 5/8 J^&T KOMBINASI ===
-".venv\Scripts\python.exe" main.py --reguler --bagian kombinasi --kurir jnt --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
 echo.
 echo === 6/8 SPX SPESIAL ===
-".venv\Scripts\python.exe" main.py --label --kurir spx --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan
 echo.
 echo === 7/8 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" main.py --reguler --bagian 1qty --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan
 echo.
 echo === 8/8 SPX KOMBINASI ===
-".venv\Scripts\python.exe" main.py --reguler --bagian kombinasi --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
 echo.
 echo SESI SORE selesai.
 pause

@@ -1,7 +1,7 @@
 """Buat laporan daftar SKU spesial (PDF) dari Excel 'laporan siap proses'.
 
 Pemakaian:
-    python sku_spesial.py "laporan siap proses.xlsx" --out laporan_sku_spesial.pdf
+    python src/sku_spesial.py "laporan siap proses.xlsx" --out laporan_sku_spesial.pdf
 """
 import argparse
 import sys

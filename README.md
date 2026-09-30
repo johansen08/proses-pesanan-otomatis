@@ -38,11 +38,11 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 
 | File | Isi |
 |---|---|
-| `main.py` | Alur CLI: login → download Excel → hitung → (SKU spesial + PDF) → (reguler). `--urgent`/`--reguler`/`--shopee-pagi` adalah alur terpisah (tidak lewat langkah ini). Lihat `--help` untuk semua opsi |
-| `jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
-| `sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
-| `proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi per channel), catat riwayat |
-| `run.bat` | Menjalankan `main.py` dengan Python di `.venv` |
+| `src/main.py` | Alur CLI: login → download Excel → hitung → (SKU spesial + PDF) → (reguler). `--urgent`/`--reguler`/`--shopee-pagi` adalah alur terpisah (tidak lewat langkah ini). Lihat `--help` untuk semua opsi |
+| `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
+| `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
+| `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi per channel), catat riwayat |
+| `run.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `menu.bat` | Menu interaktif SUNGGUHAN (klik 2x), 3 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE — tiap sesi menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `menu.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
@@ -210,7 +210,7 @@ atas selalu memakai kurir SPX (`KURIR_FILTER_REGULER`) dan channel Shopee (`CHAN
 mengeluarkan "kilat") begitu salah satu dari dua kondisi itu terpenuhi — berlaku juga kalau
 nanti ada skenario lain yang memakai SPX atau Shopee.
 
-`main.py --label --jalankan` otomatis menjalankan ini **SETELAH** SKU spesial selesai (kalau
+`run.bat --label --jalankan` otomatis menjalankan ini **SETELAH** SKU spesial selesai (kalau
 tidak dibatasi `--sku`, karena daftar SKU spesial perlu lengkap dulu supaya pengecualiannya
 benar). Bisa juga dijalankan terpisah, per bagian — ini tetap download & hitung Excel dulu
 (read-only, tanpa proses SKU spesial) supaya tahu resi mana yang harus dikecualikan:

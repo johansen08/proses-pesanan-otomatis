@@ -1,17 +1,17 @@
 """Otomatisasi: download Laporan Siap Proses (Jubelio) -> PDF daftar SKU spesial.
 
 Pemakaian:
-    python main.py                      # download dari Jubelio lalu buat PDF
-    python main.py --excel file.xlsx    # lewati download, proses file yang ada
-    python main.py --excel file.xlsx --tanpa-cek-nilai   # tanpa akses API sama sekali
+    python src/main.py                      # download dari Jubelio lalu buat PDF
+    python src/main.py --excel file.xlsx    # lewati download, proses file yang ada
+    python src/main.py --excel file.xlsx --tanpa-cek-nilai   # tanpa akses API sama sekali
 
 Proses sampai label pengiriman (proses_label.py):
-    python main.py --label                          # MODE UJI: hanya tampilkan rencana
-    python main.py --label --sku T01-BSBI-5         # mode uji untuk 1 SKU saja
-    python main.py --label --jalankan               # proses sungguhan semua SKU spesial
-    python main.py --label --sku T01-BSBI-5 --jalankan
-    python main.py --label --tanpa-reguler --jalankan   # SKU spesial saja, tanpa lanjut reguler
-    python main.py --lanjut PICK-000154839 --jalankan   # lanjutkan picklist yang terhenti
+    python src/main.py --label                          # MODE UJI: hanya tampilkan rencana
+    python src/main.py --label --sku T01-BSBI-5         # mode uji untuk 1 SKU saja
+    python src/main.py --label --jalankan               # proses sungguhan semua SKU spesial
+    python src/main.py --label --sku T01-BSBI-5 --jalankan
+    python src/main.py --label --tanpa-reguler --jalankan   # SKU spesial saja, tanpa lanjut reguler
+    python src/main.py --lanjut PICK-000154839 --jalankan   # lanjutkan picklist yang terhenti
 
 Dengan "--label --jalankan", PDF BARU dibuat setelah proses selesai, dari jumlah pesanan
 yang benar-benar berhasil dipicklist per SKU (bukan daftar kandidat awal).
@@ -21,9 +21,9 @@ menu.bat cuma untuk kurir J&T/SPX). 2 skenario: channel Lazada, dan kurir GTL/Si
 (lintas channel - baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok, urgent-nya
 ditentukan kurir bukan channel). Berdiri sendiri lewat --urgent (sampai label PDF juga),
 boleh dibatasi 1 skenario saja lewat --channel:
-    python main.py --urgent                          # MODE UJI: hanya tampilkan rencana
-    python main.py --urgent --channel lazada --jalankan
-    python main.py --urgent --channel gtl-sicepat --jalankan
+    python src/main.py --urgent                          # MODE UJI: hanya tampilkan rencana
+    python src/main.py --urgent --channel lazada --jalankan
+    python src/main.py --urgent --channel gtl-sicepat --jalankan
 
 Picklist sisa reguler (proses_label.py): pesanan channel TikTok Shop ("Shop | Tokopedia") &
 Shopee, kurir J&T/SPX, yang BUKAN bagian SKU spesial hari itu - dipecah 2: (1) 1 SKU 1 qty
@@ -31,23 +31,23 @@ yang tidak spesial, (2) kombinasi/multi-baris. Lewat "--label --jalankan" dijala
 SETELAH proses SKU spesial (perlu tahu SKU mana yang sudah spesial) - DILEWATI kalau dipakai
 bersama --sku (proses cuma sebagian SKU, daftar SKU spesial belum lengkap utk pengecualian).
 Bisa juga berdiri sendiri lewat --reguler, boleh dibatasi 1 bagian saja lewat --bagian:
-    python main.py --reguler                          # MODE UJI: hanya tampilkan rencana
-    python main.py --reguler --bagian 1qty --jalankan
-    python main.py --reguler --bagian kombinasi --jalankan
+    python src/main.py --reguler                          # MODE UJI: hanya tampilkan rencana
+    python src/main.py --reguler --bagian 1qty --jalankan
+    python src/main.py --reguler --bagian kombinasi --jalankan
 
 Pemisahan J&T/SPX (dipakai sesi JAM 13.00 & SESI SORE - lihat menu.bat/JADWAL-PROSES.md):
 tambahkan --kurir jnt atau --kurir spx ke --label maupun --reguler supaya J&T dan SPX jadi
 picklist terpisah saat pembuatan (bukan digabung seperti SESI PAGI). Penentuan SKU spesial
 sendiri TETAP menggabung J&T+SPX, --kurir hanya membatasi resi mana yang benar-benar
 dipicklist:
-    python main.py --label --kurir jnt --tanpa-reguler --jalankan
-    python main.py --reguler --bagian 1qty --kurir spx --jalankan
+    python src/main.py --label --kurir jnt --tanpa-reguler --jalankan
+    python src/main.py --reguler --bagian 1qty --kurir spx --jalankan
 
 Picklist Shopee Pagi (proses_label.py): dijalankan MANUAL 1x sehari (mis. jam 13:00), BUKAN
 bagian alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam pesannya (WIB)
 maksimal jam 12 siang hari ini, digabung jadi 1 picklist:
-    python main.py --shopee-pagi                      # MODE UJI: hanya tampilkan rencana
-    python main.py --shopee-pagi --jalankan
+    python src/main.py --shopee-pagi                      # MODE UJI: hanya tampilkan rencana
+    python src/main.py --shopee-pagi --jalankan
 """
 import argparse
 import logging
@@ -63,7 +63,7 @@ import pandas as pd
 from proses_label import durasi
 from sku_spesial import baca_excel, buat_pdf, hitung_sku_spesial, resi_kandidat
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
 FOLDER_PDF = ROOT / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
