@@ -663,6 +663,89 @@ def uji_shopee_pagi_filter_channel_dan_jam_cutoff():
     print("  proses_shopee_pagi: 3 pesanan -> 1 picklist SHOPEE-PAGI")
 
 
+class JubelioPalsuJntSiang:
+    """Server tiruan khusus skenario picklist J&T Resi Siang (filter channel + kurir +
+    jam pesan)."""
+
+    def __init__(self):
+        self.log = []
+        # channel 131076 = TikTok Shop (izin); channel 64 = Shopee nyelip (harus dibuang lagi)
+        self.pesanan = [
+            {"salesorder_id": 1, "source": 131076, "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
+            {"salesorder_id": 2, "source": 131076, "transaction_date": "2026-09-29T07:59:59.000Z"},  # 14:59:59 WIB
+            {"salesorder_id": 3, "source": 131076, "transaction_date": "2026-09-29T08:00:00.000Z"},  # 15:00:00 WIB, pas batas -> ikut
+            {"salesorder_id": 4, "source": 131076, "transaction_date": "2026-09-29T08:00:01.000Z"},  # 15:00:01 WIB -> tidak ikut
+            {"salesorder_id": 5, "source": 131076, "transaction_date": "2026-09-29T09:00:00.000Z"},  # 16:00 WIB -> tidak ikut
+            {"salesorder_id": 6, "source": 64, "transaction_date": "2026-09-29T02:00:00.000Z"},      # Shopee nyelip
+        ]
+        self.picklist_no = 0
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        self.log.append(("GET", url, params))
+        assert headers.get("authorization") == "TKN"
+        if url.endswith("ready-to-process/"):
+            assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
+            assert "channel_ids[1]" not in params, "J&T Resi Siang cuma channel TikTok Shop"
+            assert params.get("couriers[0]") == "j&t" and "couriers[1]" not in params, \
+                "J&T Resi Siang cuma kurir J&T"
+            return Resp(data={"data": self.pesanan, "totalCount": len(self.pesanan)})
+        raise AssertionError(f"GET tak dikenal {url}")
+
+    def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+        self.log.append(("POST", url, json))
+        assert headers.get("authorization") == "TKN"
+        if url.endswith("items-to-pick/"):
+            return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                               "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                               "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                               "item_full_name": "X", "salesorder_no": f"SO{i}"} for i in json["ids"]])
+        if url.endswith("wms/sales/picklists/"):
+            self.picklist_no += 1
+            no = f"PICK-{930000 + self.picklist_no}"
+            return Resp(data={"status": "ok", "data": {
+                "picks": [{"picklist_id": self.picklist_no, "picklist_no": no, "status": "ok"}],
+                "invalidSO": []}})
+        raise AssertionError(f"POST tak dikenal {url}")
+
+
+def uji_jnt_siang_filter_channel_kurir_dan_jam_cutoff():
+    import datetime as dt
+
+    j = JubelioPalsuJntSiang()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    # "sekarang" = jam 16:00 WIB 29-09-2026 -> batas = 15:00 WIB hari yang sama
+    sekarang = dt.datetime(2026, 9, 29, 16, 0, 0, tzinfo=pl.WIB)
+
+    pesanan = pl.ambil_pesanan_jnt_siang(k, sekarang=sekarang)
+    assert {o["salesorder_id"] for o in pesanan} == {1, 2, 3}, pesanan
+    print("  J&T Resi Siang: hanya channel TikTok Shop + kurir J&T (Shopee dibuang), hanya "
+          "jam pesan <= 15:00:00 WIB (15:00:00 pas ikut, 15:00:01 tidak)")
+
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+        panggilan.append((pid, pno, jumlah, sku, folder_label))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            riwayat = Path(d) / "riwayat.xlsx"
+            # proses_jnt_siang() sendiri pakai waktu sungguhan (dipanggil manual jam 15:00,
+            # bukan lewat parameter) -> di sini cukup uji lewat pemanggilan langsung supaya
+            # deterministik, ambil_pesanan_jnt_siang() sudah diuji terpisah di atas
+            pesanan = pl.ambil_pesanan_jnt_siang(k, sekarang=sekarang)
+            hasil = pl._proses_channel_batch(k, "J&T Resi Siang", pl.LABEL_JNT_SIANG, pesanan,
+                                             riwayat, Path(d) / "label")
+    finally:
+        pl.lanjutkan_picklist = asli
+
+    assert len(hasil) == 1 and hasil[0]["SKU"] == "JNT-SIANG" and hasil[0]["Total Pesanan"] == 3
+    assert panggilan[0][3] == "JNT-SIANG"
+    print("  proses_jnt_siang: 3 pesanan -> 1 picklist JNT-SIANG")
+
+
 def uji_cek_item_bundle_hanya_ptaa_boleh_spesial():
     item = lambda so, bundle: {"salesorder_id": so, "salesorder_detail_id": so, "qty_ordered": "1.0000",
                                "bundle_item_id": bundle, "item_full_name": "komponen tidak terkait",

@@ -10,6 +10,7 @@ echo ==================================================================
 echo   1. Uji SESI PAGI
 echo   2. Uji JAM 13.00
 echo   3. Uji SESI SORE
+echo   4. Uji JAM 15.00
 echo   0. Keluar
 echo ==================================================================
 set "pilih="
@@ -17,6 +18,7 @@ set /p "pilih=Pilih menu: "
 if "%pilih%"=="1" goto sesi_pagi
 if "%pilih%"=="2" goto jam_1300
 if "%pilih%"=="3" goto sesi_sore
+if "%pilih%"=="4" goto jam_1500
 if "%pilih%"=="0" goto :eof
 goto menu
 
@@ -101,5 +103,29 @@ echo === 8/8 Uji SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx
 echo.
 echo Uji SESI SORE selesai.
+pause
+goto menu
+
+:jam_1500
+echo.
+echo === 1/6 Uji URGENT LAZADA ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
+echo.
+echo === 2/6 Uji URGENT GTL ^& SICEPAT ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat
+echo.
+echo === 3/6 Uji J^&T RESI SIANG (WAJIB KELUAR TIKTOK ^<= 15.00) ===
+".venv\Scripts\python.exe" src\main.py --jnt-siang
+echo.
+echo === 4/6 Uji SPX - J^&T SPESIAL ===
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler
+echo.
+echo === 5/6 Uji SPX - J^&T 1 QTY REGULER ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty
+echo.
+echo === 6/6 Uji SPX - J^&T KOMBINASI ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
+echo.
+echo Uji JAM 15.00 selesai.
 pause
 goto menu

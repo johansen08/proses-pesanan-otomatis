@@ -1,4 +1,4 @@
-"""Proses pesanan Jubelio sampai label pengiriman PDF - 4 alur, langkah 3-6 dipakai bersama
+"""Proses pesanan Jubelio sampai label pengiriman PDF - 5 alur, langkah 3-6 dipakai bersama
 (lihat analisa-alur-cetak-label.md untuk detail request/respons langkah-langkah ini):
   1. Filter pesanan Siap Proses (disaring pakai aturan masing-masing, lihat di bawah)
   2. Buat picklist                          -> PICK-000xxxxxx
@@ -36,10 +36,17 @@ MANUAL 1x sehari (mis. jam 13:00), BUKAN bagian alur otomatis main.py --label --
 lintas SKU, channel Shopee saja, pesanan yang jam pesannya (WIB) maksimal jam 12 siang hari
 ini (JAM_CUTOFF_SHOPEE_PAGI) - digabung jadi 1 picklist, maks MAKS_PESANAN_PICKLIST.
 
-Alur 2, 3 & 4 berbagi _proses_channel_batch() (buat picklist -> langkah 3-6), beda cuma
-sumber datanya (ambil_pesanan_channel(), ambil_pesanan_reguler()+pisah_reguler(), atau
-ambil_pesanan_shopee_pagi()) dan label yang dipakai untuk nama file/kolom SKU di riwayat
-(nama skenario, bukan SKU asli).
+Alur 5 - picklist J&T Resi Siang (fungsi rencana_jnt_siang()/proses_jnt_siang()), dijalankan
+MANUAL 1x sehari (mis. jam 15:00), BUKAN bagian alur otomatis main.py --label --jalankan:
+sama pola dengan alur 4, tapi channel TikTok Shop saja, kurir J&T saja, pesanan yang jam
+pesannya (WIB) maksimal jam 15 siang hari ini (JAM_CUTOFF_JNT_SIANG) - digabung jadi 1
+picklist, maks MAKS_PESANAN_PICKLIST. Aturan bisnis J&T: pesanan TikTok Shop wajib keluar
+lewat J&T digabung 1 picklist paling lambat jam 15:00 (lihat docs/jadwal-proses.md).
+
+Alur 2, 3, 4 & 5 berbagi _proses_channel_batch() (buat picklist -> langkah 3-6), beda cuma
+sumber datanya (ambil_pesanan_channel(), ambil_pesanan_reguler()+pisah_reguler(),
+ambil_pesanan_shopee_pagi(), atau ambil_pesanan_jnt_siang()) dan label yang dipakai untuk
+nama file/kolom SKU di riwayat (nama skenario, bukan SKU asli).
 
 Mode uji (rencana*(), default lewat main.py tanpa --jalankan) hanya membaca data (langkah 1)
 dan menampilkan rencana. Langkah 2-6 hanya dijalankan lewat proses*()/lanjutkan() (main.py
@@ -114,6 +121,16 @@ LABEL_REGULER_KOMBINASI = "KOMBINASI-REGULER"   # sisanya (multi-baris/qty>1), t
 JAM_CUTOFF_SHOPEE_PAGI = 12
 LABEL_SHOPEE_PAGI = "SHOPEE-PAGI"
 WIB = ZoneInfo("Asia/Jakarta")
+
+# Picklist "J&T Resi Siang" (lintas SKU): dijalankan MANUAL, 1x sehari jam 15:00 - bukan
+# bagian alur otomatis --label --jalankan. Aturan bisnis J&T: pesanan channel TikTok Shop
+# yang wajib keluar hari itu lewat kurir J&T harus digabung jadi 1 picklist paling lambat
+# jam 15:00 (supaya tidak tercampur pesanan yang masuk setelah jam 15:00) - sejajar dengan
+# Shopee Pagi (SPX ≤ 12:00) tapi beda channel (TikTok Shop, bukan Shopee), beda kurir
+# (difilter J&T saja - SPX di channel TikTok Shop TIDAK ikut aturan ini) dan beda jam
+# cutoff. Lihat docs/jadwal-proses.md bagian "J&T Resi Siang".
+JAM_CUTOFF_JNT_SIANG = 15
+LABEL_JNT_SIANG = "JNT-SIANG"
 
 MAKS_COBA_PICKLIST = 3
 TUNGGU_PICKING_S = 90                   # batas tunggu status FINISH_PICK
@@ -511,6 +528,47 @@ def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list
     MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur otomatis --label --jalankan."""
     pesanan = ambil_pesanan_shopee_pagi(k)
     return _proses_channel_batch(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, pesanan,
+                                 file_riwayat, folder_label)
+
+
+# ==================================================== 1e. picklist J&T Resi Siang
+def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
+                            sekarang: datetime | None = None) -> list[dict]:
+    """Semua pesanan Siap Proses channel TikTok Shop, kurir J&T saja, dengan jam pesan
+    (WIB) maksimal `jam` HARI INI. Dipakai untuk picklist yang dijalankan manual 1x sehari
+    jam 15:00 (resi TikTok Shop wajib keluar lewat J&T yang masuk sebelum jam 15:00 harus
+    sudah masuk picklist ini). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
+    dipanggil."""
+    pesanan = ambil_pesanan_channel(k, [CHANNEL_ID_TIKTOK_SHOP], couriers=["j&t"])
+    batas = (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
+    hasil = []
+    for o in pesanan:
+        ts = o.get("transaction_date")
+        if not ts:
+            continue
+        waktu = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
+        if waktu <= batas:
+            hasil.append(o)
+    return hasil
+
+
+def rencana_jnt_siang(k: Klien) -> None:
+    """Mode uji picklist J&T Resi Siang: hanya membaca data, tidak mengubah apa pun di
+    Jubelio."""
+    pesanan = ambil_pesanan_jnt_siang(k)
+    batch = bagi_batch([o["salesorder_id"] for o in pesanan])
+    log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d -> "
+             "%d picklist (maks %d/picklist)", JAM_CUTOFF_JNT_SIANG, len(pesanan),
+             len(batch), MAKS_PESANAN_PICKLIST)
+
+
+def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
+    """Picklist J&T Resi Siang: semua pesanan channel TikTok Shop, kurir J&T, yang jam
+    pesannya (WIB) maksimal jam 15 siang hari ini, digabung jadi 1 picklist (dipecah kalau
+    > MAKS_PESANAN_PICKLIST). Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
+    otomatis --label --jalankan."""
+    pesanan = ambil_pesanan_jnt_siang(k)
+    return _proses_channel_batch(k, "J&T Resi Siang", LABEL_JNT_SIANG, pesanan,
                                  file_riwayat, folder_label)
 
 

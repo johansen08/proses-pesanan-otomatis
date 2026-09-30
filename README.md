@@ -22,6 +22,10 @@ Struktur folder & aturan penamaan file di project ini: lihat
 Di luar alur lengkap itu, ada **Picklist SPX Resi Pagi** (`--shopee-pagi`) — **bukan** bagian
 `--label --jalankan`, dijalankan manual 1x sehari (mis. jam 13:00): channel Shopee saja,
 pesanan yang jam pesannya (WIB) maksimal jam 12:00 siang hari ini. Lihat bagian 4 di bawah.
+Sejajar dengan itu, ada **Picklist J&T Resi Siang** (`--jnt-siang`) — juga manual 1x sehari
+(mis. jam 15:00): channel TikTok Shop saja, kurir J&T saja, pesanan yang jam pesannya (WIB)
+maksimal jam 15:00 hari ini (aturan bisnis J&T: wajib keluar TikTok Shop paling lambat jam
+15.00). Lihat bagian 5 di bawah.
 
 **Pemisahan J&T/SPX (`--kurir`)**: `--label` dan `--reguler` menerima opsi `--kurir jnt` /
 `--kurir spx` supaya J&T dan SPX jadi picklist **terpisah** saat pembuatan, bukan digabung.
@@ -38,12 +42,12 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 
 | File | Isi |
 |---|---|
-| `src/main.py` | Alur CLI: login → download Excel → hitung → (SKU spesial + PDF) → (reguler). `--urgent`/`--reguler`/`--shopee-pagi` adalah alur terpisah (tidak lewat langkah ini). Lihat `--help` untuk semua opsi |
+| `src/main.py` | Alur CLI: login → download Excel → hitung → (SKU spesial + PDF) → (reguler). `--urgent`/`--reguler`/`--shopee-pagi`/`--jnt-siang` adalah alur terpisah (tidak lewat langkah ini). Lihat `--help` untuk semua opsi |
 | `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
-| `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi per channel), catat riwayat |
+| `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
-| `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 3 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE — tiap sesi menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
+| `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE, JAM 15.00 — tiap sesi menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
@@ -234,9 +238,9 @@ tidak boleh memuat simbol `&` (dibuang otomatis), jadi khusus nama file J&T ditu
 tanpa simbol, mis. `label-pengiriman/PICK-000155300_1QTY-REGULER_...pdf` atau
 `label-pengiriman/PICK-000155301_JNT-1QTY-REGULER_...pdf`.
 
-Tiap sesi `proses-harian.bat` (SESI PAGI, JAM 13.00, SESI SORE) menjalankan seluruh langkahnya secara
-berurut dalam satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap sesi ada di
-[docs/jadwal-proses.md](docs/jadwal-proses.md).
+Tiap sesi `proses-harian.bat` (SESI PAGI, JAM 13.00, SESI SORE, JAM 15.00) menjalankan seluruh
+langkahnya secara berurut dalam satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap sesi
+ada di [docs/jadwal-proses.md](docs/jadwal-proses.md).
 
 ## 4. Picklist SPX Resi Pagi (`--shopee-pagi`)
 
@@ -255,6 +259,26 @@ jalankan.bat --shopee-pagi --jalankan    # sungguhan
 --jalankan` (dijalankan cukup 1x sehari, jangan diulang di SESI SORE). `proses-harian-uji.bat` = versi mode
 uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat: `SHOPEE-PAGI`, mis.
 `label-pengiriman/PICK-000155400_SHOPEE-PAGI_...pdf`.
+
+## 5. Picklist J&T Resi Siang (`--jnt-siang`)
+
+**Dijalankan MANUAL 1x sehari** (mis. jam 15:00) — **bukan** bagian alur otomatis
+`--label --jalankan`, dan **tidak** perlu download/hitung Excel. Semua pesanan Siap Proses
+channel **TikTok Shop** (`channel_id=131076`), kurir **J&T saja**, yang jam pesannya (WIB)
+**maksimal jam 15:00 hari ini**, digabung jadi 1 picklist (dipecah kalau > 200), diproses
+SAMPAI label PDF juga. Aturan bisnis J&T: pesanan TikTok Shop wajib keluar hari itu lewat J&T
+harus digabung 1 picklist paling lambat jam 15.00 (sejajar dengan aturan SPX Resi Pagi di
+atas, beda kurir dan beda jam cutoff — lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)).
+
+```bash
+jalankan.bat --jnt-siang               # mode uji
+jalankan.bat --jnt-siang --jalankan    # sungguhan
+```
+
+`proses-harian.bat` sesi JAM 15.00, langkah "J&T RESI SIANG (WAJIB KELUAR TIKTOK <= 15.00)" =
+`jalankan.bat --jnt-siang --jalankan` (dijalankan cukup 1x sehari, jangan diulang di siklus
+setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
+SKU di riwayat: `JNT-SIANG`, mis. `label-pengiriman/PICK-000155500_JNT-SIANG_...pdf`.
 
 ## Jadwal otomatis (Windows Task Scheduler)
 

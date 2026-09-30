@@ -48,6 +48,13 @@ bagian alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam p
 maksimal jam 12 siang hari ini, digabung jadi 1 picklist:
     python src/main.py --shopee-pagi                      # MODE UJI: hanya tampilkan rencana
     python src/main.py --shopee-pagi --jalankan
+
+Picklist J&T Resi Siang (proses_label.py): dijalankan MANUAL 1x sehari (mis. jam 15:00), BUKAN
+bagian alur otomatis --label --jalankan. Semua pesanan channel TikTok Shop, kurir J&T, yang
+jam pesannya (WIB) maksimal jam 15 siang hari ini, digabung jadi 1 picklist (aturan bisnis
+J&T: wajib keluar TikTok Shop paling lambat jam 15.00 - lihat docs/jadwal-proses.md):
+    python src/main.py --jnt-siang                        # MODE UJI: hanya tampilkan rencana
+    python src/main.py --jnt-siang --jalankan
 """
 import argparse
 import logging
@@ -105,18 +112,29 @@ def folder_label_sesi() -> Path:
 
 
 def dalam_jam_menu(menu: str) -> bool:
-    """Cek apakah jam sekarang ada dalam jendela jam menu proses-harian.bat:
-    "1"=SESI PAGI (07.00-13.00), "2"=JAM 13.00 (13.01-14.00), "3"=SESI SORE
-    (14.01-16.00). Dipakai proses-harian.bat untuk menanyakan konfirmasi kalau
-    menu dijalankan di luar jam yang seharusnya (lihat docs/jadwal-proses.md)."""
+    """Cek apakah jam sekarang ada dalam jendela jam menu proses-harian.bat. Jendela di sini
+    LEBAR sengaja (bukan jam pas), karena aturan sebenarnya berbasis URUTAN proses selesai,
+    bukan jam pas per menit - tim boleh lanjut ke menu berikutnya begitu proses sebelumnya
+    selesai, kapan pun itu (mis. JAM 13.00 kadang selesai jauh sebelum jam 14.00 kalau
+    pesanannya sedikit). Jendela sempit di sini cuma akan salah memperingatkan "di luar jam"
+    padahal urutannya sudah benar - lihat docs/jadwal-proses.md untuk penjelasan urutan:
+    "1"=SESI PAGI (07.00-13.00, dipakai lagi 15.00-17.59 setelah JAM 15.00/J&T Resi Siang
+    selesai), "2"=JAM 13.00 (13.01-14.00), "3"=SESI SORE (13.01-14.59 - setelah JAM 13.00
+    selesai & sebelum JAM 15.00 mulai, dipakai lagi 18.00-23.00 untuk jadwal malam),
+    "4"=JAM 15.00 (15.00-15.59, J&T Resi Siang). Dipakai proses-harian.bat untuk menanyakan
+    konfirmasi kalau menu dijalankan di luar jendela ini (soft warning, bukan blokir) - tiap
+    menu boleh punya lebih dari 1 jendela, dan jendela antar-menu SENGAJA tumpang tindih
+    (mis. 13.01-14.00 dipakai baik JAM 13.00 maupun SESI SORE) karena keduanya sama-sama
+    valid dipilih tim di rentang itu, tergantung mana yang sudah/belum dijalankan hari itu -
+    guard ini tidak menyimpan status menu mana yang sudah jalan, cuma sanity check jam."""
     sekarang = datetime.now().hour * 60 + datetime.now().minute
     jendela = {
-        "1": (7 * 60, 13 * 60),
-        "2": (13 * 60 + 1, 14 * 60),
-        "3": (14 * 60 + 1, 16 * 60),
+        "1": [(7 * 60, 13 * 60), (15 * 60, 17 * 60 + 59)],
+        "2": [(13 * 60 + 1, 14 * 60)],
+        "3": [(13 * 60 + 1, 14 * 60 + 59), (18 * 60, 23 * 60)],
+        "4": [(15 * 60, 15 * 60 + 59)],
     }
-    awal, akhir = jendela[menu]
-    return awal <= sekarang <= akhir
+    return any(awal <= sekarang <= akhir for awal, akhir in jendela[menu])
 
 
 def muat_env(path: Path) -> None:
@@ -196,6 +214,11 @@ def main() -> int:
                     help="hanya buat picklist Shopee Pagi (channel Shopee, jam pesan s.d. "
                         "12:00 WIB hari ini) sampai label PDF - dijalankan manual 1x sehari, "
                         "BUKAN bagian alur otomatis --label (tanpa --jalankan = mode uji)")
+    ap.add_argument("--jnt-siang", action="store_true",
+                    help="hanya buat picklist J&T Resi Siang (channel TikTok Shop, kurir "
+                        "J&T, jam pesan s.d. 15:00 WIB hari ini) sampai label PDF - "
+                        "dijalankan manual 1x sehari, BUKAN bagian alur otomatis --label "
+                        "(tanpa --jalankan = mode uji)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -218,6 +241,8 @@ def main() -> int:
             return reguler_picklist(log, args)
         if args.shopee_pagi:
             return shopee_pagi_picklist(log, args)
+        if args.jnt_siang:
+            return jnt_siang_picklist(log, args)
 
         waktu, mulai = datetime.now(), time.monotonic()
         perlu_api = not args.excel or not args.tanpa_cek_nilai or args.label
@@ -409,6 +434,21 @@ def shopee_pagi_picklist(log: logging.Logger, args) -> int:
     hasil = proses_label.proses_shopee_pagi(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
     gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
     log.info("SELESAI Shopee Pagi: %d picklist dibuat%s", len(hasil) - len(gagal),
+             f", {len(gagal)} bermasalah" if gagal else "")
+    return 1 if gagal else 0
+
+
+def jnt_siang_picklist(log: logging.Logger, args) -> int:
+    import proses_label
+
+    k = proses_label.Klien(login(log))
+    if not args.jalankan:
+        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
+        proses_label.rencana_jnt_siang(k)
+        return 0
+    hasil = proses_label.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
+    gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    log.info("SELESAI J&T Resi Siang: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0
 
