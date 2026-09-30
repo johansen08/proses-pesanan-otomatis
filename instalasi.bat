@@ -14,7 +14,7 @@ if errorlevel 1 (
     echo.
     echo Install dulu Python 3.11+ dari https://www.python.org/downloads/windows/
     echo Saat instalasi, WAJIB centang "Add python.exe to PATH".
-    echo Setelah install, tutup lalu buka ulang terminal ini, lalu jalankan setup.bat lagi.
+    echo Setelah install, tutup lalu buka ulang terminal ini, lalu jalankan instalasi.bat lagi.
     pause
     exit /b 1
 )
@@ -77,7 +77,7 @@ if exist ".env" (
         echo JUBELIO_EMAIL=
         echo JUBELIO_PASSWORD=
     ) > ".env"
-    echo [PERHATIAN] Isi dulu JUBELIO_EMAIL dan JUBELIO_PASSWORD di file .env sebelum menjalankan menu.bat.
+    echo [PERHATIAN] Isi dulu JUBELIO_EMAIL dan JUBELIO_PASSWORD di file .env sebelum menjalankan proses-harian.bat.
 )
 echo.
 
@@ -86,7 +86,7 @@ echo   SETUP SELESAI
 echo ==================================================================
 echo Langkah selanjutnya:
 echo   1. Pastikan file .env sudah berisi JUBELIO_EMAIL dan JUBELIO_PASSWORD yang benar.
-echo   2. Jalankan uji.bat dulu untuk tes login/koneksi (tidak mengubah apa pun di Jubelio).
-echo   3. Kalau uji.bat berhasil, jalankan menu.bat untuk proses sungguhan.
+echo   2. Jalankan proses-harian-uji.bat dulu untuk tes login/koneksi (tidak mengubah apa pun di Jubelio).
+echo   3. Kalau proses-harian-uji.bat berhasil, jalankan proses-harian.bat untuk proses sungguhan.
 echo.
 pause

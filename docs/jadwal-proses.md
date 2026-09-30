@@ -5,7 +5,7 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
-**Diperbarui 2026-09-30**: `menu.bat` dirombak jadi **3 sesi** (menggantikan
+**Diperbarui 2026-09-30**: `proses-harian.bat` dirombak jadi **3 sesi** (menggantikan
 menu 7-pilihan sebelumnya): **SESI PAGI**, **JAM 13.00**, **SESI SORE** —
 tiap sesi menjalankan seluruh langkahnya berurut dengan **1 kali klik +
 1 konfirmasi Y/N**. Mulai **JAM 13.00** dan **SESI SORE**, kurir **J&T dan
@@ -15,9 +15,9 @@ mana yang "spesial" (dari Excel) **tidak berubah**, tetap menggabung
 J&T+SPX; `--kurir` cuma membatasi resi kurir mana yang benar-benar
 dipicklist saat itu.
 
-## Istilah tim → menu.bat / perintah program
+## Istilah tim → proses-harian.bat / perintah program
 
-| Istilah tim | Perintah (`run.bat ...`) |
+| Istilah tim | Perintah (`jalankan.bat ...`) |
 |---|---|
 | Urgent Lazada | `--urgent --channel lazada --jalankan` |
 | Urgent GTL & SiCepat | `--urgent --channel gtl-sicepat --jalankan` |
@@ -32,7 +32,7 @@ dipicklist saat itu.
 | SPX 1 SKU 1 qty reguler (dipisah) | `--reguler --bagian 1qty --kurir spx --jalankan` |
 | SPX kombinasi reguler (dipisah) | `--reguler --bagian kombinasi --kurir spx --jalankan` |
 
-## menu.bat — 3 sesi
+## proses-harian.bat — 3 sesi
 
 ```
 1. SESI PAGI
@@ -44,7 +44,7 @@ dipicklist saat itu.
 Tiap pilihan menjalankan urutan langkah di bawah **berurut, 1 kali klik +
 1 konfirmasi Y/N**. Picklist urgent (Lazada, GTL/SiCepat) **selalu** ikut
 di awal tiap sesi — tidak ada lagi cara memicunya sendirian lewat menu
-(masih bisa manual lewat `run.bat --urgent ...` kalau perlu).
+(masih bisa manual lewat `jalankan.bat --urgent ...` kalau perlu).
 
 ### 1. SESI PAGI (J&T + SPX digabung, seperti semula)
 
@@ -85,7 +85,7 @@ Urutan dalam tiap sesi tidak saling bergantung secara teknis (kecuali
 spesial harus tahu SKU spesial hari itu, sudah ditangani lewat baca ulang
 Excel di setiap langkah), tapi urgent dijalankan **lebih dulu** supaya
 pesanan yang sudah "diambil" urgent tidak ikut terhitung sebagai kandidat
-SKU spesial (kebijakan operasional tim, `menu.bat` sudah mengikuti urutan
+SKU spesial (kebijakan operasional tim, `proses-harian.bat` sudah mengikuti urutan
 ini).
 
 Detail masing-masing alur & opsi `--kurir`: lihat [README.md](../README.md).
@@ -95,7 +95,7 @@ Detail masing-masing alur & opsi `--kurir`: lihat [README.md](../README.md).
 Dijalankan tim setiap hari, siklus 2 jam (jam bulat, lalu diulang lagi
 setelah proses transfer bank/pembayaran selesai):
 
-| Jam | Yang dijalankan | Sesi menu.bat |
+| Jam | Yang dijalankan | Sesi proses-harian.bat |
 |---|---|---|
 | 07.00 | Urgent Lazada, Urgent GTL/SiCepat, SPX & J&T spesial (digabung), 1 SKU 1 qty reguler, kombinasi reguler | 1 (SESI PAGI) |
 | 07.xx (setelah transfer) | (ulang) | 1 |
@@ -120,7 +120,7 @@ pakai sesi **SESI SORE**, bukan JAM 13.00 lagi.
 Tidak ada proses transfer bank di jam-jam ini, jadi tiap jam cuma 1 kali
 jalan (tidak ada pengulangan "setelah transfer").
 
-| Jam | Yang dijalankan | Sesi menu.bat |
+| Jam | Yang dijalankan | Sesi proses-harian.bat |
 |---|---|---|
 | 18.00 | Urgent Lazada, Urgent GTL/SiCepat, J&T & SPX dipisah (spesial, 1 qty, kombinasi) | 3 (SESI SORE) |
 | 19.00 | (ulang) | 3 |
@@ -164,7 +164,7 @@ otomatis dengan logika:
 
 1. Cek jumlah pesanan "Siap Proses" setiap **5 menit**.
 2. Begitu totalnya **≥ 200**, mulai proses (urutan sama seperti sesi
-   `menu.bat` yang berlaku saat itu: urgent → spesial → reguler).
+   `proses-harian.bat` yang berlaku saat itu: urgent → spesial → reguler).
 3. **Tunggu sampai proses itu benar-benar selesai** sebelum melakukan
    pengecekan berikutnya — proses bisa saja butuh waktu **lebih dari 5
    menit**, jadi pengecekan selanjutnya **tidak boleh mulai** kalau proses

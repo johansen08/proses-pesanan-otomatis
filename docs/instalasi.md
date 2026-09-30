@@ -1,7 +1,7 @@
 # Panduan Instalasi di PC Baru
 
 Panduan ini untuk memindahkan proyek **proses-pesanan-otomatis** ke PC/laptop lain
-(Windows) agar `menu.bat` bisa langsung jalan.
+(Windows) agar `proses-harian.bat` bisa langsung jalan.
 
 > Jika Claude Code yang membaca file ini di PC baru: jalankan langkah-langkah di
 > bagian **"Langkah instalasi"** secara berurutan lewat terminal (PowerShell/CMD),
@@ -66,7 +66,7 @@ Ini akan menginstall 5 library dari `requirements.txt`:
 
 Hanya diperlukan jika Anda akan menjalankan `sniff\run_sniff_jubel.bat` (alat
 perekam ulang alur Jubelio, dipakai kalau Jubelio mengubah tampilan/API-nya).
-**Tidak diperlukan** untuk pemakaian normal lewat `menu.bat`.
+**Tidak diperlukan** untuk pemakaian normal lewat `proses-harian.bat`.
 
 ```bash
 .venv\Scripts\python -m playwright install chromium
@@ -90,10 +90,10 @@ Ganti dengan email & password akun Jubelio yang sebenarnya. Baris
 
 ## 6. Jalankan program
 
-Klik dua kali `menu.bat`, atau dari terminal:
+Klik dua kali `proses-harian.bat`, atau dari terminal:
 
 ```bash
-menu.bat
+proses-harian.bat
 ```
 
 Program akan menampilkan menu 3 sesi (SESI PAGI, JAM 13.00, SESI SORE) +
@@ -101,18 +101,18 @@ Keluar seperti di [README.md](../README.md)/[jadwal-proses.md](jadwal-proses.md)
 Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`, `logs/` akan dibuat
 otomatis saat dibutuhkan.
 
-**Disarankan**: coba dulu `uji.bat` (mode uji, struktur menu sama seperti
-`menu.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
-koneksi API berhasil, sebelum menjalankan sesi di `menu.bat` yang membuat
+**Disarankan**: coba dulu `proses-harian-uji.bat` (mode uji, struktur menu sama seperti
+`proses-harian.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
+koneksi API berhasil, sebelum menjalankan sesi di `proses-harian.bat` yang membuat
 picklist sungguhan.
 
 ## 7. (Opsional) Jadwal otomatis via Windows Task Scheduler
 
 Kalau di PC lama ada jadwal otomatis (Task Scheduler) yang menjalankan
-`run.bat`, buat ulang di PC baru:
+`jalankan.bat`, buat ulang di PC baru:
 
 *Create Basic Task* → pilih jadwal → *Start a program*:
-- Program: `C:\proses-pesanan-otomatis\run.bat` (sesuaikan path)
+- Program: `C:\proses-pesanan-otomatis\jalankan.bat` (sesuaikan path)
 - Start in: `C:\proses-pesanan-otomatis` (sesuaikan path)
 
 ---
@@ -128,5 +128,5 @@ python --version
 ```
 
 Lalu pastikan file `.env` ada dan berisi `JUBELIO_EMAIL` + `JUBELIO_PASSWORD`
-yang benar, baru jalankan `uji.bat` (mode uji) sebagai tes akhir koneksi ke
+yang benar, baru jalankan `proses-harian-uji.bat` (mode uji) sebagai tes akhir koneksi ke
 Jubelio.

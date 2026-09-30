@@ -10,14 +10,14 @@ Supaya root tidak berantakan, hanya boleh berisi:
 - **Folder** (semua kode, dokumentasi, dan data ada di dalam folder masing-masing,
   lihat bagian 6)
 - `.env`, `.gitignore` — file konfigurasi
-- `*.bat` — skrip batch (`menu.bat`, `run.bat`, `setup.bat`, `uji.bat`)
+- `*.bat` — skrip batch (`proses-harian.bat`, `jalankan.bat`, `instalasi.bat`, `proses-harian-uji.bat`)
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
 - `riwayat_picklist.xlsx` (+ `.csv` fallback-nya) — riwayat picklist
 
 Kode Python (`.py`) **tidak** ikut di root — semua dikumpulkan dalam folder **`src/`**
 (lihat bagian 2). File scratch/hasil uji manual yang menumpuk di root (mis. transkrip
-`uji.bat` yang di-redirect ke `.txt`) sebaiknya dihapus setelah selesai dipakai, bukan
+`proses-harian-uji.bat` yang di-redirect ke `.txt`) sebaiknya dihapus setelah selesai dipakai, bukan
 dibiarkan menumpuk.
 
 ## 1. Folder
@@ -63,8 +63,19 @@ dibiarkan menumpuk.
 
 ## 4. Skrip batch (`.bat`)
 
-- Huruf kecil, 1-2 kata jelas: `menu.bat`, `run.bat`, `setup.bat`, `uji.bat`. Sudah
-  konsisten, dipertahankan apa adanya.
+- Huruf kecil, kebab-case, nama menjelaskan FUNGSI (bukan istilah teknis generik):
+  - `instalasi.bat` — setup sekali di awal (buat venv, install library, buat `.env`)
+  - `jalankan.bat` — wrapper generik ke `src/main.py` (terima semua opsi CLI lewat `%*`,
+    dipakai juga oleh Windows Task Scheduler untuk jadwal otomatis)
+  - `proses-harian.bat` — menu interaktif **SUNGGUHAN** (3 sesi: SESI PAGI, JAM 13.00,
+    SESI SORE), mengubah data sungguhan di Jubelio
+  - `proses-harian-uji.bat` — kembaran `proses-harian.bat` dalam **MODE UJI** (akhiran
+    `-uji` menandai tidak ada perubahan apa pun di Jubelio); sengaja disamakan awalan
+    nama dengan `proses-harian.bat` supaya terlihat jelas keduanya sepasang
+  - Sebelumnya bernama `setup.bat`/`run.bat`/`menu.bat`/`uji.bat` — dua nama pertama
+    diganti karena bahasa Inggris (tidak konsisten dengan sisa project yang berbahasa
+    Indonesia), dua terakhir diganti karena "menu"/"uji" saja belum menjelaskan ini
+    menu proses **harian** yang mana.
 
 ## 5. File yang dibuat OTOMATIS oleh program saat runtime
 
@@ -93,7 +104,7 @@ proses-pesanan-otomatis/
 ├─ .env / .gitignore              # konfigurasi
 ├─ requirements.txt               # daftar library Python
 ├─ riwayat_picklist.xlsx          # riwayat semua picklist
-├─ menu.bat / run.bat / setup.bat / uji.bat                  # skrip, huruf kecil
+├─ proses-harian.bat / jalankan.bat / instalasi.bat / proses-harian-uji.bat                  # skrip, huruf kecil
 ├─ src/                           # semua kode, snake_case
 │  ├─ main.py
 │  ├─ jubelio.py
