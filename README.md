@@ -46,7 +46,9 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
+| `src/print_spesial.py` | Cetak bulk label SPESIAL dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
+| `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py` (klik 2x) — lihat bagian "Cetak bulk label SPESIAL" |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
@@ -279,6 +281,56 @@ jalankan.bat --jnt-siang --jalankan    # sungguhan
 `jalankan.bat --jnt-siang --jalankan` (dijalankan cukup 1x sehari, jangan diulang di siklus
 setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
 SKU di riwayat: `JNT-SIANG`, mis. `label-pengiriman/PICK-000155500_JNT-SIANG_...pdf`.
+
+## Cetak bulk label SPESIAL (`cetak-label-spesial.bat`, `src/print_spesial.py`)
+
+Mencetak ulang semua label SKU spesial (yang namanya mengandung penanda `SPESIAL` dari
+alur di atas, mis. `PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf`) secara **bulk dan
+berurut** (nomor PICK terkecil/paling dulu dibuat, duluan dicetak), tanpa perlu buka
+file PDF satu-satu secara manual. Program ini **tidak** membuat picklist/label baru —
+cuma mencetak ulang PDF yang sudah ada.
+
+```bash
+cetak-label-spesial.bat
+```
+
+Urutan kerja: cari folder sesi `label-pengiriman/YYYY-MM-DD_N` yang **terbaru** secara
+otomatis → saring file yang namanya mengandung `_SPESIAL_` → tampilkan daftar printer
+yang terhubung ke komputer → pilih nomor printer → konfirmasi (Y/N) → cetak satu per
+satu secara berurut.
+
+Pilihan:
+
+- `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01_3"` — pakai folder sesi
+  tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya).
+- `cetak-label-spesial.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
+  (tetap tanya pilih printer).
+- `cetak-label-spesial.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
+  ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "Kertas habis" & "Kalau
+  ada yang gagal" di bawah), tanpa mencari ulang folder sesi.
+
+**Kertas habis / printer bermasalah di tengah cetak**: program memantau antrian cetak
+Windows (PrintManagement) setelah tiap file dikirim. Kalau job itu ditandai bermasalah
+(kertas habis, offline, dll), program **berhenti di file itu** dan menampilkan pesan untuk
+memperbaikinya (isi ulang kertas, dst) lalu tekan ENTER untuk **melanjutkan dari file yang
+sama** — tidak ada file yang terlewat diam-diam, dan file sebelumnya tidak dicetak ulang.
+Bisa juga ketik `lewati` untuk melewati 1 file itu saja (dicatat sebagai gagal). Catatan:
+deteksi ini bergantung pada driver printer melapor ke Windows — kalau printer tidak
+mendukungnya, program tetap jalan tanpa pemantauan otomatis (ada peringatan di log/layar).
+
+**Log jelas tiap file**: setiap file yang diproses (berhasil, gagal, atau dilewati)
+dicatat ke `logs/cetak_YYYY-MM.log` (format sama seperti `logs/run_YYYY-MM.log` di
+`main.py`) sekaligus ditampilkan di layar.
+
+**Kalau ada yang gagal**: setelah semua file selesai diproses, daftar nama file yang
+gagal/dilewati disimpan ke `logs/gagal_cetak_<waktu>.txt`, dan program langsung
+menawarkan untuk mencetak **ULANG hanya file yang gagal itu** (Y/N) — bisa langsung saat
+itu juga, atau belakangan lewat `--ulang` di atas.
+
+**Perlu [SumatraPDF](https://www.sumatrapdfreader.org/) terinstall** (gratis, dipakai
+untuk mencetak PDF langsung dari command line tanpa jendela PDF reader muncul satu-satu).
+Lokasinya dicari otomatis; kalau tidak ketemu, set environment variable
+`SUMATRA_PDF_PATH` ke lokasi `SumatraPDF.exe`.
 
 ## Jadwal otomatis (Windows Task Scheduler)
 
