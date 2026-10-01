@@ -1,0 +1,4 @@
+# File .bat WAJIB CRLF: cmd.exe salah mencari label (call :x / goto x) di file berakhiran
+# baris LF, sehingga eksekusi melompat ke baris yang salah - lihat tests/test_bat.py.
+*.bat text eol=crlf
+*.cmd text eol=crlf

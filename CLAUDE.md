@@ -34,6 +34,7 @@ jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_sku_spesial.py
 .venv\Scripts\python tests\test_jubelio.py
 .venv\Scripts\python tests\test_main.py
+.venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
 
 Tidak ada test runner (pytest dsb) terpasang sebagai framework — tiap file test adalah skrip
@@ -95,5 +96,22 @@ secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
   itu, termasuk daftar nama yang SENGAJA tidak diubah karena jadi bagian logika program
   (pola nama file picklist/label hasil generate, folder sesi `YYYY-MM-DD_N`).
 - Gaya kode Python mengikuti PEP 8 — ringkasannya ada di [docs/pep-8.md](docs/pep-8.md).
+- **`.bat`: di dalam `for /f ... in ('...')`, path python.exe TIDAK boleh dikutip** — tulis
+  `('.venv\Scripts\python.exe -c "..."')`, BUKAN `('".venv\Scripts\python.exe" -c "..."')`.
+  for /f menjalankan perintahnya lewat `cmd /c`, yang membuang kutip pertama & terakhir kalau
+  perintah diawali `"`, sehingga muncul error `'.venv\Scripts\python.exe" -c "import' is not
+  recognized...`. Pola berkutip itu hanya aman untuk baris perintah biasa (di luar for /f).
+  Bug ini sudah 3x muncul lagi karena for /f baru menyalin pola baris biasa;
+  `tests/test_bat.py` sekarang menolaknya.
+- **`.bat` WAJIB berakhiran baris CRLF, bukan LF.** Di file LF, cmd.exe salah menghitung
+  posisi saat mencari label (`call :catat_waktu`, `goto menu`) sehingga eksekusi melompat ke
+  baris yang salah — kejadian 2026-10-01: memilih TIPE 1 ikut menjalankan langkah TIPE 2/3/4
+  SUNGGUHAN, lalu menu "0. Keluar" malah melanjutkan "8/8 SPX KOMBINASI" (kembali ke `call`
+  yang belum selesai). Alat edit (termasuk Claude) sering menulis file baru sebagai LF, dan git
+  tidak mengubah working copy saat commit, jadi `.gitattributes` saja tidak cukup — cek
+  ulang CRLF setelah mengedit `.bat`; `tests/test_bat.py` menolak `.bat` LF dan
+  menyimulasikan tiap TIPE di cmd.exe (python palsu) untuk memastikan urutan langkahnya.
+  Jangan juga mengedit `.bat` yang sedang berjalan (cmd membaca ulang file per baris
+  berdasarkan posisi byte).
 - `.env` (tidak dikomit) berisi `JUBELIO_EMAIL`/`JUBELIO_PASSWORD` — lihat
   [docs/instalasi.md](docs/instalasi.md) untuk setup dari nol di PC lain.

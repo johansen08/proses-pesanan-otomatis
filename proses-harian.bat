@@ -24,7 +24,9 @@ if "%pilih%"=="1" goto tipe1
 if "%pilih%"=="2" goto tipe2
 if "%pilih%"=="3" goto tipe3
 if "%pilih%"=="4" goto tipe4
-if "%pilih%"=="0" goto :eof
+rem Keluar pakai "exit" (bukan "goto :eof"/"exit /b"): kalau ada call :label yang belum
+rem kembali, "goto :eof" cuma kembali ke baris setelah call itu dan proses LANJUT jalan.
+if "%pilih%"=="0" exit
 echo.
 echo Pilihan "%pilih%" tidak dikenali, coba lagi.
 pause
@@ -252,9 +254,11 @@ rem ============================================================
 rem Catat waktu sekarang (epoch, time.time()) ke variabel %1 - dipakai
 rem sebelum & sesudah tiap langkah proses supaya durasinya bisa dihitung
 rem src\rekap_waktu.py di akhir tiap TIPE.
+rem JANGAN beri kutip di sekitar .venv\Scripts\python.exe di dalam for /f
+rem (lihat tests\test_bat.py) - cmd.exe akan salah potong command-nya.
 rem ============================================================
 :catat_waktu
-for /f "delims=" %%t in ('".venv\Scripts\python.exe" -c "import time; print(time.time())"') do set "%~1=%%t"
+for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "%~1=%%t"
 exit /b 0
 
 rem ============================================================
