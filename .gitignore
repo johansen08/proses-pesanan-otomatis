@@ -6,9 +6,8 @@ laporan-sku-spesial/
 logs/
 __pycache__/
 .pytest_cache/
-sniff/sniff_output/
 *.cookies.json
-sniff/profil_browser/
+sniff/
 label-pengiriman/
 riwayat_picklist.*
 .vscode/
