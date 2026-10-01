@@ -7,6 +7,13 @@ TAG_SPESIAL di situ), menyaring yang namanya mengandung penanda `_SPESIAL_`
 (diurutkan dari nomor PICK terkecil - urutan dibuat, bukan abjad nama file) ke printer
 pilihan lewat SumatraPDF (-print-to, -silent).
 
+Sebelum mencetak (alur folder sesi, bukan `--ulang`), nomor PICK label yang ditemukan dicek
+berurut atau tidak (lihat cari_nomor_terlompat()) - kalau ada nomor yang hilang di tengah
+(mis. ada PICK 621, 622, lalu lompat ke 700), program BERHENTI dan tanya konfirmasi dulu
+sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masuk folder ini
+(masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
+meski pakai --tanpa-konfirmasi.
+
 Pemakaian:
     .venv\\Scripts\\python.exe src\\print_spesial.py
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
@@ -132,6 +139,22 @@ def daftar_label_spesial(folder_sesi: Path) -> list[Path]:
                 berlabel.append((int(cocok.group(1)), f))
     berlabel.sort(key=lambda x: x[0])
     return [f for _, f in berlabel]
+
+
+def cari_nomor_terlompat(file_pdf: list[Path]) -> list[int]:
+    """Cari nomor PICK yang terlompat (hilang) di antara nomor PICK terkecil dan
+    terbesar pada `file_pdf` (hasil daftar_label_spesial, sudah urut naik) - tanda
+    kemungkinan ada label yang tidak ikut tercetak/tersalin ke folder ini. Return
+    list nomor yang hilang, urut naik (kosong kalau berurut sempurna atau <2 file)."""
+    nomor = []
+    for f in file_pdf:
+        cocok = POLA_SPESIAL.match(f.name)
+        if cocok:
+            nomor.append(int(cocok.group(1)))
+    if len(nomor) < 2:
+        return []
+    lengkap = set(range(nomor[0], nomor[-1] + 1))
+    return sorted(lengkap - set(nomor))
 
 
 # ============================================================== 2. SumatraPDF & printer
@@ -313,7 +336,9 @@ def main() -> int:
     ap.add_argument("--folder", type=Path,
                     help="Folder sesi label-pengiriman tertentu (default: paling baru)")
     ap.add_argument("--tanpa-konfirmasi", action="store_true",
-                    help="Tanpa tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)")
+                    help="Tanpa tanya Y/N sebelum mulai cetak (tetap tanya pilih printer; "
+                         "tetap tanya juga kalau ada nomor PICK terlompat, lihat "
+                         "cari_nomor_terlompat())")
     ap.add_argument("--ulang", type=Path,
                     help="Cetak ULANG hanya file dari daftar gagal sebelumnya "
                          "(logs/gagal_cetak_*.txt), lewati pencarian folder sesi")
@@ -334,6 +359,21 @@ def main() -> int:
             log.info("Ditemukan %d label SPESIAL (urut cetak):", len(file_pdf))
             for f in file_pdf:
                 log.info("  %s", f.name)
+
+            terlompat = cari_nomor_terlompat(file_pdf)
+            if terlompat:
+                log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
+                           len(terlompat), ", ".join(str(n) for n in terlompat))
+                print()
+                print(f"!!! PERINGATAN: ada {len(terlompat)} nomor PICK yang terlompat/hilang "
+                     "di antara label SPESIAL folder ini:")
+                print("    " + ", ".join(str(n) for n in terlompat))
+                print("    Kemungkinan ada label yang belum masuk folder ini (mis. masih dibuat, "
+                     "gagal, atau beda folder sesi) - cek dulu sebelum lanjut.")
+                lanjut = input("Tetap lanjut cetak yang ADA sekarang? (Y/N): ").strip().lower()
+                if lanjut != "y":
+                    log.info("Dibatalkan oleh user (nomor PICK terlompat).")
+                    return 0
 
         sumatra = cari_sumatra()
         printer = pilih_printer(daftar_printer())

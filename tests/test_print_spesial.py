@@ -77,6 +77,40 @@ def uji_daftar_label_spesial_folder_kosong():
         print("  daftar_label_spesial: list kosong kalau tidak ada label spesial")
 
 
+def uji_cari_nomor_terlompat_berurut_sempurna():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        _buat(folder,
+             "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
+             "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
+             "PICK-000155623_SPESIAL_TRC9_2026-10-01_090000.pdf")
+        file_pdf = ps.daftar_label_spesial(folder)
+        assert ps.cari_nomor_terlompat(file_pdf) == []
+        print("  cari_nomor_terlompat: list kosong kalau nomor PICK berurut sempurna")
+
+
+def uji_cari_nomor_terlompat_ada_yang_hilang():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        _buat(folder,
+             "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
+             "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
+             "PICK-000155625_SPESIAL_TRC9_2026-10-01_090000.pdf")
+        file_pdf = ps.daftar_label_spesial(folder)
+        assert ps.cari_nomor_terlompat(file_pdf) == [155623, 155624]
+        print("  cari_nomor_terlompat: deteksi nomor PICK yang hilang di tengah")
+
+
+def uji_cari_nomor_terlompat_kurang_dari_2_file():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        _buat(folder, "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf")
+        file_pdf = ps.daftar_label_spesial(folder)
+        assert ps.cari_nomor_terlompat(file_pdf) == []
+        assert ps.cari_nomor_terlompat([]) == []
+        print("  cari_nomor_terlompat: list kosong kalau <2 file (tidak ada rentang untuk dicek)")
+
+
 def uji_simpan_dan_baca_daftar_gagal_roundtrip():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
