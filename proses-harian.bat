@@ -4,7 +4,7 @@ cd /d "%~dp0"
 
 rem Sesi folder label dihitung SEKALI di sini (bertahan selama proses-harian.bat ini berjalan).
 rem Ditutup lalu dijalankan ulang -> sesi baru (angka lanjut dari yang terbesar hari ini).
-for /f "delims=" %%i in ('".venv\Scripts\python.exe" -c "import sys; sys.path.insert(0, 'src'); from main import sesi_label_baru; print(sesi_label_baru())"') do set "LABEL_SESI_DIR=%%i"
+for /f "delims=" %%i in ('.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, 'src'); from main import sesi_label_baru; print(sesi_label_baru())"') do set "LABEL_SESI_DIR=%%i"
 echo Sesi label: %LABEL_SESI_DIR%
 
 :menu
@@ -196,7 +196,7 @@ rem errorlevel 1 -> user pilih batal (kembali ke menu).
 rem ============================================================
 :cek_jam
 set "JAM_OK="
-for /f "delims=" %%i in ('".venv\Scripts\python.exe" -c "import sys; sys.path.insert(0, 'src'); from main import dalam_jam_menu; print(1 if dalam_jam_menu('%~1') else 0)"') do set "JAM_OK=%%i"
+for /f "delims=" %%i in ('.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, 'src'); from main import dalam_jam_menu; print(1 if dalam_jam_menu('%~1') else 0)"') do set "JAM_OK=%%i"
 if "%JAM_OK%"=="1" exit /b 0
 echo.
 echo PERINGATAN: sekarang di luar jam %~2.
