@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 import peringatan_picklist
+import peringatan_resi
 
 
 def format_durasi(detik):
@@ -46,10 +47,14 @@ def main():
     print(f"  {'TOTAL'.ljust(lebar_nama)} : {format_durasi(total)}")
     print("=" * 60)
 
-    # peringatan picklist terlompat/batal selama TIPE ini (dicatat main.py di logs/)
+    # peringatan picklist terlompat/batal & pesanan tanpa resi selama TIPE ini
+    # (dicatat main.py di logs/)
     if awal is not None:
-        peringatan_picklist.atur_folder(Path(__file__).resolve().parent.parent / "logs")
+        folder_log = Path(__file__).resolve().parent.parent / "logs"
+        peringatan_picklist.atur_folder(folder_log)
         peringatan_picklist.cetak(peringatan_picklist.baca_sejak(awal))
+        peringatan_resi.atur_folder(folder_log)
+        peringatan_resi.cetak(peringatan_resi.baca_sejak(awal))
 
 
 if __name__ == "__main__":

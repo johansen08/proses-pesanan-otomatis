@@ -73,6 +73,13 @@ project secara umum, root tidak boleh berisi file `.py`):
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
   di bawah rekap waktu `src/rekap_waktu.py` (akhir tiap TIPE `proses-harian.bat`).
+- `src/peringatan_resi.py` — pola yang sama dengan `peringatan_picklist.py`, tapi untuk
+  pesanan yang sudah Picking > Selesai namun tidak kunjung dapat nomor resi sampai batas
+  tunggu `minta_resi()` di `proses_label.py` habis (dan bukan berstatus batal) — biasanya
+  tanda ada request cancel dari customer/channel yang masih diproses Jubelio, sehingga tim
+  resi perlu tahu nomor pesanannya untuk diinformasikan ke tim admin/CS. Peringatan di
+  `logs/pesanan_tanpa_resi.jsonl`; dicetak di tempat yang sama (akhir `main.py` & rekap
+  waktu tiap TIPE).
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder

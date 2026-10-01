@@ -70,6 +70,7 @@ import requests
 
 import jubelio
 import peringatan_picklist
+import peringatan_resi
 from sku_spesial import KURIR_DIIZINKAN, MIN_RESI
 
 REPORT_API = "https://report-prod.jubelio.com/api/reports"
@@ -961,6 +962,7 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     if batal:
         log.info("  %d pesanan dibatalkan, tidak dicetak (tetap dihitung selesai): %s",
                  len(batal), ", ".join(batal))
+    peringatan_resi.catat_tanpa_resi(picklist_no, sku, tanpa_resi)
     catatan = "; ".join(teks for teks in (
         f"batal, tidak dicetak: {', '.join(batal)}" if batal else "",
         f"belum dapat resi: {', '.join(tanpa_resi)}" if tanpa_resi else "") if teks)

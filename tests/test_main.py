@@ -155,6 +155,22 @@ def uji_peringatan_picklist_terlompat():
     print("  peringatan_picklist: nomor terlompat terdeteksi & tersimpan, berurutan tidak dianggap")
 
 
+def uji_peringatan_resi_tanpa_resi():
+    import peringatan_resi as pr
+    with tempfile.TemporaryDirectory() as tmp:
+        pr.atur_folder(Path(tmp))
+        pr._sesi.clear()
+        pr.catat_tanpa_resi("PICK-000154839", "T01-BSBI-5", [])
+        assert pr._sesi == [], "tidak ada pesanan tanpa resi: tidak perlu dicatat"
+        pr.catat_tanpa_resi("PICK-000154839", "T01-BSBI-5", ["SO9068180", "SO9068214"])
+        assert len(pr._sesi) == 1
+        pesan = pr._sesi[0]
+        assert "PICK-000154839" in pesan and "SO9068180" in pesan and "SO9068214" in pesan, pesan
+        assert len(pr.baca_sejak(0)) == 1 and pr.baca_sejak(9e12) == []
+    pr._file_peringatan = None
+    print("  peringatan_resi: pesanan tanpa resi (bukan batal) dicatat untuk diinformasikan ke CS")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

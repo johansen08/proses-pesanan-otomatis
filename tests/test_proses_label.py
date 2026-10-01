@@ -311,6 +311,26 @@ def uji_pesanan_batal_terlihat_di_detail():
     print("  status batal hanya di detail pesanan: tetap dikenali setelah batas waktu")
 
 
+def uji_pesanan_tanpa_resi_dicatat_peringatan():
+    """Pesanan yang bukan batal tapi tidak kunjung dapat resi (mis. ada request cancel yang
+    masih diproses) harus dicatat lewat peringatan_resi, bukan cuma masuk log biasa."""
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    _picklist_selesai(j, [9068214, 9068180])
+    lama, pl.TUNGGU_RESI_S = pl.TUNGGU_RESI_S, 0
+    pl.peringatan_resi._sesi.clear()
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            baris = pl.lanjutkan(k, "PICK-000154839", Path(d) / "label", Path(d) / "riwayat.xlsx")
+    finally:
+        pl.TUNGGU_RESI_S = lama
+    assert baris["Catatan"] == "belum dapat resi: SO9068214, SO9068180", baris
+    assert len(pl.peringatan_resi._sesi) == 1
+    pesan = pl.peringatan_resi._sesi[0]
+    assert "SO9068214" in pesan and "SO9068180" in pesan and "PICK-000154839" in pesan, pesan
+    print("  pesanan tanpa resi (bukan batal): dicatat peringatan_resi untuk diinfokan ke CS")
+
+
 def uji_lewati_jika_kurang_dari_3():
     j = JubelioPalsu(_html_label())
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
