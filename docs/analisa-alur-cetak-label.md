@@ -189,10 +189,14 @@ sudah dapat nomor resi), **File Label** (nama file PDF), **Catatan** (kosong jik
 
 | Waktu | SKU | No Picklist | Total Pesanan | Resi Keluar | File Label | Catatan | Durasi |
 |---|---|---|---|---|---|---|---|
-| 26-09-2026 09:06 | BM-AKS28-2 | PICK-000154834 | 19 | 19 | PICK-000154834_BM-AKS28-2_...pdf | | 0:02:10 |
-| 26-09-2026 09:10 | BM-AKS28-4 | PICK-000154835 | 8 | 8 | PICK-000154835_BM-AKS28-4_...pdf | | 0:01:32 |
-| 26-09-2026 09:37 | T01-BSBI-5 | PICK-000154839 | 6 | 6 | PICK-000154839_T01-BSBI-5_...pdf | | 0:01:48 |
-| 26-09-2026 09:40 | T01-BSCT-3 | PICK-000154840 | 9 | 9 | PICK-000154840_T01-BSCT-3_...pdf | | 0:02:05 |
+| 26-09-2026 09:06 | BM-AKS28-2 | PICK-000154834 | 19 | 19 | PICK-000154834_SPESIAL_BM-AKS28-2_...pdf | | 0:02:10 |
+| 26-09-2026 09:10 | BM-AKS28-4 | PICK-000154835 | 8 | 8 | PICK-000154835_SPESIAL_BM-AKS28-4_...pdf | | 0:01:32 |
+| 26-09-2026 09:37 | T01-BSBI-5 | PICK-000154839 | 6 | 6 | PICK-000154839_SPESIAL_T01-BSBI-5_...pdf | | 0:01:48 |
+| 26-09-2026 09:40 | T01-BSCT-3 | PICK-000154840 | 9 | 9 | PICK-000154840_SPESIAL_T01-BSCT-3_...pdf | | 0:02:05 |
+
+Catatan: penanda `SPESIAL` di nama file hanya berlaku untuk picklist SKU spesial (Alur 1).
+Picklist urgent/reguler/Shopee Pagi/J&T Resi Siang (Alur 2-5) tetap pakai nama skenario
+tanpa penanda ini, mis. `PICK-000155230_LAZADA_...pdf` (lihat README.md bagian terkait).
 
 (Kolom Resi Keluar/File Label/Durasi pada contoh di atas diisi sesuai skema saat ini untuk
 ilustrasi — nilai persisnya tidak ada di rekaman sniff asli, yang cuma merekam sampai

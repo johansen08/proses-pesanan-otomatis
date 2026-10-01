@@ -15,6 +15,9 @@ saat pembuatan, lihat JADWAL-PROSES.md), disaring lagi dengan aturan SKU spesial
 tunggal, qty 1, nilai != 0, SKU >= 3 resi sejenis - lihat panduan-sku-spesial.md; penentuan
 SKU spesial itu sendiri TETAP menggabung J&T+SPX, `kurir` hanya membatasi resi mana yang
 benar-benar dipicklist). 1 picklist = 1 SKU, validasi SKU-nya sama semua lewat _cek_item().
+Nama file label PDF alur ini (dan hanya alur ini) disisipi penanda `SPESIAL`:
+`PICK-000xxxxxx_SPESIAL_<SKU>_<tanggal>_<jam>.pdf` (lihat TAG_SPESIAL, dipakai lewat
+parameter `tag` di lanjutkan_picklist()). Alur 2-5 TIDAK memakai penanda ini.
 
 Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 2 skenario -
 channel Lazada, dan kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia -
@@ -74,6 +77,11 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # JADWAL-PROSES.md): nilai --kurir CLI ("jnt"/"spx") -> nilai filter kurir Jubelio.
 # kurir=None (default, dipakai TIPE 1/TIPE 4) = J&T dan SPX digabung seperti semula.
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
+# Penanda di nama file label PDF, HANYA untuk picklist SKU spesial (Alur 1 - proses()/
+# lanjutkan_picklist() dipanggil dari proses()). Alur 2-5 (urgent/reguler/Shopee Pagi/
+# J&T Resi Siang) tidak memakai tag ini, begitu juga lanjutkan() (resume generik lewat
+# --lanjut, tidak tahu picklist itu dari alur mana).
+TAG_SPESIAL = "SPESIAL"
 
 
 def _filter_kurir(kurir: str | None, gabungan: list[str]) -> list[str]:
@@ -923,10 +931,12 @@ def _nama_file(teks: str) -> str:
 
 
 def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int,
-                       sku: str, folder_label: Path, nama_file: str | None = None) -> dict:
+                       sku: str, folder_label: Path, nama_file: str | None = None,
+                       tag: str | None = None) -> dict:
     """Langkah 3-6. Aman dipanggil ulang untuk picklist yang prosesnya terhenti.
     `nama_file`: varian `sku` yang dipakai untuk nama file PDF (mis. tanpa "&"); default
-    sama dengan `sku`."""
+    sama dengan `sku`. `tag`: penanda opsional disisipkan setelah No Picklist di nama file
+    (mis. TAG_SPESIAL untuk Alur 1 - SKU spesial); default tanpa penanda."""
     log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, picklist_id)
 
@@ -955,7 +965,8 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     file_label = ""
     if ada_resi:
         log.info("  [6] Unduh label PDF (%d pesanan)", len(ada_resi))
-        tujuan = folder_label / (f"{picklist_no}_{_nama_file(nama_file or sku)}_"
+        awalan = f"{picklist_no}_{tag}_" if tag else f"{picklist_no}_"
+        tujuan = folder_label / (f"{awalan}{_nama_file(nama_file or sku)}_"
                                  f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
         file_label = str(unduh_label(k, ada_resi, tujuan))
         log.info("  Label: %s", file_label)
@@ -1015,7 +1026,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
                      "No Picklist": pno, "Total Pesanan": len(ids)}
             try:
-                baris = lanjutkan_picklist(k, pid, pno, len(ids), sku, folder_label)
+                baris = lanjutkan_picklist(k, pid, pno, len(ids), sku, folder_label, tag=TAG_SPESIAL)
             except Exception as e:     # noqa: BLE001
                 log.exception("  TERHENTI di %s: %s", pno, e)
                 baris["Catatan"] = f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"
