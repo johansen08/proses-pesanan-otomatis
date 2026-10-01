@@ -8,6 +8,15 @@
   6. Unduh label PDF (Telerik report-prod, tanpa browser)
 Setiap picklist dicatat di riwayat_picklist.xlsx.
 
+Alur 0 - picklist sampel (fungsi rencana_sampel()/proses_sampel()): lintas SKU, pesanan channel
+TikTok Shop ("Shop | Tokopedia") yang nilainya 0/kosong (lihat CHANNEL_ID_TIKTOK_SHOP &
+catatan TT-586350230929114342-67824, 01-10-2026) - SEBELUMNYA dibuang diam-diam oleh
+ambil_pesanan_channel() (dipakai Alur 2-5) tanpa pernah masuk picklist apa pun. Mulai
+proses-harian.bat TIPE 1-4, picklist ini SELALU dicek PALING PERTAMA (sebelum picklist
+urgent) lewat main.py --sampel: 1 picklist kalau ada pesanannya, dilewati kalau tidak ada,
+lalu lanjut seperti biasa ke urgent/spesial/reguler. ambil_pesanan_channel() (Alur 2-5) TETAP
+mengeluarkan pesanan sampel ini dari hasilnya supaya tidak dobel diproses.
+
 Alur 1 - SKU spesial (fungsi rencana()/proses()/lanjutkan()): per SKU, filter kurir J&T/SPX
 (default, digabung) atau 1 kurir saja lewat parameter `kurir` ("jnt"/"spx" - lihat
 KURIR_PILIHAN, dipakai TIPE 2 & TIPE 3 supaya J&T dan SPX jadi picklist terpisah
@@ -289,18 +298,19 @@ def saring(pesanan: list[dict], resi_spesial: set[str],
     return pakai, buang
 
 
-# ============================================== 1b. picklist urgent per channel
-def ambil_pesanan_channel(k: Klien, channel_ids: list[int] | None = None,
-                          couriers: list[str] | None = None) -> list[dict]:
-    """Semua pesanan Siap Proses, lintas SKU, diurutkan tanggal transaksi TERLAMA dulu (ASC)
-    supaya resi yang lebih lama selalu masuk picklist pertama kalau bagi_batch() memecahnya
-    jadi beberapa picklist. `channel_ids` opsional: None/kosong = semua channel (dipakai
-    skenario yang urgent-nya ditentukan kurir, bukan channel - mis. GTL/SiCepat, yang urgent
-    baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok). Opsional filter kurir. Kurir
-    SPX dan channel Shopee selalu ikut menyertakan pesanan tipe "pengiriman kilat" kalau tidak
-    difilter -> tipe itu tidak diproses lewat alur picklist ini (lihat TIPE_PESANAN_FILTER),
-    jadi filter tipe pesanan otomatis ditambahkan kalau channel-nya Shopee dan/atau
-    kurirnya SPX."""
+# ============================================== 1a. picklist sampel (TikTok Shop nilai 0)
+def _ambil_pesanan_channel_mentah(k: Klien, channel_ids: list[int] | None = None,
+                                  couriers: list[str] | None = None) -> list[dict]:
+    """Pengambilan mentah dipakai ambil_pesanan_channel() & ambil_pesanan_sampel() - BELUM
+    dikeluarkan pesanan sampelnya (lihat masing-masing fungsi itu). Semua pesanan Siap Proses,
+    lintas SKU, diurutkan tanggal transaksi TERLAMA dulu (ASC) supaya resi yang lebih lama
+    selalu masuk picklist pertama kalau bagi_batch() memecahnya jadi beberapa picklist.
+    `channel_ids` opsional: None/kosong = semua channel (dipakai skenario yang urgent-nya
+    ditentukan kurir, bukan channel - mis. GTL/SiCepat, yang urgent baik dari Tokopedia asli
+    maupun "Shop | Tokopedia"/TikTok). Opsional filter kurir. Kurir SPX dan channel Shopee
+    selalu ikut menyertakan pesanan tipe "pengiriman kilat" kalau tidak difilter -> tipe itu
+    tidak diproses lewat alur picklist ini (lihat TIPE_PESANAN_FILTER), jadi filter tipe
+    pesanan otomatis ditambahkan kalau channel-nya Shopee dan/atau kurirnya SPX."""
     pakai_filter_tipe = ((channel_ids and CHANNEL_ID_SHOPEE in channel_ids)
                          or any(c.lower() == "spx" for c in couriers or []))
     hasil, page = [], 1
@@ -328,17 +338,57 @@ def ambil_pesanan_channel(k: Klien, channel_ids: list[int] | None = None,
         # filter API saja (lihat catatan "Shop | Tokopedia" di atas)
         izin = set(channel_ids)
         hasil = [o for o in hasil if o.get("source") in izin]
-    # channel TikTok Shop ("Shop | Tokopedia", source 131076) kosong/0 nilainya = pesanan
-    # sampel/kreator (lihat catatan TT-586350230929114342-67824, 01-10-2026) - khusus channel
-    # ini saja, BUKAN Shopee/Lazada/GTL-SiCepat yang nilai kecilnya tetap pesanan sungguhan
-    # (sniff 01-10-2026: Shopee terendah Rp 1.058, tidak pernah 0/kosong).
-    sampel = [o["salesorder_no"] for o in hasil
-             if o.get("source") == CHANNEL_ID_TIKTOK_SHOP and _angka(o.get("grand_total")) == 0]
+    return hasil
+
+
+def _is_sampel(o: dict) -> bool:
+    """channel TikTok Shop ("Shop | Tokopedia", source 131076) kosong/0 nilainya = pesanan
+    sampel/kreator (lihat catatan TT-586350230929114342-67824, 01-10-2026) - khusus channel
+    ini saja, BUKAN Shopee/Lazada/GTL-SiCepat yang nilai kecilnya tetap pesanan sungguhan
+    (sniff 01-10-2026: Shopee terendah Rp 1.058, tidak pernah 0/kosong)."""
+    return o.get("source") == CHANNEL_ID_TIKTOK_SHOP and _angka(o.get("grand_total")) == 0
+
+
+LABEL_SAMPEL = "SAMPEL-TIKTOK"
+
+
+def ambil_pesanan_sampel(k: Klien) -> list[dict]:
+    """Semua pesanan Siap Proses channel TikTok Shop nilai 0/kosong (lihat _is_sampel()) -
+    dipakai picklist sampel (Alur 0), SELALU dicek paling pertama di tiap TIPE
+    proses-harian.bat, sebelum urgent."""
+    return [o for o in _ambil_pesanan_channel_mentah(k, [CHANNEL_ID_TIKTOK_SHOP]) if _is_sampel(o)]
+
+
+def rencana_sampel(k: Klien) -> None:
+    """Mode uji picklist sampel: hanya membaca data, tidak mengubah apa pun di Jubelio."""
+    pesanan = ambil_pesanan_sampel(k)
+    batch = bagi_batch([o["salesorder_id"] for o in pesanan])
+    log.info("[UJI] Sampel TikTok Shop (nilai 0/kosong) pesanan siap proses %3d -> "
+             "%d picklist (maks %d/picklist)", len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
+
+
+def proses_sampel(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
+    """Picklist sampel: semua pesanan TikTok Shop nilai 0/kosong, digabung jadi 1 picklist
+    (dipecah kalau > MAKS_PESANAN_PICKLIST). Dijalankan PALING PERTAMA di tiap TIPE
+    proses-harian.bat (sebelum urgent) lewat main.py --sampel; dilewati otomatis kalau tidak
+    ada pesanan sampel saat itu (_proses_channel_batch mengembalikan [] tanpa bikin picklist)."""
+    pesanan = ambil_pesanan_sampel(k)
+    return _proses_channel_batch(k, "Sampel TikTok Shop", LABEL_SAMPEL, pesanan,
+                                 file_riwayat, folder_label)
+
+
+# ============================================== 1b. picklist urgent per channel
+def ambil_pesanan_channel(k: Klien, channel_ids: list[int] | None = None,
+                          couriers: list[str] | None = None) -> list[dict]:
+    """Seperti _ambil_pesanan_channel_mentah(), tapi pesanan sampel (lihat _is_sampel(), Alur 0)
+    dikeluarkan dari hasilnya supaya tidak dobel diproses - picklist sampel punya alurnya
+    sendiri (ambil_pesanan_sampel()/proses_sampel()), dijalankan terpisah sebelum ini."""
+    hasil = _ambil_pesanan_channel_mentah(k, channel_ids, couriers)
+    sampel = [o["salesorder_no"] for o in hasil if _is_sampel(o)]
     if sampel:
-        log.warning("  %d pesanan TikTok Shop nilai 0 (sampel/kreator) dikeluarkan: %s",
-                    len(sampel), ", ".join(sampel))
-    return [o for o in hasil
-           if not (o.get("source") == CHANNEL_ID_TIKTOK_SHOP and _angka(o.get("grand_total")) == 0)]
+        log.warning("  %d pesanan TikTok Shop nilai 0 (sampel/kreator) dikeluarkan dari sini "
+                    "(punya picklist sendiri lewat --sampel): %s", len(sampel), ", ".join(sampel))
+    return [o for o in hasil if not _is_sampel(o)]
 
 
 def bagi_batch(ids: list[int], maks: int = MAKS_PESANAN_PICKLIST) -> list[list[int]]:

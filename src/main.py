@@ -16,6 +16,12 @@ Proses sampai label pengiriman (proses_label.py):
 Dengan "--label --jalankan", PDF BARU dibuat setelah proses selesai, dari jumlah pesanan
 yang benar-benar berhasil dipicklist per SKU (bukan daftar kandidat awal).
 
+Picklist sampel (proses_label.py): pesanan channel TikTok Shop ("Shop | Tokopedia") nilainya
+0/kosong (kreator/sampel) - TIDAK bagian dari alur "--label --jalankan", dijalankan PALING
+PERTAMA di tiap TIPE proses-harian.bat (sebelum urgent). Berdiri sendiri lewat --sampel:
+    python src/main.py --sampel                          # MODE UJI: hanya tampilkan rencana
+    python src/main.py --sampel --jalankan
+
 Picklist urgent (proses_label.py): TIDAK bagian dari alur "--label --jalankan" (menu 3 di
 menu.bat cuma untuk kurir J&T/SPX). 2 skenario: channel Lazada, dan kurir GTL/SiCepat
 (lintas channel - baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok, urgent-nya
@@ -224,6 +230,11 @@ def _main() -> int:
     ap.add_argument("--tanpa-reguler", action="store_true",
                     help="dipakai bersama --label: lewati picklist sisa reguler otomatis "
                         "setelah SKU spesial selesai (SKU spesial saja)")
+    ap.add_argument("--sampel", action="store_true",
+                    help="hanya buat picklist sampel (channel TikTok Shop, nilai pesanan "
+                        "0/kosong - kreator/sampel) sampai label PDF, tanpa proses lain "
+                        "(dijalankan paling pertama di tiap TIPE proses-harian.bat, sebelum "
+                        "urgent; tanpa --jalankan = mode uji)")
     ap.add_argument("--urgent", action="store_true",
                     help="hanya buat picklist urgent (channel Lazada, kurir GTL/SiCepat lintas "
                         "channel) sampai label PDF, tanpa proses SKU spesial "
@@ -266,6 +277,8 @@ def _main() -> int:
     try:
         if args.lanjut:
             return lanjut_picklist(log, args)
+        if args.sampel:
+            return sampel_picklist(log, args)
         if args.urgent:
             return urgent_picklist(log, args)
         if args.reguler:
@@ -403,6 +416,21 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
     log.info("Riwayat: %s", FILE_RIWAYAT)
     bermasalah = cetak_bermasalah(hasil + hasil_reguler)
     return 1 if bermasalah else 0
+
+
+def sampel_picklist(log: logging.Logger, args) -> int:
+    import proses_label
+
+    k = proses_label.Klien(login(log))
+    if not args.jalankan:
+        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
+        proses_label.rencana_sampel(k)
+        return 0
+    hasil = proses_label.proses_sampel(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
+    gagal = cetak_bermasalah(hasil)
+    log.info("SELESAI sampel: %d picklist dibuat%s", len(hasil) - len(gagal),
+             f", {len(gagal)} bermasalah" if gagal else "")
+    return 1 if gagal else 0
 
 
 def urgent_picklist(log: logging.Logger, args) -> int:

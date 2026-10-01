@@ -449,6 +449,78 @@ def uji_ambil_pesanan_channel_nilai_0_hanya_dibuang_untuk_tiktok_shop():
           "LZ-NILAI-0 (channel lain, nilai 0) TETAP diproses - bukan sampel")
 
 
+def uji_ambil_pesanan_sampel_hanya_ambil_tiktok_shop_nilai_0():
+    # Kebalikan dari ambil_pesanan_channel(): ambil_pesanan_sampel() HARUS cuma mengambil
+    # pesanan yang dibuang di sana (TikTok Shop nilai 0/kosong), supaya pesanan itu sekarang
+    # masuk picklist sampel-nya sendiri, bukan hilang sama sekali.
+    class JubelioPalsuCampur:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
+            data = [
+                {"salesorder_id": 1, "salesorder_no": "TT-SAMPEL", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "0.0000"},
+                {"salesorder_id": 2, "salesorder_no": "TT-SAMPEL-KOSONG", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": None},
+                {"salesorder_id": 3, "salesorder_no": "TT-ASLI", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "35900.0000"},
+            ]
+            return Resp(data={"data": data, "totalCount": len(data)})
+
+    k = pl.Klien("TKN", sesi=JubelioPalsuCampur(), tidur=lambda s: None)
+    pesanan = pl.ambil_pesanan_sampel(k)
+    assert {o["salesorder_no"] for o in pesanan} == {"TT-SAMPEL", "TT-SAMPEL-KOSONG"}, pesanan
+    print("  ambil_pesanan_sampel(): hanya TT-SAMPEL & TT-SAMPEL-KOSONG, TT-ASLI (nilai asli) tidak ikut")
+
+
+def uji_proses_sampel_buat_1_picklist_dan_dilewati_kalau_kosong():
+    class JubelioPalsuSampel:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            data = [
+                {"salesorder_id": 1, "salesorder_no": "TT-SAMPEL-1", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "0.0000"},
+                {"salesorder_id": 2, "salesorder_no": "TT-SAMPEL-2", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "0.0000"},
+            ]
+            return Resp(data={"data": data, "totalCount": len(data)})
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                                   "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                                   "item_full_name": "X", "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            if url.endswith("wms/sales/picklists/"):
+                return Resp(data={"status": "ok", "data": {
+                    "picks": [{"picklist_id": 1, "picklist_no": "PICK-000900001", "status": "ok"}],
+                    "invalidSO": []}})
+            raise AssertionError(f"POST tak dikenal {url}")
+
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+        panggilan.append((pid, pno, jumlah, sku))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        k = pl.Klien("TKN", sesi=JubelioPalsuSampel(), tidur=lambda s: None)
+        with tempfile.TemporaryDirectory() as d:
+            riwayat = Path(d) / "riwayat.xlsx"
+            hasil = pl.proses_sampel(k, riwayat, Path(d) / "label")
+    finally:
+        pl.lanjutkan_picklist = asli
+
+    assert len(hasil) == 1 and hasil[0]["SKU"] == pl.LABEL_SAMPEL, hasil
+    assert panggilan and panggilan[0][3] == pl.LABEL_SAMPEL, panggilan
+    print("  proses_sampel(): 2 pesanan TikTok Shop nilai 0 -> 1 picklist SAMPEL-TIKTOK")
+
+    class JubelioPalsuKosong:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            return Resp(data={"data": [], "totalCount": 0})
+
+    k = pl.Klien("TKN", sesi=JubelioPalsuKosong(), tidur=lambda s: None)
+    with tempfile.TemporaryDirectory() as d:
+        hasil = pl.proses_sampel(k, Path(d) / "riwayat.xlsx", Path(d) / "label")
+    assert hasil == [], hasil
+    print("  proses_sampel(): tidak ada pesanan sampel -> dilewati, tidak ada picklist dibuat")
+
+
 def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     j = JubelioPalsuUrgent()
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)

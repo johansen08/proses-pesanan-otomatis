@@ -101,6 +101,41 @@ dari `/` menjadi `/xlsx/`, lalu diunduh langsung dengan cookie `JB_OMNI_ACCESS_T
 Jika suatu saat Jubelio mengubah alurnya dan download gagal, rekam ulang dengan
 `sniff\run_sniff_jubel.bat`.
 
+## 0. Picklist sampel (`--sampel`)
+
+**Alur berdiri sendiri, dijalankan PALING PERTAMA di tiap TIPE `proses-harian.bat`** (sebelum
+picklist urgent). Pesanan channel TikTok Shop ("Shop | Tokopedia", `channel_id=131076`) yang
+nilainya **0 atau kosong** adalah pesanan sampel/kreator (lihat catatan
+`TT-586350230929114342-67824`, 01-10-2026) — sebelumnya dibuang diam-diam oleh
+`ambil_pesanan_channel()` di semua alur channel (urgent/reguler/Shopee Pagi/J&T Resi Siang)
+tanpa pernah masuk picklist apa pun. Sekarang pesanan itu dikumpulkan jadi **1 picklist
+tersendiri** (dipecah kalau > 200 pesanan), diproses SAMPAI label PDF juga — kalau tidak ada
+pesanan sampel saat itu, langkah ini otomatis dilewati tanpa membuat picklist, lalu lanjut ke
+langkah berikutnya seperti biasa.
+
+```bash
+jalankan.bat --sampel                 # mode uji
+jalankan.bat --sampel --jalankan      # sungguhan
+```
+
+Dijalankan sebagai langkah PERTAMA di setiap TIPE `proses-harian.bat` (TIPE 1-4), sebelum
+urgent Lazada/GTL-SiCepat. `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
+
+**Format penamaan**: nomor picklist (`PICK-000xxxxxx`) dibuat otomatis oleh Jubelio sendiri,
+sama seperti alur lain — bukan sesuatu yang kita tentukan. Yang kita tentukan cuma "nama SKU
+pengganti" dipakai sebagai pengganti nama SKU asli (karena lintas SKU, sama polanya dengan
+`LAZADA`/`GTL-SICEPAT`/`1QTY-REGULER`/`SHOPEE-PAGI`/`JNT-SIANG` di bagian 1/3/4/5):
+`LABEL_SAMPEL = "SAMPEL-TIKTOK"` (`src/proses_label.py`). Nama ini dipakai di 2 tempat:
+
+- **Nama file PDF label**: `{No Picklist}_SAMPEL-TIKTOK_{tanggal YYYY-MM-DD}_{jam HHMMSS}.pdf`,
+  mis. `label-pengiriman/PICK-000155229_SAMPEL-TIKTOK_2026-10-01_070512.pdf`. Tidak memakai
+  penanda `SPESIAL` (itu khusus Alur 1 - SKU spesial, lihat bagian "Cetak bulk label SPESIAL"
+  di bawah).
+- **Kolom SKU di `riwayat_picklist.xlsx`**: berisi `SAMPEL-TIKTOK` juga.
+
+`ambil_pesanan_channel()` (dipakai urgent/reguler/Shopee Pagi/J&T Resi Siang) TETAP
+mengeluarkan pesanan sampel ini dari hasilnya supaya tidak dobel diproses.
+
 ## 1. Picklist urgent (`--urgent`)
 
 **Alur berdiri sendiri, BUKAN bagian dari `--label --jalankan`** (lihat catatan di bawah).
@@ -131,10 +166,10 @@ jalankan.bat --urgent --channel lazada --jalankan           # Lazada saja, sungg
 jalankan.bat --urgent --channel gtl-sicepat --jalankan      # GTL/SiCepat saja, sungguhan
 ```
 
-Dijalankan sebagai langkah pertama & kedua di setiap TIPE `proses-harian.bat` (TIPE 1-4)
-= `jalankan.bat --urgent --channel lazada --jalankan` lalu
-`jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `proses-harian-uji.bat` = versi mode uji
-(tanpa `--jalankan`) masing-masing channel.
+Dijalankan sebagai langkah kedua & ketiga di setiap TIPE `proses-harian.bat` (TIPE 1-4,
+setelah picklist sampel di bagian 0 di atas) = `jalankan.bat --urgent --channel lazada --jalankan`
+lalu `jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `proses-harian-uji.bat` = versi
+mode uji (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),
   bukan SKU — mis. `label-pengiriman/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
