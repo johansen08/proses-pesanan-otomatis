@@ -65,6 +65,20 @@ Sebuah resi dihitung sebagai **resi tunggal** jika memenuhi **semua** syarat:
 | **R3** | Kurir J&T atau SPX | `Kurir` diawali `J&T` atau `SPX` |
 | **R3b** | Bukan pesanan kreator | Nilai pesanan (`grand_total` dari API Jubelio) **≠ 0**. Excel tidak punya kolom nilai, jadi nilai diambil dari `GET core-api/wms/sales/v2/orders/ready-to-process/` (dicocokkan `salesorder_no` = `No pesanan`). Resi yang nilainya tidak ditemukan di API **juga dikeluarkan** dan jumlahnya dicatat sebagai peringatan di log. |
 
+**Kosong vs 0 pada nilai pesanan** - ini dua kondisi *berbeda* yang keduanya sudah ditangani
+(jangan dianggap sama dengan "resi tidak ditemukan"):
+
+- **Field `grand_total` kosong (`None`/`""`) pada pesanan yang ADA di hasil API** - dianggap
+  **sama dengan nilai 0** (bukan error, bukan "tidak ditemukan"). Konversinya ada di fungsi
+  `_angka()` yang didefinisikan terpisah di dua modul dengan aturan sama:
+  `src/jubelio.py` (`ambil_nilai_pesanan`, dipakai alur `--label` via `hitung_sku_spesial`) dan
+  `src/proses_label.py` (`saring()`, dipakai saat picklist/label sungguhan dieksekusi). Kalau
+  salah satu diubah, yang satunya harus ikut diubah supaya hasil cek "nilai 0 (kreator)" di
+  kedua alur tetap konsisten.
+- **Pesanan itu sendiri tidak ketemu di API** (beda dari field-nya kosong) - di
+  `sku_spesial.hitung_sku_spesial()` menghasilkan `NaN` setelah `map()`, disaring lewat
+  `nilai.notna()`, dicatat terpisah sebagai `resi_tanpa_nilai` (bukan `resi_nilai_0`).
+
 Lalu:
 
 | Kode | Syarat |

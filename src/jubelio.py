@@ -86,11 +86,20 @@ def _halaman_pesanan(sesi: requests.Session, token: str, page: int, q: str = "",
     return r.json()
 
 
+def _angka(v) -> float:
+    """None/"" (field grand_total kosong di API) dianggap 0 - sama dengan pesanan
+    kreator bernilai 0, bukan error. Lihat proses_label._angka (aturan yang sama)."""
+    return float(v) if v not in (None, "") else 0.0
+
+
 def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
     """Ambil grand_total per No pesanan dari daftar 'Siap Proses'.
 
     Semua halaman diambil dulu; No pesanan di `dicari` yang belum ketemu
-    dicari satu per satu lewat parameter q.
+    dicari satu per satu lewat parameter q. No pesanan yang sama sekali tidak
+    ketemu di API (bukan field grand_total-nya yang kosong, tapi pesanannya
+    sendiri tidak ada di hasil) tidak masuk dict ini - lihat sku_spesial.hitung_sku_spesial
+    yang mengeluarkannya lewat nilai.notna().
     """
     nilai: dict[str, float] = {}
     with requests.Session() as sesi:
@@ -100,7 +109,7 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
             data = j.get("data") or []
             total = j.get("totalCount", total)
             for o in data:
-                nilai[o["salesorder_no"]] = float(o["grand_total"])
+                nilai[o["salesorder_no"]] = _angka(o.get("grand_total"))
             if not data or (total is not None and page * 25 >= int(total)):
                 break
             page += 1
@@ -108,7 +117,7 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
         for no in sorted(dicari - nilai.keys()):
             for o in _halaman_pesanan(sesi, token, 1, q=no).get("data") or []:
                 if o.get("salesorder_no") == no:
-                    nilai[no] = float(o["grand_total"])
+                    nilai[no] = _angka(o.get("grand_total"))
     return nilai
 
 
