@@ -28,16 +28,23 @@ python -m venv .venv
 jalankan.bat
 jalankan.bat --label --sku <SKU> --jalankan
 
-# Uji tanpa akses internet (server Jubelio ditiru di dalam test)
+# Uji tanpa akses internet (server Jubelio / requests ditiru di dalam test)
 .venv\Scripts\python tests\test_proses_label.py
 .venv\Scripts\python tests\test_print_spesial.py
+.venv\Scripts\python tests\test_sku_spesial.py
+.venv\Scripts\python tests\test_jubelio.py
+.venv\Scripts\python tests\test_main.py
 ```
 
-Tidak ada test runner (pytest dsb) terpasang sebagai framework — kedua file test adalah
-skrip mandiri yang dijalankan langsung dengan `python`, memakai server Jubelio tiruan
-(`JubelioPalsu`/mock) berbasis rekaman HAR di `sniff/sniff_output/`, bukan `unittest`/`pytest`
-assertions berjalan via CLI test discovery. Jalankan satu file sekaligus seperti di atas untuk
-"menjalankan satu test".
+Tidak ada test runner (pytest dsb) terpasang sebagai framework — tiap file test adalah skrip
+mandiri yang dijalankan langsung dengan `python`, memakai server Jubelio tiruan
+(`JubelioPalsu`/mock di `test_proses_label.py`, berbasis rekaman HAR di `sniff/sniff_output/`)
+atau `requests.get`/`post`/`Session` yang ditiru langsung (`test_jubelio.py`), bukan
+`unittest`/`pytest` assertions berjalan via CLI test discovery. Jalankan satu file sekaligus
+seperti di atas untuk "menjalankan satu test". `test_sku_spesial.py` dan `test_main.py` murni
+logika data/filesystem (tanpa API sama sekali) — cocok dijalankan paling sering karena paling
+cepat dan jadi yang pertama dicek kalau mengubah aturan bisnis SKU spesial atau penomoran
+sesi label.
 
 **Mode uji vs sungguhan**: hampir semua alur CLI defaultnya adalah mode uji (read-only, hanya
 menampilkan rencana) kecuali diberi flag `--jalankan`, yang baru benar-benar mengubah data di
