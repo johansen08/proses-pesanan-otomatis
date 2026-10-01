@@ -67,8 +67,8 @@ dibiarkan menumpuk.
   - `instalasi.bat` — setup sekali di awal (buat venv, install library, buat `.env`)
   - `jalankan.bat` — wrapper generik ke `src/main.py` (terima semua opsi CLI lewat `%*`,
     dipakai juga oleh Windows Task Scheduler untuk jadwal otomatis)
-  - `proses-harian.bat` — menu interaktif **SUNGGUHAN** (4 sesi: SESI PAGI, JAM 13.00,
-    SESI SORE, JAM 15.00), mengubah data sungguhan di Jubelio
+  - `proses-harian.bat` — menu interaktif **SUNGGUHAN** (4 TIPE: TIPE 1-4), mengubah data
+    sungguhan di Jubelio
   - `proses-harian-uji.bat` — kembaran `proses-harian.bat` dalam **MODE UJI** (akhiran
     `-uji` menandai tidak ada perubahan apa pun di Jubelio); sengaja disamakan awalan
     nama dengan `proses-harian.bat` supaya terlihat jelas keduanya sepasang

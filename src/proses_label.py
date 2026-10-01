@@ -10,7 +10,7 @@ Setiap picklist dicatat di riwayat_picklist.xlsx.
 
 Alur 1 - SKU spesial (fungsi rencana()/proses()/lanjutkan()): per SKU, filter kurir J&T/SPX
 (default, digabung) atau 1 kurir saja lewat parameter `kurir` ("jnt"/"spx" - lihat
-KURIR_PILIHAN, dipakai sesi JAM 13.00 & SESI SORE supaya J&T dan SPX jadi picklist terpisah
+KURIR_PILIHAN, dipakai TIPE 2 & TIPE 3 supaya J&T dan SPX jadi picklist terpisah
 saat pembuatan, lihat JADWAL-PROSES.md), disaring lagi dengan aturan SKU spesial (resi
 tunggal, qty 1, nilai != 0, SKU >= 3 resi sejenis - lihat panduan-sku-spesial.md; penentuan
 SKU spesial itu sendiri TETAP menggabung J&T+SPX, `kurir` hanya membatasi resi mana yang
@@ -70,9 +70,9 @@ from sku_spesial import KURIR_DIIZINKAN, MIN_RESI
 
 REPORT_API = "https://report-prod.jubelio.com/api/reports"
 KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
-# Pemisahan J&T/SPX saat proses (dipakai sesi JAM 13.00 & SESI SORE - lihat menu.bat/
+# Pemisahan J&T/SPX saat proses (dipakai TIPE 2 & TIPE 3 - lihat proses-harian.bat/
 # JADWAL-PROSES.md): nilai --kurir CLI ("jnt"/"spx") -> nilai filter kurir Jubelio.
-# kurir=None (default, dipakai SESI PAGI) = J&T dan SPX digabung seperti semula.
+# kurir=None (default, dipakai TIPE 1/TIPE 4) = J&T dan SPX digabung seperti semula.
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
 
 
@@ -219,7 +219,7 @@ def durasi(detik: float) -> str:
 # ============================================================== 1. filter
 def cari_pesanan(k: Klien, sku: str, kurir: str | None = None) -> list[dict]:
     """`kurir`: None (default) = J&T + SPX digabung, atau "jnt"/"spx" untuk 1 kurir saja
-    (lihat KURIR_PILIHAN - dipakai sesi JAM 13.00 & SESI SORE)."""
+    (lihat KURIR_PILIHAN - dipakai TIPE 2 & TIPE 3)."""
     filter_kurir = _filter_kurir(kurir, KURIR_FILTER)
     hasil, page = [], 1
     while True:
@@ -472,7 +472,7 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    folder_label: Path, bagian: str | None = None,
                    kurir: str | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
-    (atau 1 kurir saja - lihat cari_pesanan(), dipakai sesi JAM 13.00 & SESI SORE): (1) 1 SKU
+    (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU
     1 qty yang tidak spesial, (2) kombinasi/multi-baris/qty>1. Dipanggil SETELAH proses SKU
     spesial selesai (perlu resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per
     picklist (maks MAKS_PESANAN_PICKLIST, dipecah kalau lebih)."""

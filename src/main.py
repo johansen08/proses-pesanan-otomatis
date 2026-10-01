@@ -35,10 +35,10 @@ Bisa juga berdiri sendiri lewat --reguler, boleh dibatasi 1 bagian saja lewat --
     python src/main.py --reguler --bagian 1qty --jalankan
     python src/main.py --reguler --bagian kombinasi --jalankan
 
-Pemisahan J&T/SPX (dipakai sesi JAM 13.00 & SESI SORE - lihat menu.bat/JADWAL-PROSES.md):
+Pemisahan J&T/SPX (dipakai TIPE 2 & TIPE 3 - lihat proses-harian.bat/docs/jadwal-proses.md):
 tambahkan --kurir jnt atau --kurir spx ke --label maupun --reguler supaya J&T dan SPX jadi
-picklist terpisah saat pembuatan (bukan digabung seperti SESI PAGI). Penentuan SKU spesial
-sendiri TETAP menggabung J&T+SPX, --kurir hanya membatasi resi mana yang benar-benar
+picklist terpisah saat pembuatan (bukan digabung seperti TIPE 1/TIPE 4). Penentuan SKU
+spesial sendiri TETAP menggabung J&T+SPX, --kurir hanya membatasi resi mana yang benar-benar
 dipicklist:
     python src/main.py --label --kurir jnt --tanpa-reguler --jalankan
     python src/main.py --reguler --bagian 1qty --kurir spx --jalankan
@@ -113,25 +113,24 @@ def folder_label_sesi() -> Path:
 
 def dalam_jam_menu(menu: str) -> bool:
     """Cek apakah jam sekarang ada dalam jendela jam menu proses-harian.bat. Jendela di sini
-    LEBAR sengaja (bukan jam pas), karena aturan sebenarnya berbasis URUTAN proses selesai,
-    bukan jam pas per menit - tim boleh lanjut ke menu berikutnya begitu proses sebelumnya
-    selesai, kapan pun itu (mis. JAM 13.00 kadang selesai jauh sebelum jam 14.00 kalau
-    pesanannya sedikit). Jendela sempit di sini cuma akan salah memperingatkan "di luar jam"
-    padahal urutannya sudah benar - lihat docs/jadwal-proses.md untuk penjelasan urutan:
-    "1"=SESI PAGI (07.00-13.00, dipakai lagi 15.00-17.59 setelah JAM 15.00/J&T Resi Siang
-    selesai), "2"=JAM 13.00 (13.01-14.00), "3"=SESI SORE (13.01-14.59 - setelah JAM 13.00
-    selesai & sebelum JAM 15.00 mulai, dipakai lagi 18.00-23.00 untuk jadwal malam),
-    "4"=JAM 15.00 (15.00-15.59, J&T Resi Siang). Dipakai proses-harian.bat untuk menanyakan
-    konfirmasi kalau menu dijalankan di luar jendela ini (soft warning, bukan blokir) - tiap
-    menu boleh punya lebih dari 1 jendela, dan jendela antar-menu SENGAJA tumpang tindih
-    (mis. 13.01-14.00 dipakai baik JAM 13.00 maupun SESI SORE) karena keduanya sama-sama
-    valid dipilih tim di rentang itu, tergantung mana yang sudah/belum dijalankan hari itu -
-    guard ini tidak menyimpan status menu mana yang sudah jalan, cuma sanity check jam."""
+    cuma SANITY CHECK (soft warning via konfirmasi Y/N, bukan blokir) - tim tetap yang
+    menentukan urutan kerja sebenarnya. 4 tipe (lihat docs/jadwal-proses.md untuk urutan
+    langkah & alasan bisnis tiap tipe):
+      "1"=TIPE 1, gabung J&T+SPX (07.00-12.00 pagi, DAN 16.00-07.00 keesokan harinya -
+          dipakai lagi sore/malam/dini hari setelah TIPE 4 selesai sampai TIPE 1 besok pagi)
+      "2"=TIPE 2, dipisah + SPX Resi Pagi, dipicu TEPAT jam 13.00 (12.00-13.00 sengaja
+          dikosongkan dari jendela menu mana pun = jam istirahat, bukan celah)
+      "3"=TIPE 3, dipisah tanpa SPX Resi Pagi (13.00-15.00, setelah TIPE 2 & sebelum TIPE 4)
+      "4"=TIPE 4, gabung lagi + J&T Resi Siang, dipicu TEPAT jam 15.00 (15.00-16.00)
+    Jendela menu 2/3 (13.00-13.59 vs 13.00-14.59) SENGAJA tumpang tindih - di rentang itu
+    dua tipe sama-sama valid dipilih tim, tergantung mana yang sudah/belum dijalankan hari
+    itu. TIPE 1 (menu "1") melingkupi tengah malam (16.00 hari ini - 07.00 esok), dicek
+    dengan membandingkan jam-dalam-sehari saja (berulang tiap hari, tidak peduli tanggal)."""
     sekarang = datetime.now().hour * 60 + datetime.now().minute
     jendela = {
-        "1": [(7 * 60, 13 * 60), (15 * 60, 17 * 60 + 59)],
-        "2": [(13 * 60 + 1, 14 * 60)],
-        "3": [(13 * 60 + 1, 14 * 60 + 59), (18 * 60, 23 * 60)],
+        "1": [(0, 12 * 60), (16 * 60, 24 * 60 - 1)],
+        "2": [(13 * 60, 13 * 60 + 59)],
+        "3": [(13 * 60, 14 * 60 + 59)],
         "4": [(15 * 60, 15 * 60 + 59)],
     }
     return any(awal <= sekarang <= akhir for awal, akhir in jendela[menu])
@@ -207,9 +206,9 @@ def main() -> int:
                     help="dipakai bersama --reguler: batasi ke 1 bagian saja")
     ap.add_argument("--kurir", choices=["jnt", "spx"],
                     help="dipakai bersama --label atau --reguler: pisahkan J&T dan SPX jadi "
-                        "picklist sendiri-sendiri, bukan digabung (dipakai sesi JAM 13.00 & "
-                        "SESI SORE - lihat menu.bat/JADWAL-PROSES.md); tanpa --kurir = J&T "
-                        "dan SPX digabung seperti semula (SESI PAGI)")
+                        "picklist sendiri-sendiri, bukan digabung (dipakai TIPE 2 & TIPE 3 - "
+                        "lihat proses-harian.bat/docs/jadwal-proses.md); tanpa --kurir = J&T "
+                        "dan SPX digabung seperti semula (TIPE 1/TIPE 4)")
     ap.add_argument("--shopee-pagi", action="store_true",
                     help="hanya buat picklist Shopee Pagi (channel Shopee, jam pesan s.d. "
                         "12:00 WIB hari ini) sampai label PDF - dijalankan manual 1x sehari, "

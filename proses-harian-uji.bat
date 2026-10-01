@@ -7,22 +7,22 @@ cls
 echo ==================================================================
 echo   PROSES PESANAN OTOMATIS - MODE UJI (tidak ada perubahan di Jubelio)
 echo ==================================================================
-echo   1. Uji SESI PAGI
-echo   2. Uji JAM 13.00
-echo   3. Uji SESI SORE
-echo   4. Uji JAM 15.00
+echo   1. Uji TIPE 1 - GABUNG J^&T+SPX   (07.00-12.00 / 16.00-07.00)
+echo   2. Uji TIPE 2 - DIPISAH + SPX RESI PAGI   (TEPAT JAM 13.00)
+echo   3. Uji TIPE 3 - DIPISAH   (13.00-15.00)
+echo   4. Uji TIPE 4 - GABUNG LAGI + J^&T RESI SIANG   (TEPAT JAM 15.00)
 echo   0. Keluar
 echo ==================================================================
 set "pilih="
 set /p "pilih=Pilih menu: "
-if "%pilih%"=="1" goto sesi_pagi
-if "%pilih%"=="2" goto jam_1300
-if "%pilih%"=="3" goto sesi_sore
-if "%pilih%"=="4" goto jam_1500
+if "%pilih%"=="1" goto tipe1
+if "%pilih%"=="2" goto tipe2
+if "%pilih%"=="3" goto tipe3
+if "%pilih%"=="4" goto tipe4
 if "%pilih%"=="0" goto :eof
 goto menu
 
-:sesi_pagi
+:tipe1
 echo.
 echo === 1/5 Uji URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
@@ -39,11 +39,11 @@ echo.
 echo === 5/5 Uji SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
 echo.
-echo Uji SESI PAGI selesai.
+echo Uji TIPE 1 selesai.
 pause
 goto menu
 
-:jam_1300
+:tipe2
 echo.
 echo === 1/9 Uji URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
@@ -51,7 +51,7 @@ echo.
 echo === 2/9 Uji URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat
 echo.
-echo === 3/9 Uji SPX PAGI (RESI SHOPEE ^<= 12.00) ===
+echo === 3/9 Uji SPX ^<= 12.00 (SPX RESI PAGI) ===
 ".venv\Scripts\python.exe" src\main.py --shopee-pagi
 echo.
 echo === 4/9 Uji J^&T SPESIAL ===
@@ -72,11 +72,11 @@ echo.
 echo === 9/9 Uji SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx
 echo.
-echo Uji JAM 13.00 selesai.
+echo Uji TIPE 2 selesai.
 pause
 goto menu
 
-:sesi_sore
+:tipe3
 echo.
 echo === 1/8 Uji URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
@@ -102,11 +102,11 @@ echo.
 echo === 8/8 Uji SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx
 echo.
-echo Uji SESI SORE selesai.
+echo Uji TIPE 3 selesai.
 pause
 goto menu
 
-:jam_1500
+:tipe4
 echo.
 echo === 1/6 Uji URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
@@ -114,7 +114,7 @@ echo.
 echo === 2/6 Uji URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat
 echo.
-echo === 3/6 Uji J^&T RESI SIANG (WAJIB KELUAR TIKTOK ^<= 15.00) ===
+echo === 3/6 Uji J^&T ^<= 15.00 (J^&T RESI SIANG) ===
 ".venv\Scripts\python.exe" src\main.py --jnt-siang
 echo.
 echo === 4/6 Uji SPX - J^&T SPESIAL ===
@@ -126,6 +126,6 @@ echo.
 echo === 6/6 Uji SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
 echo.
-echo Uji JAM 15.00 selesai.
+echo Uji TIPE 4 selesai.
 pause
 goto menu

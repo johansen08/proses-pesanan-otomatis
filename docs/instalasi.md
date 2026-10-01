@@ -96,8 +96,7 @@ Klik dua kali `proses-harian.bat`, atau dari terminal:
 proses-harian.bat
 ```
 
-Program akan menampilkan menu 4 sesi (SESI PAGI, JAM 13.00, SESI SORE, JAM
-15.00) + Keluar seperti di
+Program akan menampilkan menu 4 TIPE (TIPE 1-4) + Keluar seperti di
 [README.md](../README.md)/[jadwal-proses.md](jadwal-proses.md).
 Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`, `logs/` akan dibuat
 otomatis saat dibutuhkan.

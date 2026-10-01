@@ -12,33 +12,34 @@ cls
 echo ==================================================================
 echo   PROSES PESANAN OTOMATIS
 echo ==================================================================
-echo   1. SESI PAGI
-echo   2. JAM 13.00
-echo   3. SESI SORE
-echo   4. JAM 15.00
+echo   1. TIPE 1 - GABUNG J^&T+SPX   (07.00-12.00 / 16.00-07.00)
+echo   2. TIPE 2 - DIPISAH + SPX RESI PAGI   (TEPAT JAM 13.00)
+echo   3. TIPE 3 - DIPISAH   (13.00-15.00)
+echo   4. TIPE 4 - GABUNG LAGI + J^&T RESI SIANG   (TEPAT JAM 15.00)
 echo   0. Keluar
 echo ==================================================================
 set "pilih="
 set /p "pilih=Pilih menu: "
-if "%pilih%"=="1" goto sesi_pagi
-if "%pilih%"=="2" goto jam_1300
-if "%pilih%"=="3" goto sesi_sore
-if "%pilih%"=="4" goto jam_1500
+if "%pilih%"=="1" goto tipe1
+if "%pilih%"=="2" goto tipe2
+if "%pilih%"=="3" goto tipe3
+if "%pilih%"=="4" goto tipe4
 if "%pilih%"=="0" goto :eof
 goto menu
 
 rem ============================================================
-rem SESI PAGI: J&T dan SPX digabung (seperti semula, dipakai jam
-rem 07.00-11.xx, DAN lagi setelah JAM 15.00 selesai (kapan pun
-rem itu, bukan jam pas - lihat JADWAL-PROSES.md) sampai jam 17.xx)
+rem TIPE 1: J&T dan SPX DIGABUNG (seperti semula). Dipakai siklus
+rem pagi 07.00-11.xx DAN siklus sore/malam/dini hari 16.00-07.00
+rem keesokan harinya (setelah TIPE 4 selesai sampai TIPE 1 besok
+rem pagi) - lihat docs/jadwal-proses.md
 rem ============================================================
-:sesi_pagi
-call :cek_jam 1 "SESI PAGI (07.00-13.00 / 15.00-17.59, setelah JAM 15.00 selesai)"
+:tipe1
+call :cek_jam 1 "TIPE 1 (07.00-12.00 / 16.00-07.00)"
 if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio.
 set "yakin="
-set /p "yakin=Lanjutkan SESI PAGI? (Y/N): "
+set /p "yakin=Lanjutkan TIPE 1? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/5 URGENT LAZADA ===
@@ -56,21 +57,22 @@ echo.
 echo === 5/5 SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan
 echo.
-echo SESI PAGI selesai.
+echo TIPE 1 selesai.
 pause
 goto menu
 
 rem ============================================================
-rem JAM 13.00: SPX Resi Pagi (resi Shopee <= 12.00) + J&T dan SPX
-rem DIPISAH saat pembuatan picklist (lihat JADWAL-PROSES.md)
+rem TIPE 2: SPX Resi Pagi (resi Shopee <= 12.00, habiskan wajib
+rem keluar Shopee) + J&T dan SPX DIPISAH saat pembuatan picklist.
+rem Dipicu TEPAT jam 13.00 (lihat docs/jadwal-proses.md)
 rem ============================================================
-:jam_1300
-call :cek_jam 2 "JAM 13.00 (13.01-14.00)"
+:tipe2
+call :cek_jam 2 "TIPE 2 (TEPAT JAM 13.00)"
 if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio. SPX RESI PAGI cuma 1x sehari.
 set "yakin="
-set /p "yakin=Lanjutkan JAM 13.00? (Y/N): "
+set /p "yakin=Lanjutkan TIPE 2? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/9 URGENT LAZADA ===
@@ -79,7 +81,7 @@ echo.
 echo === 2/9 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 echo.
-echo === 3/9 SPX PAGI (RESI SHOPEE ^<= 12.00) ===
+echo === 3/9 SPX ^<= 12.00 (SPX RESI PAGI) ===
 ".venv\Scripts\python.exe" src\main.py --shopee-pagi --jalankan
 echo.
 echo === 4/9 J^&T SPESIAL ===
@@ -100,23 +102,22 @@ echo.
 echo === 9/9 SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
 echo.
-echo JAM 13.00 selesai.
+echo TIPE 2 selesai.
 pause
 goto menu
 
 rem ============================================================
-rem SESI SORE: sama seperti JAM 13.00 tapi TANPA SPX Resi Pagi
-rem (sudah dijalankan jam 13.00, cukup 1x sehari). Dipakai SETELAH
-rem JAM 13.00 selesai (kapan pun itu) DAN SEBELUM JAM 15.00 mulai,
-rem juga dipakai lagi untuk jadwal malam 18.00-23.00.
+rem TIPE 3: sama seperti TIPE 2 tapi TANPA SPX Resi Pagi (sudah
+rem dijalankan di TIPE 2, cukup 1x sehari). Dipakai SETELAH TIPE 2
+rem selesai DAN SEBELUM TIPE 4 dimulai (13.00-15.00)
 rem ============================================================
-:sesi_sore
-call :cek_jam 3 "SESI SORE (13.01-14.59, setelah JAM 13.00 selesai / 18.00-23.00)"
+:tipe3
+call :cek_jam 3 "TIPE 3 (13.00-15.00)"
 if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio.
 set "yakin="
-set /p "yakin=Lanjutkan SESI SORE? (Y/N): "
+set /p "yakin=Lanjutkan TIPE 3? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/8 URGENT LAZADA ===
@@ -143,22 +144,23 @@ echo.
 echo === 8/8 SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
 echo.
-echo SESI SORE selesai.
+echo TIPE 3 selesai.
 pause
 goto menu
 
 rem ============================================================
-rem JAM 15.00: J&T Resi Siang (wajib keluar TikTok Shop <= 15.00,
-rem cukup 1x sehari), lalu J&T dan SPX DIGABUNG lagi seperti SESI
-rem PAGI (bukan dipisah lagi - lihat JADWAL-PROSES.md)
+rem TIPE 4: J&T Resi Siang (wajib keluar TikTok Shop <= 15.00,
+rem habiskan wajib keluar TikTok, cukup 1x sehari), lalu J&T dan
+rem SPX DIGABUNG lagi seperti TIPE 1 (bukan dipisah lagi). Dipicu
+rem TEPAT jam 15.00 (lihat docs/jadwal-proses.md)
 rem ============================================================
-:jam_1500
-call :cek_jam 4 "JAM 15.00 (15.00-15.59)"
+:tipe4
+call :cek_jam 4 "TIPE 4 (TEPAT JAM 15.00)"
 if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio. J^&T RESI SIANG cuma 1x sehari.
 set "yakin="
-set /p "yakin=Lanjutkan JAM 15.00? (Y/N): "
+set /p "yakin=Lanjutkan TIPE 4? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 echo === 1/6 URGENT LAZADA ===
@@ -167,7 +169,7 @@ echo.
 echo === 2/6 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 echo.
-echo === 3/6 J^&T RESI SIANG (WAJIB KELUAR TIKTOK ^<= 15.00) ===
+echo === 3/6 J^&T ^<= 15.00 (J^&T RESI SIANG) ===
 ".venv\Scripts\python.exe" src\main.py --jnt-siang --jalankan
 echo.
 echo === 4/6 SPX - J^&T SPESIAL ===
@@ -179,7 +181,7 @@ echo.
 echo === 6/6 SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan
 echo.
-echo JAM 15.00 selesai.
+echo TIPE 4 selesai.
 pause
 goto menu
 

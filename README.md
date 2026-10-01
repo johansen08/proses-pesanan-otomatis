@@ -31,9 +31,9 @@ maksimal jam 15:00 hari ini (aturan bisnis J&T: wajib keluar TikTok Shop paling 
 `--kurir spx` supaya J&T dan SPX jadi picklist **terpisah** saat pembuatan, bukan digabung.
 Tanpa `--kurir` (default), J&T dan SPX tetap digabung seperti semula. Penentuan SKU mana yang
 "spesial" (dari Excel, `hitung_sku_spesial`) **selalu** menggabung J&T+SPX — `--kurir` cuma
-membatasi resi mana yang benar-benar dipicklist saat itu. Dipakai `proses-harian.bat` sesi **JAM 13.00**
-dan **SESI SORE** (lihat `proses-harian.bat`/[docs/jadwal-proses.md](docs/jadwal-proses.md)); sesi **SESI PAGI**
-tetap menggabung J&T+SPX seperti sebelumnya.
+membatasi resi mana yang benar-benar dipicklist saat itu. Dipakai `proses-harian.bat` **TIPE 2**
+dan **TIPE 3** (lihat `proses-harian.bat`/[docs/jadwal-proses.md](docs/jadwal-proses.md)); **TIPE 1**
+dan **TIPE 4** tetap menggabung J&T+SPX.
 
 Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/panduan-sku-spesial.md)
 (kode di bagian 8 panduan adalah versi awal; kode yang dipakai adalah file `.py` di folder ini).
@@ -47,7 +47,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
-| `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 sesi + Keluar: SESI PAGI, JAM 13.00, SESI SORE, JAM 15.00 — tiap sesi menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
+| `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
@@ -127,8 +127,8 @@ jalankan.bat --urgent --channel lazada --jalankan           # Lazada saja, sungg
 jalankan.bat --urgent --channel gtl-sicepat --jalankan      # GTL/SiCepat saja, sungguhan
 ```
 
-Dijalankan sebagai langkah pertama & kedua di setiap sesi `proses-harian.bat` (SESI PAGI, JAM 13.00,
-SESI SORE) = `jalankan.bat --urgent --channel lazada --jalankan` lalu
+Dijalankan sebagai langkah pertama & kedua di setiap TIPE `proses-harian.bat` (TIPE 1-4)
+= `jalankan.bat --urgent --channel lazada --jalankan` lalu
 `jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `proses-harian-uji.bat` = versi mode uji
 (tanpa `--jalankan`) masing-masing channel.
 
@@ -153,8 +153,8 @@ jalankan.bat --label --sku T01-BSBI-5
 jalankan.bat --label --sku T01-BSBI-5 --jalankan
 jalankan.bat --label --jalankan
 jalankan.bat --label --tanpa-reguler --jalankan
-jalankan.bat --label --kurir jnt --tanpa-reguler --jalankan    # J&T saja (JAM 13.00/SESI SORE)
-jalankan.bat --label --kurir spx --tanpa-reguler --jalankan    # SPX saja (JAM 13.00/SESI SORE)
+jalankan.bat --label --kurir jnt --tanpa-reguler --jalankan    # J&T saja (TIPE 2/TIPE 3)
+jalankan.bat --label --kurir spx --tanpa-reguler --jalankan    # SPX saja (TIPE 2/TIPE 3)
 jalankan.bat --lanjut PICK-000154839 --jalankan
 ```
 
@@ -180,10 +180,10 @@ kosong/invalidSO, PDF akan mencerminkan angka aktual itu, jadi total di PDF sela
 dengan yang benar-benar diproses. (Mode uji tetap memakai daftar kandidat, karena tidak ada
 proses sungguhan yang bisa "aktual".)
 
-`proses-harian.bat` sesi SESI PAGI, langkah "SPX - J&T SPESIAL" = `jalankan.bat --label --tanpa-reguler --jalankan`;
-sesi JAM 13.00/SESI SORE, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kurir jnt
+`proses-harian.bat` TIPE 1/TIPE 4, langkah "SPX - J&T SPESIAL" = `jalankan.bat --label --tanpa-reguler --jalankan`;
+TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kurir jnt
 --tanpa-reguler --jalankan` / `jalankan.bat --label --kurir spx --tanpa-reguler --jalankan`
-(satu konfirmasi Y/N per sesi). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
+(satu konfirmasi Y/N per TIPE). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
 - Label PDF: `label-pengiriman/<PICK-no>_<SKU>_<tanggal>_<jam>.pdf`, mis. `PICK-000155085_BM-AKS27-1_2026-09-29_090947.pdf`
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
@@ -227,9 +227,9 @@ jalankan.bat --reguler --bagian 1qty --kurir jnt --jalankan       # J&T saja
 jalankan.bat --reguler --bagian kombinasi --kurir spx --jalankan  # SPX saja
 ```
 
-`proses-harian.bat` sesi SESI PAGI, langkah "SPX - J&T 1 QTY REGULER"/"SPX - J&T KOMBINASI" =
+`proses-harian.bat` TIPE 1/TIPE 4, langkah "SPX - J&T 1 QTY REGULER"/"SPX - J&T KOMBINASI" =
 `jalankan.bat --reguler --bagian 1qty --jalankan` / `jalankan.bat --reguler --bagian kombinasi --jalankan`
-(digabung). Sesi JAM 13.00/SESI SORE, langkah "J&T 1 QTY REGULER"/"J&T KOMBINASI"/"SPX 1 QTY
+(digabung). TIPE 2/TIPE 3, langkah "J&T 1 QTY REGULER"/"J&T KOMBINASI"/"SPX 1 QTY
 REGULER"/"SPX KOMBINASI" = perintah yang sama ditambah `--kurir jnt`/`--kurir spx`.
 `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama. Kolom SKU di riwayat:
 `1QTY-REGULER` / `KOMBINASI-REGULER` (digabung), atau `J&T-1QTY-REGULER` / `SPX-1QTY-REGULER`
@@ -238,9 +238,9 @@ tidak boleh memuat simbol `&` (dibuang otomatis), jadi khusus nama file J&T ditu
 tanpa simbol, mis. `label-pengiriman/PICK-000155300_1QTY-REGULER_...pdf` atau
 `label-pengiriman/PICK-000155301_JNT-1QTY-REGULER_...pdf`.
 
-Tiap sesi `proses-harian.bat` (SESI PAGI, JAM 13.00, SESI SORE, JAM 15.00) menjalankan seluruh
-langkahnya secara berurut dalam satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap sesi
-ada di [docs/jadwal-proses.md](docs/jadwal-proses.md).
+Tiap TIPE `proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara berurut dalam
+satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
+[docs/jadwal-proses.md](docs/jadwal-proses.md).
 
 ## 4. Picklist SPX Resi Pagi (`--shopee-pagi`)
 
@@ -255,8 +255,8 @@ jalankan.bat --shopee-pagi               # mode uji
 jalankan.bat --shopee-pagi --jalankan    # sungguhan
 ```
 
-`proses-harian.bat` sesi JAM 13.00, langkah "SPX PAGI (RESI SHOPEE <= 12.00)" = `jalankan.bat --shopee-pagi
---jalankan` (dijalankan cukup 1x sehari, jangan diulang di SESI SORE). `proses-harian-uji.bat` = versi mode
+`proses-harian.bat` TIPE 2, langkah "SPX <= 12.00 (SPX RESI PAGI)" = `jalankan.bat --shopee-pagi
+--jalankan` (dijalankan cukup 1x sehari, jangan diulang di TIPE 3). `proses-harian-uji.bat` = versi mode
 uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat: `SHOPEE-PAGI`, mis.
 `label-pengiriman/PICK-000155400_SHOPEE-PAGI_...pdf`.
 
@@ -275,7 +275,7 @@ jalankan.bat --jnt-siang               # mode uji
 jalankan.bat --jnt-siang --jalankan    # sungguhan
 ```
 
-`proses-harian.bat` sesi JAM 15.00, langkah "J&T RESI SIANG (WAJIB KELUAR TIKTOK <= 15.00)" =
+`proses-harian.bat` TIPE 4, langkah "J&T <= 15.00 (J&T RESI SIANG)" =
 `jalankan.bat --jnt-siang --jalankan` (dijalankan cukup 1x sehari, jangan diulang di siklus
 setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
 SKU di riwayat: `JNT-SIANG`, mis. `label-pengiriman/PICK-000155500_JNT-SIANG_...pdf`.
