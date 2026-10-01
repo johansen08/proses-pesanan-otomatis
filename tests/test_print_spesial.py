@@ -22,23 +22,24 @@ def _buat(folder: Path, *nama: str) -> None:
 def uji_folder_sesi_terbaru_pilih_tanggal_lalu_nomor_terbesar():
     with tempfile.TemporaryDirectory() as tmp:
         label = Path(tmp)
-        for nama in ("2026-09-30_1", "2026-09-30_9", "2026-09-30_10", "2026-10-01_1",
-                    "2026-10-01_2", "bukan-folder-sesi"):
-            (label / nama).mkdir()
+        for tanggal, nomor in (("2026-09-30", "1"), ("2026-09-30", "9"), ("2026-09-30", "10"),
+                               ("2026-10-01", "1"), ("2026-10-01", "2")):
+            (label / tanggal / nomor).mkdir(parents=True)
+        (label / "bukan-folder-sesi").mkdir()
         (label / "bukan-folder.txt").write_text("x")
         terbaru = ps.folder_sesi_terbaru(label)
-        assert terbaru.name == "2026-10-01_2", terbaru.name
+        assert terbaru.name == "2" and terbaru.parent.name == "2026-10-01", terbaru
         print("  folder_sesi_terbaru: pilih tanggal terbaru lalu nomor urut terbesar")
 
 
 def uji_folder_sesi_terbaru_bandingkan_nomor_sebagai_angka_bukan_teks():
     with tempfile.TemporaryDirectory() as tmp:
         label = Path(tmp)
-        for nama in ("2026-10-01_2", "2026-10-01_10"):
-            (label / nama).mkdir()
+        for nomor in ("2", "10"):
+            (label / "2026-10-01" / nomor).mkdir(parents=True)
         terbaru = ps.folder_sesi_terbaru(label)
-        assert terbaru.name == "2026-10-01_10", terbaru.name   # bukan "_2" (perbandingan teks)
-        print("  folder_sesi_terbaru: _10 > _2 (dibandingkan sebagai angka)")
+        assert terbaru.name == "10", terbaru.name   # bukan "2" (perbandingan teks)
+        print("  folder_sesi_terbaru: 10 > 2 (dibandingkan sebagai angka)")
 
 
 def uji_folder_sesi_terbaru_tidak_ada_folder_sesi():

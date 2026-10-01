@@ -107,21 +107,23 @@ def uji_sesi_label_baru_nomor_urut_bertambah():
             dt.now.return_value = datetime(2026, 9, 30)
             n1 = m.sesi_label_baru()
             n2 = m.sesi_label_baru()
-            assert n1 == "2026-09-30_1" and n2 == "2026-09-30_2", (n1, n2)
+            assert n1 == "2026-09-30/1" and n2 == "2026-09-30/2", (n1, n2)
             assert (Path(tmp) / n1).is_dir() and (Path(tmp) / n2).is_dir()
     print("  sesi_label_baru: nomor urut bertambah per panggilan untuk tanggal yang sama")
 
 
 def uji_sesi_label_baru_abaikan_folder_bukan_pola_sesi():
     with tempfile.TemporaryDirectory() as tmp:
-        (Path(tmp) / "2026-09-30_5").mkdir()
-        (Path(tmp) / "folder-lain").mkdir()
-        (Path(tmp) / "2026-09-30_bukan_angka").mkdir()
+        folder_tanggal = Path(tmp) / "2026-09-30"
+        folder_tanggal.mkdir()
+        (folder_tanggal / "5").mkdir()
+        (folder_tanggal / "folder-lain").mkdir()
+        (folder_tanggal / "bukan_angka").mkdir()
         with mock.patch.object(m, "FOLDER_LABEL", Path(tmp)), \
              mock.patch.object(m, "datetime") as dt:
             dt.now.return_value = datetime(2026, 9, 30)
             nama = m.sesi_label_baru()
-        assert nama == "2026-09-30_6", nama
+        assert nama == "2026-09-30/6", nama
     print("  sesi_label_baru: folder yang tidak cocok pola sesi diabaikan, lanjut dari nomor "
           "tertinggi yang valid")
 
@@ -130,12 +132,12 @@ def uji_folder_label_sesi_pakai_env_jika_ada():
     import os
     with tempfile.TemporaryDirectory() as tmp:
         with mock.patch.object(m, "FOLDER_LABEL", Path(tmp)):
-            os.environ["LABEL_SESI_DIR"] = "2026-09-30_7"
+            os.environ["LABEL_SESI_DIR"] = "2026-09-30/7"
             try:
                 folder = m.folder_label_sesi()
             finally:
                 os.environ.pop("LABEL_SESI_DIR", None)
-            assert folder == Path(tmp) / "2026-09-30_7" and folder.is_dir()
+            assert folder == Path(tmp) / "2026-09-30" / "7" and folder.is_dir()
     print("  folder_label_sesi: pakai LABEL_SESI_DIR dari environment kalau ada, bukan bikin sesi baru")
 
 

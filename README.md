@@ -298,14 +298,14 @@ cuma mencetak ulang PDF yang sudah ada.
 cetak-label-spesial.bat
 ```
 
-Urutan kerja: cari folder sesi `label-pengiriman/YYYY-MM-DD_N` yang **terbaru** secara
+Urutan kerja: cari folder sesi `label-pengiriman/YYYY-MM-DD/N` yang **terbaru** secara
 otomatis → saring file yang namanya mengandung `_SPESIAL_` → tampilkan daftar printer
 yang terhubung ke komputer → pilih nomor printer → konfirmasi (Y/N) → cetak satu per
 satu secara berurut.
 
 Pilihan:
 
-- `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01_3"` — pakai folder sesi
+- `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder sesi
   tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya).
 - `cetak-label-spesial.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
   (tetap tanya pilih printer).

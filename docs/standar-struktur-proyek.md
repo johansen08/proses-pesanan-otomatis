@@ -82,19 +82,23 @@ dibiarkan menumpuk.
 Nama file laporan/label yang di-generate `src/main.py`/`src/jubelio.py`/
 `src/proses_label.py` (mis. `laporan_siap_proses_2026-09-30_065510.xlsx`,
 `SKU_Spesial_2026-09-30_0654.pdf`, `PICK-000155300_1QTY-REGULER_...pdf`, folder sesi
-`2026-09-30_5/`) **TIDAK** mengikuti aturan kebab-case di atas dan **sengaja tidak
-diubah** oleh standarisasi ini, karena:
+`label-pengiriman/2026-09-30/5/`) **TIDAK** mengikuti aturan kebab-case di atas dan
+**sengaja tidak diubah** oleh standarisasi ini, karena:
 
-- Formatnya (garis bawah `_` sebagai pemisah tanggal/jam/kode) adalah bagian dari
+- Formatnya (garis bawah `_` sebagai pemisah tanggal/jam/kode pada nama file, dan
+  struktur folder tanggal/nomor sesi pada `label-pengiriman/`) adalah bagian dari
   **logika program**, bukan sekadar rapikan folder — mengubahnya berarti mengubah kode
   di `src/main.py`/`src/jubelio.py`/`src/proses_label.py`.
 - Beberapa nama folder di antaranya di-parse ulang oleh kode (mis. `sesi_label_baru()`
-  di `src/main.py` mencari pola `YYYY-MM-DD_N` di dalam `label-pengiriman/`) — ganti
-  pemisah bisa merusak fungsi itu.
+  dan `folder_label_sesi()` di `src/main.py`, serta `folder_sesi_terbaru()` di
+  `src/print_spesial.py`, yang mencari folder tanggal `YYYY-MM-DD` berisi subfolder
+  bernomor `N` di dalam `label-pengiriman/`) — ganti strukturnya bisa merusak fungsi
+  itu.
 
 Kalau suatu saat pola ini mau distandarkan juga, lakukan sebagai perubahan kode
 tersendiri (bukan bagian dari rapi-rapi struktur folder), dan uji dulu lewat
-`tests/test_proses_label.py`.
+`tests/test_main.py` (pembuatan sesi) dan `tests/test_print_spesial.py` (pencarian
+sesi terbaru).
 
 ## 6. Struktur saat ini
 

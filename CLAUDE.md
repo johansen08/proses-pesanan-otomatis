@@ -105,7 +105,7 @@ secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
   lihat bagian 5 [docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md)) harus
   kebab-case untuk folder/docs/bat, snake_case untuk `.py` — detail lengkap ada di dokumen
   itu, termasuk daftar nama yang SENGAJA tidak diubah karena jadi bagian logika program
-  (pola nama file picklist/label hasil generate, folder sesi `YYYY-MM-DD_N`).
+  (pola nama file picklist/label hasil generate, folder sesi `label-pengiriman/YYYY-MM-DD/N`).
 - Gaya kode Python mengikuti PEP 8 — ringkasannya ada di [docs/pep-8.md](docs/pep-8.md).
 - **`.bat`: di dalam `for /f ... in ('...')`, path python.exe TIDAK boleh dikutip** — tulis
   `('.venv\Scripts\python.exe -c "..."')`, BUKAN `('".venv\Scripts\python.exe" -c "..."')`.

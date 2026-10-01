@@ -1,7 +1,7 @@
 """Cetak bulk label pengiriman SPESIAL dari folder sesi label-pengiriman TERBARU.
 
 Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di folder
-sesi label-pengiriman/YYYY-MM-DD_N (dibuat proses_label.py alur SKU spesial, lihat
+sesi label-pengiriman/YYYY-MM-DD/N (dibuat proses_label.py alur SKU spesial, lihat
 TAG_SPESIAL di situ), menyaring yang namanya mengandung penanda `_SPESIAL_`
 (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf), lalu mencetaknya BERURUT
 (diurutkan dari nomor PICK terkecil - urutan dibuat, bukan abjad nama file) ke printer
@@ -17,7 +17,7 @@ meski pakai --tanpa-konfirmasi.
 Pemakaian:
     .venv\\Scripts\\python.exe src\\print_spesial.py
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
-    .venv\\Scripts\\python.exe src\\print_spesial.py --folder label-pengiriman/2026-10-01_3
+    .venv\\Scripts\\python.exe src\\print_spesial.py --folder label-pengiriman/2026-10-01/3
         # pakai folder sesi tertentu, bukan yang terbaru
     .venv\\Scripts\\python.exe src\\print_spesial.py --tanpa-konfirmasi
         # lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)
@@ -65,7 +65,7 @@ ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src
 FOLDER_LABEL = ROOT / "label-pengiriman"
 FOLDER_LOG = ROOT / "logs"
 
-POLA_SESI = re.compile(r"^(\d{4}-\d{2}-\d{2})_(\d+)$")
+POLA_TANGGAL_SESI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # Penanda SPESIAL ini dibuat proses_label.py (lihat TAG_SPESIAL) - HANYA alur SKU
 # spesial yang menyisipkannya di nama file, jadi cukup cari pola ini saja.
 POLA_SPESIAL = re.compile(r"^PICK-0*(\d+)_SPESIAL_.*\.pdf$", re.IGNORECASE)
@@ -110,21 +110,21 @@ def siapkan_log() -> logging.Logger:
 
 # ============================================================== 1. cari file
 def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
-    """Folder sesi (mis. `label-pengiriman/2026-10-01_3`) TERBARU: dibandingkan dari
+    """Folder sesi (mis. `label-pengiriman/2026-10-01/3`) TERBARU: dibandingkan dari
     tanggal lalu nomor urut sesi di namanya (sejalan dengan sesi_label_baru() di
     main.py yang membuatnya), BUKAN dari waktu modifikasi file/folder."""
     terbaik: tuple | None = None
-    for item in folder_label.iterdir() if folder_label.is_dir() else []:
-        if not item.is_dir():
+    for folder_tanggal in folder_label.iterdir() if folder_label.is_dir() else []:
+        if not folder_tanggal.is_dir() or not POLA_TANGGAL_SESI.match(folder_tanggal.name):
             continue
-        cocok = POLA_SESI.match(item.name)
-        if not cocok:
-            continue
-        kunci = (cocok.group(1), int(cocok.group(2)))
-        if terbaik is None or kunci > terbaik[0]:
-            terbaik = (kunci, item)
+        for item in folder_tanggal.iterdir():
+            if not item.is_dir() or not item.name.isdigit():
+                continue
+            kunci = (folder_tanggal.name, int(item.name))
+            if terbaik is None or kunci > terbaik[0]:
+                terbaik = (kunci, item)
     if terbaik is None:
-        raise CetakError(f"Tidak ada folder sesi (YYYY-MM-DD_N) di {folder_label}")
+        raise CetakError(f"Tidak ada folder sesi (YYYY-MM-DD/N) di {folder_label}")
     return terbaik[1]
 
 

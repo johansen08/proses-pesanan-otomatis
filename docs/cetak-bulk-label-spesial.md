@@ -79,7 +79,7 @@ cetak-label-spesial.bat
 
 Urutan kerja program:
 
-1. Cari folder sesi `label-pengiriman/YYYY-MM-DD_N` **terbaru** secara otomatis
+1. Cari folder sesi `label-pengiriman/YYYY-MM-DD/N` **terbaru** secara otomatis
    (dibandingkan dari tanggal lalu nomor urut sesi di nama folder, bukan dari waktu
    modifikasi file).
 2. Saring file yang namanya mengandung `_SPESIAL_`.
@@ -92,7 +92,7 @@ Urutan kerja program:
 
 | Perintah | Kegunaan |
 |---|---|
-| `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01_3"` | Pakai folder sesi tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya) |
+| `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01\3"` | Pakai folder sesi tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya) |
 | `cetak-label-spesial.bat --tanpa-konfirmasi` | Lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer) |
 | `cetak-label-spesial.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` | Cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian 4), tanpa mencari ulang folder sesi |
 
@@ -136,5 +136,5 @@ mulai), dan daftar berhasil/gagal (bagian 5) jadi jaring pengaman untuk kasus it
 |---|---|---|
 | `SumatraPDF.exe tidak ditemukan` | Belum install, atau terpasang di lokasi tidak standar | Install ulang (bagian 2.1) atau set `SUMATRA_PDF_PATH` (bagian 2.3) |
 | `Tidak ada printer terhubung ke komputer ini` | Printer belum ditambahkan di Windows (Settings → Printers & scanners), atau driver belum terpasang | Pasang/hubungkan printer dulu di Windows sebelum menjalankan program |
-| `Tidak ada folder sesi (YYYY-MM-DD_N)` | Belum ada label yang dibuat lewat alur `--label` hari itu | Jalankan alur SKU spesial (`jalankan.bat --label --jalankan`) dulu sampai label PDF terbentuk |
+| `Tidak ada folder sesi (YYYY-MM-DD/N)` | Belum ada label yang dibuat lewat alur `--label` hari itu | Jalankan alur SKU spesial (`jalankan.bat --label --jalankan`) dulu sampai label PDF terbentuk |
 | Program tidak tahu kertas habis sampai dicek manual | Printer tidak melapor status ke Windows Print Spooler (lihat bagian 4) | Pantau fisik printer saat sesi cetak besar; andalkan daftar gagal (bagian 5) sebagai jaring pengaman |

@@ -59,7 +59,6 @@ J&T: wajib keluar TikTok Shop paling lambat jam 15.00 - lihat docs/jadwal-proses
 import argparse
 import logging
 import os
-import re
 import sys
 import time
 from datetime import datetime
@@ -79,27 +78,26 @@ FOLDER_LOG = ROOT / "logs"
 FOLDER_LABEL = ROOT / "label-pengiriman"
 FILE_RIWAYAT = ROOT / "riwayat_picklist.xlsx"
 
-# Folder sesi aktif di dalam FOLDER_LABEL, mis. "label-pengiriman/2026-09-30_4". Diisi sekali oleh
-# main() lewat folder_label_sesi() sebelum menu mana pun dijalankan, supaya semua pilihan
-# menu.bat (1-7) dalam 1x jalan menu.bat menyimpan label ke folder sesi yang sama - baru
-# ganti sesi saat menu.bat ditutup & dijalankan ulang (lihat menu.bat: LABEL_SESI_DIR).
+# Folder sesi aktif di dalam FOLDER_LABEL, mis. "label-pengiriman/2026-09-30/4" (folder
+# tanggal berisi subfolder bernomor per sesi). Diisi sekali oleh main() lewat
+# folder_label_sesi() sebelum menu mana pun dijalankan, supaya semua pilihan menu.bat (1-7)
+# dalam 1x jalan menu.bat menyimpan label ke folder sesi yang sama - baru ganti sesi saat
+# menu.bat ditutup & dijalankan ulang (lihat menu.bat: LABEL_SESI_DIR).
 FOLDER_LABEL_SESI = FOLDER_LABEL
 
 
 def sesi_label_baru() -> str:
-    """Cari nomor sesi terbesar untuk tanggal hari ini di FOLDER_LABEL, lalu buat folder
-    sesi berikutnya (mis. sudah ada 2026-09-30_1..2026-09-30_3 -> buat 2026-09-30_4)."""
-    FOLDER_LABEL.mkdir(exist_ok=True)
+    """Cari nomor sesi terbesar untuk tanggal hari ini di FOLDER_LABEL/<tanggal>, lalu buat
+    folder sesi berikutnya (mis. sudah ada 2026-09-30/1..2026-09-30/3 -> buat 2026-09-30/4)."""
     tanggal = datetime.now().strftime("%Y-%m-%d")
-    pola = re.compile(rf"^{re.escape(tanggal)}_(\d+)$")
+    folder_tanggal = FOLDER_LABEL / tanggal
+    folder_tanggal.mkdir(parents=True, exist_ok=True)
     urutan_terbesar = 0
-    for item in FOLDER_LABEL.iterdir():
-        if item.is_dir():
-            cocok = pola.match(item.name)
-            if cocok:
-                urutan_terbesar = max(urutan_terbesar, int(cocok.group(1)))
-    nama = f"{tanggal}_{urutan_terbesar + 1}"
-    (FOLDER_LABEL / nama).mkdir(exist_ok=True)
+    for item in folder_tanggal.iterdir():
+        if item.is_dir() and item.name.isdigit():
+            urutan_terbesar = max(urutan_terbesar, int(item.name))
+    nama = f"{tanggal}/{urutan_terbesar + 1}"
+    (FOLDER_LABEL / nama).mkdir(parents=True, exist_ok=True)
     return nama
 
 
@@ -109,7 +107,7 @@ def folder_label_sesi() -> Path:
     tanpa menu.bat)."""
     nama = os.environ.get("LABEL_SESI_DIR") or sesi_label_baru()
     folder = FOLDER_LABEL / nama
-    folder.mkdir(exist_ok=True)
+    folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
