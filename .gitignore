@@ -11,3 +11,6 @@ sniff/sniff_output/
 sniff/profil_browser/
 label-pengiriman/
 riwayat_picklist.*
+.vscode/
+.idea/
+Thumbs.db
