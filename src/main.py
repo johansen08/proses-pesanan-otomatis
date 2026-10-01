@@ -67,6 +67,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import peringatan_picklist
 from proses_label import durasi
 from sku_spesial import baca_excel, buat_pdf, hitung_sku_spesial, resi_kandidat
 
@@ -183,6 +184,16 @@ def download(log: logging.Logger, token: str) -> Path:
 
 
 def main() -> int:
+    """Jalankan _main(), lalu cetak peringatan picklist terlompat/batal PALING AKHIR supaya
+    tidak tenggelam di log yang panjang."""
+    peringatan_picklist.atur_folder(FOLDER_LOG)
+    try:
+        return _main()
+    finally:
+        peringatan_picklist.cetak_sesi()
+
+
+def _main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--excel", type=Path, help="proses file Excel ini tanpa download")
     ap.add_argument("--tanpa-cek-nilai", action="store_true",

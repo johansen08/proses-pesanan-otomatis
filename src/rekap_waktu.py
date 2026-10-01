@@ -9,6 +9,9 @@ Pemakaian:
     python src/rekap_waktu.py "TIPE 1" "URGENT LAZADA:<mulai>:<selesai>" "...:<mulai>:<selesai>"
 """
 import sys
+from pathlib import Path
+
+import peringatan_picklist
 
 
 def format_durasi(detik):
@@ -23,9 +26,11 @@ def main():
     judul = sys.argv[1]
     entri = []
     total = 0.0
+    awal = None
     for arg in sys.argv[2:]:
         nama, mulai, selesai = arg.rsplit(":", 2)
         durasi = max(0.0, float(selesai) - float(mulai))
+        awal = float(mulai) if awal is None else min(awal, float(mulai))
         entri.append((nama, durasi))
         total += durasi
 
@@ -40,6 +45,11 @@ def main():
     print("-" * 60)
     print(f"  {'TOTAL'.ljust(lebar_nama)} : {format_durasi(total)}")
     print("=" * 60)
+
+    # peringatan picklist terlompat/batal selama TIPE ini (dicatat main.py di logs/)
+    if awal is not None:
+        peringatan_picklist.atur_folder(Path(__file__).resolve().parent.parent / "logs")
+        peringatan_picklist.cetak(peringatan_picklist.baca_sejak(awal))
 
 
 if __name__ == "__main__":

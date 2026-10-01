@@ -139,6 +139,22 @@ def uji_folder_label_sesi_pakai_env_jika_ada():
     print("  folder_label_sesi: pakai LABEL_SESI_DIR dari environment kalau ada, bukan bikin sesi baru")
 
 
+def uji_peringatan_picklist_terlompat():
+    import peringatan_picklist as pp
+    with tempfile.TemporaryDirectory() as tmp:
+        pp.atur_folder(Path(tmp))
+        pp._sesi.clear()
+        assert pp.periksa_nomor("PICK-000155661") is None      # pertama kali: belum ada pembanding
+        assert pp.periksa_nomor("PICK-000155662") is None      # berurutan: aman
+        pesan = pp.periksa_nomor("PICK-000155665")
+        assert pesan and "PICK-000155663" in pesan and "PICK-000155664" in pesan, pesan
+        assert pp.periksa_nomor("PICK-000155666") is None
+        assert len(pp._sesi) == 1
+        assert len(pp.baca_sejak(0)) == 1 and pp.baca_sejak(9e12) == []
+    pp._file_terakhir = pp._file_peringatan = None
+    print("  peringatan_picklist: nomor terlompat terdeteksi & tersimpan, berurutan tidak dianggap")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

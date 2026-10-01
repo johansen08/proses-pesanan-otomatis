@@ -69,6 +69,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 import jubelio
+import peringatan_picklist
 from sku_spesial import KURIR_DIIZINKAN, MIN_RESI
 
 REPORT_API = "https://report-prod.jubelio.com/api/reports"
@@ -346,6 +347,7 @@ def buat_picklist_channel(k: Klien, ids: list[int]) -> tuple[int, str, list[int]
         picks = data.get("picks") or []
         if len(picks) != 1:
             raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
+        peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
         invalid = set(data.get("invalidSO") or [])
         if invalid:
             log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
@@ -619,6 +621,7 @@ def buat_picklist(k: Klien, sku: str, resi_spesial: set[str],
         picks = data.get("picks") or []
         if len(picks) != 1:
             raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
+        peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
         invalid = set(data.get("invalidSO") or [])
         if invalid:
             log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
