@@ -113,6 +113,26 @@ def folder_label_sesi() -> Path:
     return folder
 
 
+def cetak_bermasalah(hasil: list[dict],
+                     judul: str = "PERHATIAN: PICKLIST TERHENTI/GAGAL") -> list[dict]:
+    """Cetak blok peringatan mencolok untuk baris hasil proses yang Catatan-nya diawali
+    GAGAL/TERHENTI (mis. error koneksi saat unduh label, lihat proses_label.lanjutkan_picklist())
+    - supaya tidak tenggelam di log yang panjang, sejajar dengan
+    peringatan_picklist.cetak()/peringatan_resi.cetak(). Mengembalikan baris yang bermasalah
+    (dipakai caller untuk exit code)."""
+    bermasalah = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    if not bermasalah:
+        return bermasalah
+    print()
+    print("!" * 60)
+    print(f"  {judul}")
+    print("!" * 60)
+    for h in bermasalah:
+        print(f"  - {h.get('No Picklist') or h.get('SKU', '-')}: {h.get('Catatan', '')}")
+    print("!" * 60)
+    return bermasalah
+
+
 def dalam_jam_menu(menu: str) -> bool:
     """Cek apakah jam sekarang ada dalam jendela jam menu proses-harian.bat. Jendela di sini
     cuma SANITY CHECK (soft warning via konfirmasi Y/N, bukan blokir) - tim tetap yang
@@ -364,6 +384,7 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
     log.info("SELESAI: %d SKU spesial (benar-benar diproses), %d resi -> %s",
              ringkasan_aktual["total_sku_spesial"], ringkasan_aktual["total_resi_spesial"], pdf)
 
+    hasil_reguler = []
     if not args.sku and not args.tanpa_reguler:
         # Sisa reguler (TikTok Shop & Shopee, bukan SKU spesial) baru bisa dipisah dengan
         # benar SETELAH tahu daftar SKU spesial hari itu -> dijalankan di sini, bukan sebelum
@@ -372,8 +393,8 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
         # spesial saja).
         resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
         log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
-        proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI,
-                                    kurir=args.kurir)
+        hasil_reguler = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT,
+                                                     FOLDER_LABEL_SESI, kurir=args.kurir)
 
     diproses = [h["detik"] for h in hasil if h.get("No Picklist")]
     log.info("Waktu buat daftar resi spesial : %s", durasi(lama_daftar))
@@ -382,7 +403,8 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
              durasi(sum(diproses) / len(diproses)) if diproses else "-")
     log.info("Total waktu                    : %s", durasi(lama_daftar + lama_proses))
     log.info("Riwayat: %s", FILE_RIWAYAT)
-    return 1 if any(str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI")) for h in hasil) else 0
+    bermasalah = cetak_bermasalah(hasil + hasil_reguler)
+    return 1 if bermasalah else 0
 
 
 def urgent_picklist(log: logging.Logger, args) -> int:
@@ -399,7 +421,7 @@ def urgent_picklist(log: logging.Logger, args) -> int:
         proses_label.rencana_urgent(k, skenario)
         return 0
     hasil = proses_label.proses_urgent(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, skenario)
-    gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    gagal = cetak_bermasalah(hasil)
     log.info("SELESAI urgent: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0
@@ -430,7 +452,7 @@ def reguler_picklist(log: logging.Logger, args) -> int:
         return 0
     hasil = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI,
                                         args.bagian, args.kurir)
-    gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    gagal = cetak_bermasalah(hasil)
     log.info("SELESAI reguler: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0
@@ -445,7 +467,7 @@ def shopee_pagi_picklist(log: logging.Logger, args) -> int:
         proses_label.rencana_shopee_pagi(k)
         return 0
     hasil = proses_label.proses_shopee_pagi(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
-    gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    gagal = cetak_bermasalah(hasil)
     log.info("SELESAI Shopee Pagi: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0
@@ -460,7 +482,7 @@ def jnt_siang_picklist(log: logging.Logger, args) -> int:
         proses_label.rencana_jnt_siang(k)
         return 0
     hasil = proses_label.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
-    gagal = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
+    gagal = cetak_bermasalah(hasil)
     log.info("SELESAI J&T Resi Siang: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0

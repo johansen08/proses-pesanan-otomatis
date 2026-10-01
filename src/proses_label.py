@@ -150,6 +150,13 @@ JEDA_RESI_S = 3.5                       # jeda polling resi (sama dengan web)
 TUNGGU_PDF_S = 180
 TUNGGU_CLIENT_REPORT_S = 300            # batas total coba ulang report-prod "410 Expired"
 JEDA_COBA_CLIENT_REPORT_S = 5
+# Koneksi putus di tengah request (mis. RemoteDisconnected) - ulangi request YANG SAMA
+# beberapa kali sebelum menyerah, supaya 1 kedipan koneksi tidak menggagalkan seluruh
+# picklist (operator harus --lanjut manual). Dipasang di Klien._kirim(), dipakai semua
+# request keluar (get/post/report_get/report_post) - jadi retry-nya tepat di titik
+# request yang gagal, bukan mengulang dari awal langkah 3-6.
+MAKS_COBA_KONEKSI = 3
+JEDA_COBA_KONEKSI_S = 5
 
 KOLOM_RIWAYAT = ["Waktu", "SKU", "No Picklist", "Total Pesanan", "Resi Keluar",
                  "File Label", "Catatan", "Durasi"]
@@ -182,29 +189,44 @@ class Klien:
             raise ProsesError(f"{apa} gagal (HTTP {r.status_code}): {jubelio._pesan(r)}")
         return r.json()
 
+    def _kirim(self, fn, *a, **kw):
+        """Panggil `fn` (sesi.get/sesi.post), ulangi kalau koneksi putus di tengah jalan
+        (mis. ConnectionError/RemoteDisconnected, Timeout) - lihat MAKS_COBA_KONEKSI."""
+        for coba in range(1, MAKS_COBA_KONEKSI + 1):
+            try:
+                return fn(*a, **kw)
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                if coba == MAKS_COBA_KONEKSI:
+                    raise
+                log.warning("  Koneksi putus (percobaan %d/%d): %s -> ulangi %d detik lagi",
+                           coba, MAKS_COBA_KONEKSI, e, JEDA_COBA_KONEKSI_S)
+                self.tidur(JEDA_COBA_KONEKSI_S)
+
     def get(self, path: str, params=None):
-        r = self.sesi.get(f"{jubelio.API}/{path}", params=params,
-                          headers=jubelio._header(self.token), timeout=60)
+        r = self._kirim(self.sesi.get, f"{jubelio.API}/{path}", params=params,
+                        headers=jubelio._header(self.token), timeout=60)
         return self._json(r, f"GET {path}")
 
     def post_mentah(self, path: str, body):
-        return self.sesi.post(f"{jubelio.API}/{path}", json=body,
-                              headers=jubelio._header(self.token), timeout=120)
+        return self._kirim(self.sesi.post, f"{jubelio.API}/{path}", json=body,
+                           headers=jubelio._header(self.token), timeout=120)
 
     def post(self, path: str, body):
         return self._json(self.post_mentah(path, body), f"POST {path}")
 
     # report-prod (Telerik) memakai cookie, bukan header authorization
     def report_get(self, url: str, params=None, referer: str | None = None):
-        return self.sesi.get(url, params=params, cookies=self.cookie, timeout=180, headers={
-            "User-Agent": jubelio.USER_AGENT, "Referer": referer or self.halaman_report})
+        return self._kirim(self.sesi.get, url, params=params, cookies=self.cookie, timeout=180,
+                           headers={"User-Agent": jubelio.USER_AGENT,
+                                    "Referer": referer or self.halaman_report})
 
     def report_post(self, path: str, body):
-        r = self.sesi.post(f"{REPORT_API}/{path}", json=body, cookies=self.cookie, timeout=120,
-                           headers={"User-Agent": jubelio.USER_AGENT,
-                                    "Referer": self.halaman_report,
-                                    "Origin": "https://report-prod.jubelio.com",
-                                    "X-Requested-With": "XMLHttpRequest"})
+        r = self._kirim(self.sesi.post, f"{REPORT_API}/{path}", json=body, cookies=self.cookie,
+                        timeout=120,
+                        headers={"User-Agent": jubelio.USER_AGENT,
+                                 "Referer": self.halaman_report,
+                                 "Origin": "https://report-prod.jubelio.com",
+                                 "X-Requested-With": "XMLHttpRequest"})
         return self._json(r, f"report {path.rsplit('/', 1)[-1]}")
 
 
