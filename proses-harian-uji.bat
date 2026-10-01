@@ -5,21 +5,24 @@ cd /d "%~dp0"
 :menu
 cls
 echo ==================================================================
-echo   PROSES PESANAN OTOMATIS - MODE UJI (tidak ada perubahan di Jubelio)
+echo   PROSES PESANAN OTOMATIS (NON EVENT) - MODE UJI (tidak ada perubahan di Jubelio)
 echo ==================================================================
-echo   1. Uji TIPE 1 - GABUNG J^&T+SPX   (07.00-12.00 / 16.00-07.00)
-echo   2. Uji TIPE 2 - DIPISAH + SPX RESI PAGI   (TEPAT JAM 13.00)
-echo   3. Uji TIPE 3 - DIPISAH   (13.00-15.00)
-echo   4. Uji TIPE 4 - GABUNG LAGI + J^&T RESI SIANG   (TEPAT JAM 15.00)
+echo   1. Uji GABUNG JNT+SPX                           (07.00-12.00 / 16.00-07.00)
+echo   2. Uji DIPISAH + SPX RESI ^<= 12.00              (TEPAT JAM 13.00)
+echo   3. Uji DIPISAH, TANPA SPX RESI PAGI             (13.00-15.00)
+echo   4. Uji GABUNG JNT+SPX LAGI + JNT RESI ^<= 15.00  (TEPAT JAM 15.00)
 echo   0. Keluar
 echo ==================================================================
 set "pilih="
-set /p "pilih=Pilih menu: "
+set /p "pilih=Pilih menu (0-4): "
 if "%pilih%"=="1" goto tipe1
 if "%pilih%"=="2" goto tipe2
 if "%pilih%"=="3" goto tipe3
 if "%pilih%"=="4" goto tipe4
 if "%pilih%"=="0" goto :eof
+echo.
+echo Pilihan "%pilih%" tidak dikenali, coba lagi.
+pause
 goto menu
 
 :tipe1
