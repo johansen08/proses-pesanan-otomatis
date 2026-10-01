@@ -69,6 +69,10 @@ project secara umum, root tidak boleh berisi file `.py`):
   Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `riwayat_picklist.xlsx`.
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF) label
   SKU spesial yang sudah ada; tidak membuat picklist/label baru.
+- `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
+  dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
+  peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
+  di bawah rekap waktu `src/rekap_waktu.py` (akhir tiap TIPE `proses-harian.bat`).
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder
