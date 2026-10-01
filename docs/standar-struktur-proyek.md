@@ -114,8 +114,12 @@ proses-pesanan-otomatis/
 │  ├─ standar-struktur-proyek.md  # dokumen ini
 │  ├─ instalasi.md
 │  ├─ jadwal-proses.md
+│  ├─ rencana-pengembangan.md
 │  ├─ panduan-sku-spesial.md
-│  └─ analisa-alur-cetak-label.md
+│  ├─ referensi-implementasi-sku-spesial-awal.md
+│  ├─ analisa-alur-cetak-label.md
+│  ├─ cetak-bulk-label-spesial.md
+│  └─ pep-8.md
 ├─ tests/                         # kasus uji
 ├─ sniff/                         # perekam alur Jubelio (tools dev)
 ├─ laporan-siap-proses/           # Excel hasil download Jubelio (dibuat otomatis)

@@ -36,7 +36,8 @@ dan **TIPE 3** (lihat `proses-harian.bat`/[docs/jadwal-proses.md](docs/jadwal-pr
 dan **TIPE 4** tetap menggabung J&T+SPX.
 
 Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/panduan-sku-spesial.md)
-(kode di bagian 8 panduan adalah versi awal; kode yang dipakai adalah file `.py` di folder ini).
+(kode yang dipakai adalah file `.py` di folder `src/`; versi awal/kerangka ada di
+[docs/referensi-implementasi-sku-spesial-awal.md](docs/referensi-implementasi-sku-spesial-awal.md)).
 
 ## File
 
@@ -74,8 +75,9 @@ tidak ada file `.env.example` di proyek ini).
 Pindah ke PC lain? Lihat panduan lengkap di [docs/instalasi.md](docs/instalasi.md) (versi
 Python, semua library yang perlu di-install, dan konfigurasi `.env`).
 
-Jadwal operasional harian tim resi (jam berapa menu apa dijalankan, plus
-rencana pengembangan ke depan): lihat [docs/jadwal-proses.md](docs/jadwal-proses.md).
+Jadwal operasional harian tim resi (jam berapa menu apa dijalankan): lihat
+[docs/jadwal-proses.md](docs/jadwal-proses.md). Rencana pengembangan ke depan
+(belum diimplementasikan): [docs/rencana-pengembangan.md](docs/rencana-pengembangan.md).
 
 ## Menjalankan
 
