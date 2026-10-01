@@ -323,12 +323,22 @@ def ambil_pesanan_channel(k: Klien, channel_ids: list[int] | None = None,
         if not data or len(hasil) >= int(j.get("totalCount") or 0):
             break
         page += 1
-    if not channel_ids:
-        return hasil
-    # jaga-jaga: saring lagi di sisi kita terhadap channel_id sungguhan, jangan andalkan
-    # filter API saja (lihat catatan "Shop | Tokopedia" di atas)
-    izin = set(channel_ids)
-    return [o for o in hasil if o.get("source") in izin]
+    if channel_ids:
+        # jaga-jaga: saring lagi di sisi kita terhadap channel_id sungguhan, jangan andalkan
+        # filter API saja (lihat catatan "Shop | Tokopedia" di atas)
+        izin = set(channel_ids)
+        hasil = [o for o in hasil if o.get("source") in izin]
+    # channel TikTok Shop ("Shop | Tokopedia", source 131076) kosong/0 nilainya = pesanan
+    # sampel/kreator (lihat catatan TT-586350230929114342-67824, 01-10-2026) - khusus channel
+    # ini saja, BUKAN Shopee/Lazada/GTL-SiCepat yang nilai kecilnya tetap pesanan sungguhan
+    # (sniff 01-10-2026: Shopee terendah Rp 1.058, tidak pernah 0/kosong).
+    sampel = [o["salesorder_no"] for o in hasil
+             if o.get("source") == CHANNEL_ID_TIKTOK_SHOP and _angka(o.get("grand_total")) == 0]
+    if sampel:
+        log.warning("  %d pesanan TikTok Shop nilai 0 (sampel/kreator) dikeluarkan: %s",
+                    len(sampel), ", ".join(sampel))
+    return [o for o in hasil
+           if not (o.get("source") == CHANNEL_ID_TIKTOK_SHOP and _angka(o.get("grand_total")) == 0)]
 
 
 def bagi_batch(ids: list[int], maks: int = MAKS_PESANAN_PICKLIST) -> list[list[int]]:

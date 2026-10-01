@@ -351,13 +351,17 @@ class JubelioPalsuUrgent:
         # 3 Lazada asli (source 4) + kebocoran channel lain yang sengaja diselipkan untuk
         # memastikan ambil_pesanan_channel menyaring ulang, bukan cuma percaya query API
         self.pesanan_lazada = [
-            {"salesorder_id": 100 + i, "source": 4, "shipper": "J&T"} for i in range(3)
-        ] + [{"salesorder_id": 999, "source": 64, "shipper": "SPX"}]     # Shopee nyelip
+            {"salesorder_id": 100 + i, "source": 4, "shipper": "J&T", "grand_total": "35900.0000"}
+            for i in range(3)
+        ] + [{"salesorder_id": 999, "source": 64, "shipper": "SPX",
+              "grand_total": "35900.0000"}]     # Shopee nyelip
         # 200 Tokopedia asli (source 128) + 50 TikTok "Shop | Tokopedia" (source 131076) -
         # keduanya harus IKUT karena skenario ini tidak difilter channel, cuma kurir
         self.pesanan_gtl_sicepat = [
-            {"salesorder_id": 200 + i, "source": 128, "shipper": "GTL"} for i in range(200)
-        ] + [{"salesorder_id": 400 + i, "source": 131076, "shipper": "SiCepat"} for i in range(50)]
+            {"salesorder_id": 200 + i, "source": 128, "shipper": "GTL", "grand_total": "35900.0000"}
+            for i in range(200)
+        ] + [{"salesorder_id": 400 + i, "source": 131076, "shipper": "SiCepat",
+              "grand_total": "35900.0000"} for i in range(50)]
         self.picklist_no = 0
         self.stok_kosong_ids: set[int] = set()
 
@@ -407,7 +411,7 @@ def uji_ambil_pesanan_channel_resi_terlama_masuk_batch_pertama():
         def get(self, url, params=None, headers=None, timeout=None, cookies=None):
             assert params.get("sort_direction") == "ASC"
             # API sudah mengurutkan ASC di server; klien tinggal percaya urutan responsnya
-            data = [{"salesorder_id": i, "source": pl.CHANNEL_ID_LAZADA,
+            data = [{"salesorder_id": i, "source": pl.CHANNEL_ID_LAZADA, "grand_total": "35900.0000",
                      "transaction_date": f"2026-09-29T{6 + i // 40:02d}:00:00Z"}
                     for i in range(250)]     # id 0 = terlama (jam 06), id 249 = terbaru
             return Resp(data={"data": data, "totalCount": len(data)})
@@ -419,6 +423,30 @@ def uji_ambil_pesanan_channel_resi_terlama_masuk_batch_pertama():
     assert batch[1] == list(range(200, 250)), "50 resi terbaru baru di picklist kedua"
     print("  250 resi (id 0 = terlama) -> batch pertama isinya id 0-199 (terlama), "
           "bukan tercampur/id terbaru duluan")
+
+
+def uji_ambil_pesanan_channel_nilai_0_hanya_dibuang_untuk_tiktok_shop():
+    # TT-586350230929114342-67824 (01-10-2026): pesanan TikTok Shop nilai 0 lolos sampai
+    # finish-pick karena ambil_pesanan_channel() belum memfilternya. Aturan dikonfirmasi user:
+    # nilai 0/kosong cuma berarti sampel/kreator utk channel TikTok Shop ("Shop | Tokopedia",
+    # source 131076) - Shopee/Lazada/channel lain nilai kecil (bahkan 0) tetap pesanan
+    # sungguhan, jangan ikut dibuang.
+    class JubelioPalsuCampur:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            data = [
+                {"salesorder_id": 1, "salesorder_no": "TT-SAMPEL", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "0.0000"},
+                {"salesorder_id": 2, "salesorder_no": "TT-SAMPEL-KOSONG", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": None},
+                {"salesorder_id": 3, "salesorder_no": "TT-ASLI", "source": pl.CHANNEL_ID_TIKTOK_SHOP, "grand_total": "35900.0000"},
+                {"salesorder_id": 4, "salesorder_no": "SP-NILAI-0", "source": pl.CHANNEL_ID_SHOPEE, "grand_total": "0.0000"},
+                {"salesorder_id": 5, "salesorder_no": "LZ-NILAI-0", "source": pl.CHANNEL_ID_LAZADA, "grand_total": "0.0000"},
+            ]
+            return Resp(data={"data": data, "totalCount": len(data)})
+
+    k = pl.Klien("TKN", sesi=JubelioPalsuCampur(), tidur=lambda s: None)
+    pesanan = pl.ambil_pesanan_channel(k)
+    assert {o["salesorder_no"] for o in pesanan} == {"TT-ASLI", "SP-NILAI-0", "LZ-NILAI-0"}, pesanan
+    print("  TT-SAMPEL & TT-SAMPEL-KOSONG (TikTok Shop, nilai 0/kosong) dibuang; SP-NILAI-0 & "
+          "LZ-NILAI-0 (channel lain, nilai 0) TETAP diproses - bukan sampel")
 
 
 def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
@@ -490,16 +518,19 @@ class JubelioPalsuReguler:
         # SO-6 total_qty 2 (calon kombinasi). SO-1 & SO-2 "sudah" SKU spesial -> dikeluarkan.
         # + Shopee (source 64): SO-7 total_qty 3 (kombinasi), SO-8 total_qty 1 (1 qty reguler).
         # + kebocoran channel lain (source 4, Lazada) utk pastikan disaring ulang.
+        # + SO-10 nilai 0 (sampel/kreator, mis. TT-586350230929114342-67824) -> harus
+        # dikeluarkan ambil_pesanan_channel() sebelum sempat masuk pisah_reguler().
         self.pesanan = [
-            {"salesorder_id": 1, "salesorder_no": "SO-1", "source": 131076, "total_qty": "1.0000"},
-            {"salesorder_id": 2, "salesorder_no": "SO-2", "source": 131076, "total_qty": "1.0000"},
-            {"salesorder_id": 3, "salesorder_no": "SO-3", "source": 131076, "total_qty": "1.0000"},
-            {"salesorder_id": 4, "salesorder_no": "SO-4", "source": 131076, "total_qty": "1.0000"},
-            {"salesorder_id": 5, "salesorder_no": "SO-5", "source": 131076, "total_qty": "1.0000"},
-            {"salesorder_id": 6, "salesorder_no": "SO-6", "source": 131076, "total_qty": "2.0000"},
-            {"salesorder_id": 7, "salesorder_no": "SO-7", "source": 64, "total_qty": "3.0000"},
-            {"salesorder_id": 8, "salesorder_no": "SO-8", "source": 64, "total_qty": "1.0000"},
-            {"salesorder_id": 9, "salesorder_no": "SO-9", "source": 4, "total_qty": "1.0000"},
+            {"salesorder_id": 1, "salesorder_no": "SO-1", "source": 131076, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 2, "salesorder_no": "SO-2", "source": 131076, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 3, "salesorder_no": "SO-3", "source": 131076, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 4, "salesorder_no": "SO-4", "source": 131076, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 5, "salesorder_no": "SO-5", "source": 131076, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 6, "salesorder_no": "SO-6", "source": 131076, "total_qty": "2.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 7, "salesorder_no": "SO-7", "source": 64, "total_qty": "3.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 8, "salesorder_no": "SO-8", "source": 64, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 9, "salesorder_no": "SO-9", "source": 4, "total_qty": "1.0000", "grand_total": "35900.0000"},
+            {"salesorder_id": 10, "salesorder_no": "SO-10", "source": 131076, "total_qty": "1.0000", "grand_total": "0.0000"},
         ]
         self.picklist_no = 0
 
@@ -560,7 +591,8 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
 
     pesanan = pl.ambil_pesanan_reguler(k)
     assert {o["salesorder_no"] for o in pesanan} == {f"SO-{i}" for i in range(1, 9)}, pesanan
-    print("  ambil_pesanan_reguler: SO-9 (channel Lazada, bocor dari filter API) dibuang lagi di kita")
+    print("  ambil_pesanan_reguler: SO-9 (channel Lazada, bocor dari filter API) dan SO-10 "
+          "(nilai 0, sampel/kreator) sama-sama dibuang lagi di kita")
     satu_qty, kombinasi = pl.pisah_reguler(pesanan, resi_spesial_semua)
     assert {o["salesorder_no"] for o in satu_qty} == {"SO-3", "SO-4", "SO-5", "SO-8"}, satu_qty
     assert {o["salesorder_no"] for o in kombinasi} == {"SO-6", "SO-7"}, kombinasi
@@ -610,12 +642,12 @@ class JubelioPalsuShopeePagi:
         self.log = []
         # source 64 = Shopee (izin); source 4 = Lazada nyelip (harus dibuang lagi di kita)
         self.pesanan = [
-            {"salesorder_id": 1, "source": 64, "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
-            {"salesorder_id": 2, "source": 64, "transaction_date": "2026-09-29T04:59:59.000Z"},  # 11:59:59 WIB
-            {"salesorder_id": 3, "source": 64, "transaction_date": "2026-09-29T05:00:00.000Z"},  # 12:00:00 WIB, pas batas -> ikut
-            {"salesorder_id": 4, "source": 64, "transaction_date": "2026-09-29T05:00:01.000Z"},  # 12:00:01 WIB -> tidak ikut
-            {"salesorder_id": 5, "source": 64, "transaction_date": "2026-09-29T06:00:00.000Z"},  # 13:00 WIB -> tidak ikut
-            {"salesorder_id": 6, "source": 4, "transaction_date": "2026-09-29T02:00:00.000Z"},   # Lazada nyelip
+            {"salesorder_id": 1, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
+            {"salesorder_id": 2, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T04:59:59.000Z"},  # 11:59:59 WIB
+            {"salesorder_id": 3, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:00.000Z"},  # 12:00:00 WIB, pas batas -> ikut
+            {"salesorder_id": 4, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:01.000Z"},  # 12:00:01 WIB -> tidak ikut
+            {"salesorder_id": 5, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T06:00:00.000Z"},  # 13:00 WIB -> tidak ikut
+            {"salesorder_id": 6, "source": 4, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},   # Lazada nyelip
         ]
         self.picklist_no = 0
 
@@ -693,12 +725,12 @@ class JubelioPalsuJntSiang:
         self.log = []
         # channel 131076 = TikTok Shop (izin); channel 64 = Shopee nyelip (harus dibuang lagi)
         self.pesanan = [
-            {"salesorder_id": 1, "source": 131076, "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
-            {"salesorder_id": 2, "source": 131076, "transaction_date": "2026-09-29T07:59:59.000Z"},  # 14:59:59 WIB
-            {"salesorder_id": 3, "source": 131076, "transaction_date": "2026-09-29T08:00:00.000Z"},  # 15:00:00 WIB, pas batas -> ikut
-            {"salesorder_id": 4, "source": 131076, "transaction_date": "2026-09-29T08:00:01.000Z"},  # 15:00:01 WIB -> tidak ikut
-            {"salesorder_id": 5, "source": 131076, "transaction_date": "2026-09-29T09:00:00.000Z"},  # 16:00 WIB -> tidak ikut
-            {"salesorder_id": 6, "source": 64, "transaction_date": "2026-09-29T02:00:00.000Z"},      # Shopee nyelip
+            {"salesorder_id": 1, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
+            {"salesorder_id": 2, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T07:59:59.000Z"},  # 14:59:59 WIB
+            {"salesorder_id": 3, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:00.000Z"},  # 15:00:00 WIB, pas batas -> ikut
+            {"salesorder_id": 4, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:01.000Z"},  # 15:00:01 WIB -> tidak ikut
+            {"salesorder_id": 5, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T09:00:00.000Z"},  # 16:00 WIB -> tidak ikut
+            {"salesorder_id": 6, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},      # Shopee nyelip
         ]
         self.picklist_no = 0
 
