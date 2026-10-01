@@ -53,7 +53,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
-| `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label) |
+| `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label SPESIAL) |
 
 Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
 label per picklist di `label-pengiriman/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
@@ -283,6 +283,8 @@ setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama
 SKU di riwayat: `JNT-SIANG`, mis. `label-pengiriman/PICK-000155500_JNT-SIANG_...pdf`.
 
 ## Cetak bulk label SPESIAL (`cetak-label-spesial.bat`, `src/print_spesial.py`)
+
+Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label-spesial.md](docs/cetak-bulk-label-spesial.md).
 
 Mencetak ulang semua label SKU spesial (yang namanya mengandung penanda `SPESIAL` dari
 alur di atas, mis. `PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf`) secara **bulk dan
