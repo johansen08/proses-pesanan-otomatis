@@ -282,8 +282,16 @@ spesial selesai diproses (picklist urgent tidak termasuk, lihat bagian 1). Sisa 
 di Jubelio, `channel_id=131076`) dan **Shopee** (`channel_id=64`) dengan kurir **J&T/SPX**
 yang **bukan** bagian SKU spesial hari itu digabung jadi picklist, dipecah 2 bagian:
 
-- **1 Qty Reguler**: 1 SKU, qty 1 (resi tunggal yang SKU-nya tidak mencapai syarat spesial).
-- **Kombinasi Reguler**: sisanya — pesanan qty > 1 (multi-baris/multi-SKU atau 1 SKU qty > 1).
+- **1 Qty Reguler**: 1 SKU, qty 1 (resi tunggal yang SKU-nya tidak mencapai syarat spesial) -
+  dipecah LAGI jadi beberapa picklist berdasarkan grup rak gudang (`GRUP_RAK` di
+  `src/proses_label.py`: `2A`, `3A`, `1B`, `2B`, `3B`, berurutan - grup `1A` tidak ada di
+  gudang ini), supaya picker tidak bolak-balik antar zona. Pesanan yang rak-nya di luar 5
+  grup itu digabung jadi 1 picklist `LAINNYA`. Grup yang tidak ada pesanannya dilewati (tidak
+  bikin picklist kosong). Lihat
+  [docs/superpowers/specs/2026-10-02-pecah-1qty-per-rak-design.md](docs/superpowers/specs/2026-10-02-pecah-1qty-per-rak-design.md)
+  untuk detail mekanismenya (endpoint `zones-racks-combination` + filter `combination[]`).
+- **Kombinasi Reguler**: sisanya — pesanan qty > 1 (multi-baris/multi-SKU atau 1 SKU qty > 1),
+  TIDAK dipecah per rak (tetap 1 picklist gabungan seperti sebelumnya).
 
 Resi yang sudah termasuk SKU spesial (dari `resi_per_sku` hasil `hitung_sku_spesial`)
 dikeluarkan dari kedua bagian ini, supaya tidak dobel proses dengan picklist SKU spesial.
@@ -314,12 +322,15 @@ jalankan.bat --reguler --bagian kombinasi --kurir spx --jalankan  # SPX saja
 `jalankan.bat --reguler --bagian 1qty --jalankan` / `jalankan.bat --reguler --bagian kombinasi --jalankan`
 (digabung). TIPE 2/TIPE 3, langkah "J&T 1 QTY REGULER"/"J&T KOMBINASI"/"SPX 1 QTY
 REGULER"/"SPX KOMBINASI" = perintah yang sama ditambah `--kurir jnt`/`--kurir spx`.
-`proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama. Kolom SKU di riwayat:
-`1QTY-REGULER` / `KOMBINASI-REGULER` (digabung), atau `J&T-1QTY-REGULER` / `SPX-1QTY-REGULER`
-/ `J&T-KOMBINASI-REGULER` / `SPX-KOMBINASI-REGULER` (dipisah lewat `--kurir`). Nama file PDF
-tidak boleh memuat simbol `&` (dibuang otomatis), jadi khusus nama file J&T dituliskan `JNT`
-tanpa simbol, mis. `label-pengiriman/PICK-000155300_1QTY-REGULER_...pdf` atau
-`label-pengiriman/PICK-000155301_JNT-1QTY-REGULER_...pdf`.
+`proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama. Kolom SKU di riwayat
+untuk bagian 1 Qty Reguler kini per grup rak: `1QTY-REGULER-2A` / `1QTY-REGULER-3A` /
+`1QTY-REGULER-1B` / `1QTY-REGULER-2B` / `1QTY-REGULER-3B` / `1QTY-REGULER-LAINNYA` (digabung),
+atau diawali `J&T-`/`SPX-` kalau dipisah lewat `--kurir` (mis. `J&T-1QTY-REGULER-2A`). Bagian
+Kombinasi Reguler tidak berubah: `KOMBINASI-REGULER` (digabung) atau `J&T-KOMBINASI-REGULER` /
+`SPX-KOMBINASI-REGULER` (dipisah). Nama file PDF tidak boleh memuat simbol `&` (dibuang
+otomatis), jadi khusus nama file J&T dituliskan `JNT` tanpa simbol, mis.
+`label-pengiriman/PICK-000155300_1QTY-REGULER-2A_...pdf` atau
+`label-pengiriman/PICK-000155301_JNT-1QTY-REGULER-2A_...pdf`.
 
 Tiap TIPE `proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara berurut dalam
 satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
