@@ -98,16 +98,20 @@ untuk aturan penamaan folder/file.
 ## Instalasi (sekali saja)
 
 ```bash
+git clone https://github.com/johansen08/proses-pesanan-otomatis.git
+cd proses-pesanan-otomatis
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-Buat file `.env` berisi `JUBELIO_EMAIL` dan `JUBELIO_PASSWORD` (lihat contoh isi di
-`.env` yang sudah ada, atau [docs/instalasi.md](docs/instalasi.md) bagian 5 kalau mulai dari nol —
-tidak ada file `.env.example` di proyek ini).
+Buat file `.env` berisi `JUBELIO_EMAIL` dan `JUBELIO_PASSWORD` (lihat
+[docs/instalasi.md](docs/instalasi.md) bagian 5) — file ini **tidak ikut ter-clone** dari
+GitHub karena sengaja di-gitignore (berisi kredensial login), jadi wajib dibuat manual
+sendiri; tidak ada file `.env.example` di proyek ini.
 
-Pindah ke PC lain? Lihat panduan lengkap di [docs/instalasi.md](docs/instalasi.md) (versi
-Python, semua library yang perlu di-install, dan konfigurasi `.env`).
+Pindah dari PC lama ke PC baru (atau sudah pernah pakai `riwayat_picklist.xlsx` sebelumnya)?
+Lihat panduan lengkap di [docs/instalasi.md](docs/instalasi.md) (versi Python, semua library
+yang perlu di-install, konfigurasi `.env`, dan file lain yang perlu disalin manual).
 
 Jadwal operasional harian tim resi (jam berapa menu apa dijalankan): lihat
 [docs/jadwal-proses.md](docs/jadwal-proses.md). Rencana pengembangan ke depan
