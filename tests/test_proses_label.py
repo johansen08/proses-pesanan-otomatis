@@ -740,6 +740,20 @@ def uji_ambil_kombinasi_rak_buang_gabungan_dan_kosong():
     print("  ambil_kombinasi_rak: string kosong & gabungan (\" - \") dibuang, paging jalan")
 
 
+def uji_kelompokkan_kombinasi_per_grup():
+    kombinasi = ["2A-B1-1", "2A-B2-2", "3A-C2-2", "1B-A2-3", "2B-D1-1", "3B-E1-1",
+                 "4C-F1-1", "1A-X1-1"]
+    hasil = pl.kelompokkan_kombinasi_per_grup(kombinasi)
+    assert list(hasil.keys()) == pl.GRUP_RAK, hasil
+    assert hasil["2A"] == ["2A-B1-1", "2A-B2-2"]
+    assert hasil["3A"] == ["3A-C2-2"]
+    assert hasil["1B"] == ["1B-A2-3"]
+    assert hasil["2B"] == ["2B-D1-1"]
+    assert hasil["3B"] == ["3B-E1-1"]
+    print("  kelompokkan_kombinasi_per_grup: prefix di luar GRUP_RAK (4C, 1A) diabaikan, "
+          "urutan key = GRUP_RAK")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan

@@ -597,6 +597,19 @@ def ambil_kombinasi_rak(k: Klien) -> list[str]:
         page += 1
 
 
+def kelompokkan_kombinasi_per_grup(kombinasi: list[str]) -> dict[str, list[str]]:
+    """Kelompokkan string kombinasi rak tunggal (lihat ambil_kombinasi_rak()) berdasarkan
+    prefix sebelum '-' pertama, hanya untuk prefix yang ada di GRUP_RAK. Prefix di luar
+    GRUP_RAK diabaikan di sini - pesanan dengan rak itu otomatis masuk LABEL_RAK_LAINNYA
+    lewat pisah_satu_qty_per_rak(), bukan di sini."""
+    hasil = {grup: [] for grup in GRUP_RAK}
+    for c in kombinasi:
+        prefix = c.split("-", 1)[0]
+        if prefix in hasil:
+            hasil[prefix].append(c)
+    return hasil
+
+
 def pisah_reguler(pesanan: list[dict],
                   resi_spesial_semua: set[str]) -> tuple[list[dict], list[dict]]:
     """Keluarkan resi yang sudah termasuk SKU spesial hari ini, lalu pisah sisanya jadi
