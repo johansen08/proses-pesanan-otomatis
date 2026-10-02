@@ -1,9 +1,11 @@
 """Cetak bulk label pengiriman SPESIAL dari folder sesi label-pengiriman TERBARU.
 
 Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di subfolder
-SPESIAL folder sesi label-pengiriman/YYYY-MM-DD/N/SPESIAL (dibuat proses_label.py alur SKU
-spesial, lihat TAG_SPESIAL di situ), menyaring yang namanya mengandung penanda `_SPESIAL_`
-(mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf), lalu mencetaknya BERURUT
+SPESIAL folder sesi label-pengiriman/YYYY-MM-DD/N/SPESIAL (atau JNT_SPESIAL/SPX_SPESIAL
+kalau --kurir jnt/spx dipakai saat proses - dibuat proses_label.py alur SKU spesial, lihat
+TAG_SPESIAL & _tag_spesial() di situ), menyaring yang namanya mengandung penanda
+`_SPESIAL_` (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf atau
+PICK-000155621_JNT_SPESIAL_TRC1_2026-10-01_080302.pdf), lalu mencetaknya BERURUT
 (diurutkan dari nomor PICK terkecil - urutan dibuat, bukan abjad nama file) ke printer
 pilihan lewat SumatraPDF (-print-to, -silent).
 
@@ -61,16 +63,24 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from proses_label import TAG_SPESIAL
+from proses_label import KURIR_LABEL_FILE, TAG_SPESIAL
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_LABEL = ROOT / "label-pengiriman"
 FOLDER_LOG = ROOT / "logs"
 
 POLA_TANGGAL_SESI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# Penanda SPESIAL ini dibuat proses_label.py (lihat TAG_SPESIAL) - HANYA alur SKU
-# spesial yang menyisipkannya di nama file, jadi cukup cari pola ini saja.
-POLA_SPESIAL = re.compile(r"^PICK-0*(\d+)_SPESIAL_.*\.pdf$", re.IGNORECASE)
+# Penanda SPESIAL ini dibuat proses_label.py (lihat TAG_SPESIAL & _tag_spesial()) - HANYA
+# alur SKU spesial yang menyisipkannya di nama file, jadi cukup cari pola ini saja. Kalau
+# --kurir jnt/spx dipakai saat proses, tag-nya disisipi awalan JNT_/SPX_ (lihat
+# _tag_spesial()) - pola ini menerima dengan atau tanpa awalan itu.
+POLA_SPESIAL = re.compile(
+    rf"^PICK-0*(\d+)_(?:(?:{'|'.join(KURIR_LABEL_FILE.values())})_)?SPESIAL_.*\.pdf$",
+    re.IGNORECASE)
+# Subfolder tempat label SPESIAL disimpan: tanpa --kurir di folder `SPESIAL`, dengan
+# --kurir jnt/spx di folder `JNT_SPESIAL`/`SPX_SPESIAL` (lihat _tag_spesial()) - dicari
+# semuanya supaya label dari ketiga kemungkinan tetap ketemu dan tercetak.
+SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_FILE.values()]
 
 LOKASI_SUMATRA_UMUM = [
     r"%LOCALAPPDATA%\SumatraPDF\SumatraPDF.exe",
@@ -131,19 +141,22 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
 
 
 def daftar_label_spesial(folder_sesi: Path) -> list[Path]:
-    """PDF label SPESIAL di subfolder `folder_sesi/SPESIAL` (lihat TAG_SPESIAL di
-    proses_label.py), diurutkan dari nomor PICK terkecil (urutan dibuat), BUKAN
-    diurutkan abjad nama file apa adanya. Kosong (bukan error) kalau subfolder-nya
-    belum ada - artinya belum ada label SPESIAL di sesi ini."""
-    folder_spesial = folder_sesi / TAG_SPESIAL
-    if not folder_spesial.is_dir():
-        return []
+    """PDF label SPESIAL di subfolder `folder_sesi/SPESIAL` DAN/atau
+    `folder_sesi/JNT_SPESIAL`/`folder_sesi/SPX_SPESIAL` kalau --kurir dipakai saat proses
+    (lihat SUBFOLDER_SPESIAL, TAG_SPESIAL & _tag_spesial() di proses_label.py), digabung
+    lalu diurutkan dari nomor PICK terkecil (urutan dibuat), BUKAN diurutkan abjad nama
+    file apa adanya. Kosong (bukan error) kalau belum ada subfolder sama sekali - artinya
+    belum ada label SPESIAL di sesi ini."""
     berlabel = []
-    for f in folder_spesial.iterdir():
-        if f.is_file():
-            cocok = POLA_SPESIAL.match(f.name)
-            if cocok:
-                berlabel.append((int(cocok.group(1)), f))
+    for nama_folder in SUBFOLDER_SPESIAL:
+        folder_spesial = folder_sesi / nama_folder
+        if not folder_spesial.is_dir():
+            continue
+        for f in folder_spesial.iterdir():
+            if f.is_file():
+                cocok = POLA_SPESIAL.match(f.name)
+                if cocok:
+                    berlabel.append((int(cocok.group(1)), f))
     berlabel.sort(key=lambda x: x[0])
     return [f for _, f in berlabel]
 

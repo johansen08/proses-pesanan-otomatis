@@ -76,6 +76,28 @@ def uji_daftar_label_spesial_hanya_bertanda_spesial_urut_nomor_pick():
         print("  daftar_label_spesial: hanya file _SPESIAL_ di subfolder SPESIAL, urut nomor PICK naik")
 
 
+def uji_daftar_label_spesial_gabung_folder_jnt_spx_dan_gabungan():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        subfolder_gabungan = folder / "SPESIAL"
+        subfolder_gabungan.mkdir()
+        _buat(subfolder_gabungan, "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf")
+        subfolder_jnt = folder / "JNT_SPESIAL"
+        subfolder_jnt.mkdir()
+        _buat(subfolder_jnt, "PICK-000155622_JNT_SPESIAL_TRC4_2026-10-01_080320.pdf")
+        subfolder_spx = folder / "SPX_SPESIAL"
+        subfolder_spx.mkdir()
+        _buat(subfolder_spx, "PICK-000155700_SPX_SPESIAL_TRC9_2026-10-01_090000.pdf")
+        hasil = ps.daftar_label_spesial(folder)
+        assert [f.name for f in hasil] == [
+            "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
+            "PICK-000155622_JNT_SPESIAL_TRC4_2026-10-01_080320.pdf",
+            "PICK-000155700_SPX_SPESIAL_TRC9_2026-10-01_090000.pdf",
+        ], [f.name for f in hasil]
+        print("  daftar_label_spesial: subfolder SPESIAL (gabungan), JNT_SPESIAL, SPX_SPESIAL "
+              "(dari --kurir) semuanya ikut dicari & digabung, urut nomor PICK naik")
+
+
 def uji_daftar_label_spesial_folder_kosong():
     with tempfile.TemporaryDirectory() as tmp:
         assert ps.daftar_label_spesial(Path(tmp)) == []

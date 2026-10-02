@@ -95,10 +95,12 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # kurir=None (default, dipakai TIPE 1/TIPE 4) = J&T dan SPX digabung seperti semula.
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
 # Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
-# (folder_label / TAG_SPESIAL), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
+# (folder_label / tag), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
 # lanjutkan_picklist() dipanggil dari proses()). Alur 2-5 (urgent/reguler/Shopee Pagi/
 # J&T Resi Siang) tidak memakai tag ini, begitu juga lanjutkan() (resume generik lewat
-# --lanjut, tidak tahu picklist itu dari alur mana).
+# --lanjut, tidak tahu picklist itu dari alur mana). Kalau --kurir jnt/spx dipakai di
+# alur 1, tag disisipi awalan KURIR_LABEL_FILE (mis. "JNT_SPESIAL"/"SPX_SPESIAL") supaya
+# nama file & subfolder J&T dan SPX tidak bercampur - lihat proses().
 TAG_SPESIAL = "SPESIAL"
 
 
@@ -717,6 +719,13 @@ def _label_kurir_file(label: str, kurir: str | None) -> str:
     return f"{KURIR_LABEL_FILE[kurir]}-{label}" if kurir else label
 
 
+def _tag_spesial(kurir: str | None) -> str:
+    """Tag dipakai lanjutkan_picklist() di proses() (Alur 1). Tanpa --kurir tetap
+    TAG_SPESIAL polos; dengan --kurir disisipi awalan KURIR_LABEL_FILE supaya nama file
+    & subfolder J&T dan SPX tidak bercampur (mis. "JNT_SPESIAL"/"SPX_SPESIAL")."""
+    return f"{KURIR_LABEL_FILE[kurir]}_{TAG_SPESIAL}" if kurir else TAG_SPESIAL
+
+
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
                     kurir: str | None = None) -> None:
     """Mode uji picklist sisa reguler: hanya membaca data, tidak mengubah apa pun di Jubelio.
@@ -1311,7 +1320,8 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
                      "No Picklist": pno, "Total Pesanan": len(ids)}
             try:
-                baris = lanjutkan_picklist(k, pid, pno, len(ids), sku, folder_label, tag=TAG_SPESIAL)
+                baris = lanjutkan_picklist(k, pid, pno, len(ids), sku, folder_label,
+                                          tag=_tag_spesial(kurir))
             except Exception as e:     # noqa: BLE001
                 log.exception("  TERHENTI di %s: %s", pno, e)
                 baris["Catatan"] = f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"

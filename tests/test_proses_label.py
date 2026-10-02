@@ -1123,6 +1123,13 @@ def uji_cek_item_bundle_hanya_ptaa_boleh_spesial():
     print("  SKU non-bundle: aturan PTAA tidak berlaku, tetap lolos seperti biasa")
 
 
+def uji_tag_spesial_dibedakan_per_kurir():
+    assert pl._tag_spesial(None) == pl.TAG_SPESIAL
+    assert pl._tag_spesial("jnt") == f"JNT_{pl.TAG_SPESIAL}"
+    assert pl._tag_spesial("spx") == f"SPX_{pl.TAG_SPESIAL}"
+    print("  tag SPESIAL disisipi awalan kurir (JNT_SPESIAL/SPX_SPESIAL) kalau --kurir dipakai")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":
