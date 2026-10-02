@@ -674,12 +674,25 @@ class JubelioPalsuReguler:
             {"salesorder_id": 9, "salesorder_no": "SO-9", "source": 4, "total_qty": "1.0000", "grand_total": "35900.0000"},
             {"salesorder_id": 10, "salesorder_no": "SO-10", "source": 131076, "total_qty": "1.0000", "grand_total": "0.0000"},
         ]
+        # Rak per pesanan 1qty (SO-3/4/5/8 - lihat docstring di atas): SO-3 grup 2A, SO-4 grup
+        # 3A, SO-8 grup 2B, SO-5 rak di luar 5 grup target -> harus jatuh ke LAINNYA. Grup 1B
+        # & 3B sengaja TIDAK punya pesanan sama sekali -> harus dilewati tanpa bikin picklist.
+        self.rak = {3: "2A-B1-1", 4: "3A-C2-2", 5: "4C-D3-3", 8: "2B-E4-4"}
+        self.kombinasi_rak = list(self.rak.values()) + ["1B-F5-5", "3B-G6-6"]
         self.picklist_no = 0
 
     def get(self, url, params=None, headers=None, timeout=None, cookies=None):
         self.log.append(("GET", url, params))
         assert headers.get("authorization") == "TKN"
+        if url.endswith("zones-racks-combination"):
+            assert params.get("status") == "PAID" and params.get("combination_type") == "racks"
+            data = [{"combination": c} for c in self.kombinasi_rak]
+            return Resp(data={"data": data, "totalCount": len(data)})
         if url.endswith("ready-to-process/"):
+            combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+            if combos:
+                data = [{"salesorder_id": so} for so, c in self.rak.items() if c in combos]
+                return Resp(data={"data": data, "totalCount": len(data)})
             assert params.get("sort_by") == "transaction_date" and params.get("sort_direction") == "ASC", \
                 "resi terlama harus diambil duluan, supaya masuk picklist pertama kalau dipecah"
             assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
@@ -864,11 +877,20 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
         pl.lanjutkan_picklist = asli
 
     per_label = {h["SKU"]: h for h in hasil}
-    assert per_label["1QTY-REGULER"]["Total Pesanan"] == 4
+    assert per_label["1QTY-REGULER-2A"]["Total Pesanan"] == 1, per_label
+    assert per_label["1QTY-REGULER-3A"]["Total Pesanan"] == 1, per_label
+    assert per_label["1QTY-REGULER-2B"]["Total Pesanan"] == 1, per_label
+    assert per_label["1QTY-REGULER-LAINNYA"]["Total Pesanan"] == 1, per_label
+    assert "1QTY-REGULER-1B" not in per_label and "1QTY-REGULER-3B" not in per_label, \
+        "grup tanpa pesanan (1B, 3B) tidak boleh bikin picklist"
     assert per_label["KOMBINASI-REGULER"]["Total Pesanan"] == 2
-    assert len(baris) == 1 + 2, "2 picklist reguler tercatat di riwayat"
-    print("  proses_reguler: 1 picklist 1QTY-REGULER (4 pesanan), 1 picklist "
-          "KOMBINASI-REGULER (2 pesanan)")
+    assert list(per_label.keys()) == ["1QTY-REGULER-2A", "1QTY-REGULER-3A",
+                                      "1QTY-REGULER-2B", "1QTY-REGULER-LAINNYA",
+                                      "KOMBINASI-REGULER"], \
+        "urutan harus ikut GRUP_RAK (2A,3A,1B,2B,3B) lalu LAINNYA - 1B/3B dilewati krn kosong"
+    assert len(baris) == 1 + 5, "5 picklist reguler tercatat di riwayat (4 grup rak + kombinasi)"
+    print("  proses_reguler: 1qty dipecah per grup rak (2A/3A/2B/LAINNYA, 1B & 3B dilewati "
+          "krn kosong), KOMBINASI-REGULER tetap 1 picklist gabungan")
 
     # bagian="1qty": cuma proses bagian itu
     pl.lanjutkan_picklist = stub
@@ -878,8 +900,36 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
                                       Path(d) / "label", bagian="1qty")
     finally:
         pl.lanjutkan_picklist = asli
-    assert {h["SKU"] for h in hasil} == {"1QTY-REGULER"}, hasil
-    print("  bagian bisa dibatasi 1qty atau kombinasi saja (dipakai --bagian)")
+    assert {h["SKU"] for h in hasil} == {"1QTY-REGULER-2A", "1QTY-REGULER-3A",
+                                         "1QTY-REGULER-2B", "1QTY-REGULER-LAINNYA"}, hasil
+    print("  bagian bisa dibatasi 1qty (dipecah per grup rak) atau kombinasi saja")
+
+
+class JubelioPalsuGagalRak:
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        if url.endswith("zones-racks-combination"):
+            raise pl.requests.exceptions.ConnectionError("simulasi Jubelio down")
+        raise AssertionError(f"GET tak dikenal {url}")
+
+
+def uji_kelompok_1qty_per_rak_fallback_saat_gagal_ambil_kombinasi():
+    k = pl.Klien("TKN", sesi=JubelioPalsuGagalRak(), tidur=lambda s: None)
+    satu_qty = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
+               {"salesorder_id": 2, "salesorder_no": "SO-2"}]
+    hasil = pl._kelompok_1qty_per_rak(k, satu_qty)
+    assert list(hasil.keys()) == pl.GRUP_RAK + [pl.LABEL_RAK_LAINNYA], hasil
+    assert all(hasil[g] == [] for g in pl.GRUP_RAK), hasil
+    assert [o["salesorder_no"] for o in hasil[pl.LABEL_RAK_LAINNYA]] == ["SO-1", "SO-2"], hasil
+    print("  _kelompok_1qty_per_rak: gagal ambil kombinasi rak -> semua pesanan jatuh ke "
+          "LAINNYA, tidak melempar exception")
+
+
+def uji_rencana_reguler_mode_uji_tidak_mengubah_apapun():
+    j = JubelioPalsuReguler()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    pl.rencana_reguler(k, resi_spesial_semua={"SO-1", "SO-2"})
+    assert all(m == "GET" for m, _, _ in j.log), j.log
+    print("  rencana_reguler (mode uji, termasuk pembagian per grup rak): hanya GET")
 
 
 class JubelioPalsuShopeePagi:

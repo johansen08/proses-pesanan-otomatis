@@ -676,6 +676,25 @@ def pisah_reguler(pesanan: list[dict],
     return satu_qty, kombinasi
 
 
+def _kelompok_1qty_per_rak(k: Klien, satu_qty: list[dict]) -> dict[str, list[dict]]:
+    """Bungkus ambil_kombinasi_rak()+kelompokkan_kombinasi_per_grup()+ambil_id_per_grup_rak()+
+    pisah_satu_qty_per_rak(): hasilnya peta grup -> daftar pesanan 1qty (urutan GRUP_RAK +
+    LABEL_RAK_LAINNYA). Selalu query rak dengan CHANNEL_IDS_REGULER + KURIR_FILTER_REGULER
+    penuh (bukan parameter `kurir` dari proses_reguler()) karena cuma dipakai cek keanggotaan
+    salesorder_id - `satu_qty` yang masuk ke sini sudah difilter kurir sebelumnya. Kalau
+    pengambilan data rak gagal (API down dsb), SEMUA pesanan 1qty jatuh ke LABEL_RAK_LAINNYA
+    supaya tidak ada yang hilang, tidak menghentikan proses reguler lainnya."""
+    try:
+        kombinasi = ambil_kombinasi_rak(k)
+        id_per_grup = ambil_id_per_grup_rak(k, kelompokkan_kombinasi_per_grup(kombinasi),
+                                            CHANNEL_IDS_REGULER, KURIR_FILTER_REGULER)
+    except Exception as e:      # noqa: BLE001 - jangan gagalkan seluruh 1qty gara2 gagal rak
+        log.warning("  Gagal ambil data rak (%s) - semua 1qty masuk kelompok \"%s\"",
+                   e, LABEL_RAK_LAINNYA)
+        id_per_grup = {}
+    return pisah_satu_qty_per_rak(satu_qty, id_per_grup)
+
+
 _BAGIAN_REGULER = {
     "1qty": ("1 Qty Reguler", LABEL_REGULER_1QTY, 0),
     "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1),
@@ -701,10 +720,18 @@ def _label_kurir_file(label: str, kurir: str | None) -> str:
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
                     kurir: str | None = None) -> None:
     """Mode uji picklist sisa reguler: hanya membaca data, tidak mengubah apa pun di Jubelio.
-    `kurir`: lihat cari_pesanan()."""
+    `kurir`: lihat cari_pesanan(). Bagian "1qty" dipecah lagi per grup rak - lihat
+    _kelompok_1qty_per_rak()/GRUP_RAK."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     for kunci, (nama, _, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
+            continue
+        if kunci == "1qty":
+            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx]).items():
+                batch = bagi_batch([o["salesorder_id"] for o in pesanan])
+                log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist "
+                         "(maks %d/picklist)", _nama_kurir(f"{nama} {grup}", kurir),
+                         len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
             continue
         pesanan = kelompok[idx]
         batch = bagi_batch([o["salesorder_id"] for o in pesanan])
@@ -717,13 +744,29 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    kurir: str | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
     (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU
-    1 qty yang tidak spesial, (2) kombinasi/multi-baris/qty>1. Dipanggil SETELAH proses SKU
-    spesial selesai (perlu resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per
-    picklist (maks MAKS_PESANAN_PICKLIST, dipecah kalau lebih)."""
+    1 qty yang tidak spesial - dipecah lagi per grup rak (lihat _kelompok_1qty_per_rak(),
+    GRUP_RAK; kegagalan 1 grup tidak menghentikan grup lain), (2) kombinasi/multi-baris/qty>1
+    (tidak dipecah per rak). Dipanggil SETELAH proses SKU spesial selesai (perlu
+    resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per picklist (maks
+    MAKS_PESANAN_PICKLIST, dipecah kalau lebih)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     hasil = []
     for kunci, (nama, label, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
+            continue
+        if kunci == "1qty":
+            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx]).items():
+                nama_grup, label_grup = f"{nama} {grup}", f"{label}-{grup}"
+                try:
+                    hasil += _proses_channel_batch(
+                        k, f"Reguler {_nama_kurir(nama_grup, kurir)}",
+                        _label_kurir(label_grup, kurir), pesanan, file_riwayat, folder_label,
+                        label_file=_label_kurir_file(label_grup, kurir))
+                except Exception as e:      # noqa: BLE001 - grup lain tetap lanjut
+                    log.exception("  GAGAL reguler %s: %s", nama_grup, e)
+                    hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                                  "SKU": _label_kurir(label_grup, kurir),
+                                  "Catatan": f"GAGAL: {e}"})
             continue
         try:
             hasil += _proses_channel_batch(k, f"Reguler {_nama_kurir(nama, kurir)}",
