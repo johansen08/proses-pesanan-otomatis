@@ -754,6 +754,48 @@ def uji_kelompokkan_kombinasi_per_grup():
           "urutan key = GRUP_RAK")
 
 
+class JubelioPalsuGrupRak:
+    """Server tiruan ready-to-process khusus filter combination[] - tiap pesanan dipetakan ke
+    1 kombinasi rak lewat `rak`, dicocokkan terhadap nilai combination[] yang dikirim."""
+
+    def __init__(self, rak: dict[int, str]):
+        self.rak = rak           # {salesorder_id: kombinasi}
+        self.log = []
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        self.log.append(("GET", url, dict(params)))
+        assert headers.get("authorization") == "TKN"
+        assert url.endswith("ready-to-process/")
+        combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+        assert combos, "harus selalu ada combination[] saat dipanggil ambil_id_per_grup_rak"
+        cocok = [so for so, c in self.rak.items() if c in combos]
+        return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
+                          "totalCount": len(cocok)})
+
+
+def uji_ambil_id_per_grup_rak_filter_dan_batching():
+    # grup "2A" sengaja punya 45 kombinasi (> MAKS_KOMBINASI_PER_PANGGILAN=40) supaya
+    # batching ikut teruji - cuma 1 pesanan sungguhan nyangkut di kombinasi ke-45.
+    kombinasi_2a = [f"2A-Z{i}-1" for i in range(45)]
+    rak = {1: kombinasi_2a[44], 2: "3A-C2-2", 3: "4C-X-1"}
+    kombinasi_per_grup = {"2A": kombinasi_2a, "3A": ["3A-C2-2"], "1B": [], "2B": [], "3B": []}
+    j = JubelioPalsuGrupRak(rak)
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+
+    hasil = pl.ambil_id_per_grup_rak(k, kombinasi_per_grup, pl.CHANNEL_IDS_REGULER,
+                                     pl.KURIR_FILTER_REGULER)
+    assert hasil == {"2A": {1}, "3A": {2}, "1B": set(), "2B": set(), "3B": set()}, hasil
+    panggilan_2a = [p for p in j.log if {v for kk, v in p[2].items()
+                                        if kk.startswith("combination[")} & set(kombinasi_2a)]
+    assert len(panggilan_2a) == 2, "45 kombinasi / 40 per panggilan -> 2 panggilan utk grup 2A"
+    assert any(params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
+              and params.get("couriers[1]") == "spx" for _, _, params in j.log)
+    assert any({kk for kk in params if kk.startswith("order_type[")} for _, _, params in j.log), \
+        "kurir SPX ikut -> filter order_type (buang pengiriman kilat) harus ikut ditambahkan"
+    print("  ambil_id_per_grup_rak: filter combination[] cocok per grup, dibatch 40/panggilan, "
+          "channel/kurir/tipe pesanan ikut diteruskan")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan

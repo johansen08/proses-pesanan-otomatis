@@ -610,6 +610,48 @@ def kelompokkan_kombinasi_per_grup(kombinasi: list[str]) -> dict[str, list[str]]
     return hasil
 
 
+def _potong(seq: list, n: int) -> list[list]:
+    return [seq[i:i + n] for i in range(0, len(seq), n)]
+
+
+def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
+                          channel_ids: list[int] | None = None,
+                          couriers: list[str] | None = None) -> dict[str, set[int]]:
+    """Untuk tiap grup di kombinasi_per_grup (lihat kelompokkan_kombinasi_per_grup()), cari
+    salesorder_id yang kombinasi raknya cocok lewat ready-to-process?combination[]=... (bisa
+    diulang), dibatasi channel_ids/couriers yang sama seperti ambil_pesanan_reguler(). Daftar
+    kombinasi dipecah per MAKS_KOMBINASI_PER_PANGGILAN nilai supaya query string tidak
+    kepanjangan. Dipakai _kelompok_1qty_per_rak()."""
+    pakai_filter_tipe = ((channel_ids and CHANNEL_ID_SHOPEE in channel_ids)
+                         or any(c.lower() == "spx" for c in couriers or []))
+    hasil = {}
+    for grup, daftar in kombinasi_per_grup.items():
+        ids = set()
+        for potongan in _potong(daftar, MAKS_KOMBINASI_PER_PANGGILAN):
+            page, ambil = 1, 0
+            while True:
+                params = {"q": "", "page": page, "page_size": 200, "sku_filter": "false",
+                          "sort_by": "transaction_date", "sort_direction": "ASC",
+                          "combination_type": "racks"}
+                params.update({f"combination[{i}]": c for i, c in enumerate(potongan)})
+                if channel_ids:
+                    params.update({f"channel_ids[{i}]": c for i, c in enumerate(channel_ids)})
+                if couriers:
+                    params.update({f"couriers[{i}]": c for i, c in enumerate(couriers)})
+                if pakai_filter_tipe:
+                    params.update({f"order_type[{i}]": t
+                                   for i, t in enumerate(TIPE_PESANAN_FILTER)})
+                j = k.get("wms/sales/v2/orders/ready-to-process/", params)
+                data = j.get("data") or []
+                ambil += len(data)
+                ids.update(o["salesorder_id"] for o in data)
+                if not data or ambil >= int(j.get("totalCount") or 0):
+                    break
+                page += 1
+        hasil[grup] = ids
+    return hasil
+
+
 def pisah_reguler(pesanan: list[dict],
                   resi_spesial_semua: set[str]) -> tuple[list[dict], list[dict]]:
     """Keluarkan resi yang sudah termasuk SKU spesial hari ini, lalu pisah sisanya jadi
