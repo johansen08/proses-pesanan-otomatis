@@ -125,6 +125,24 @@ setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
 atas) sampai jam 07.00 besok.
 
+### Jam tunda Urgent Lazada & GTL/SiCepat
+
+**Revisi 2026-10-02**: pesanan urgent yang jam pesannya (WIB) masih jauh dari waktu proses
+tidak buru-buru dipicklist — ditahan dulu, baru dilanjutkan otomatis sekali TIPE 1 jam 16.00
+dijalankan lagi:
+
+| | Urgent Lazada | Urgent GTL/SiCepat |
+|---|---|---|
+| Jam tunda (WIB) | di atas 14.00 | di atas 15.00 |
+| Dilanjutkan otomatis setelah | jam 16.00 | jam 16.00 |
+
+Berlaku di setiap TIPE (07.00-15.00): pesanan yang jam pesannya di atas jam tunda hari itu
+TIDAK ikut picklist saat itu — bukan dibuang, cuma ditahan sampai jendela TIPE 1 jam 16.00
+(lihat jadwal harian di bawah) dijalankan, lalu otomatis ikut tanpa batas jam lagi (karena
+sudah lewat jam 16.00, batas tunda diabaikan sepenuhnya). Implementasi kode:
+`JAM_CUTOFF_URGENT_LAZADA`/`JAM_CUTOFF_URGENT_GTL_SICEPAT`/`JAM_LANJUT_URGENT` &
+`_saring_jam_urgent()` di `src/proses_label.py`.
+
 ### Picklist sampel (TikTok Shop nilai 0/kosong)
 
 Dicek **PALING PERTAMA di tiap TIPE 1-4** (langkah 1, sebelum Urgent Lazada) — pesanan

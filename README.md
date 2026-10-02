@@ -193,6 +193,12 @@ reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
   **asli** (`channel_id=128`) *dan* "Shop | Tokopedia" (`channel_id=131076`, nama lain TikTok
   Shop di Jubelio) dengan kurir itu sama-sama ikut.
 
+**Jam tunda**: pesanan yang jam pesannya (WIB) masih di atas jam tunda hari itu belum
+dipicklist dulu — Lazada ditahan di atas jam 14.00, GTL/SiCepat di atas jam 15.00 — baru
+dilanjutkan otomatis begitu `--urgent` dijalankan lagi setelah jam 16.00 (batas jam ini
+diabaikan sepenuhnya setelah jam 16.00). Lihat `docs/jadwal-proses.md` bagian "Jam tunda
+Urgent Lazada & GTL/SiCepat" untuk jadwal lengkapnya.
+
 **Tidak dijalankan otomatis oleh `--label --jalankan`.** Harus dipicu manual, terpisah, lewat
 `--urgent` (mis. sebelum menjalankan menu SKU spesial/reguler, supaya pesanan yang sudah
 "diambil" urgent tidak ikut terhitung sebagai kandidat SKU spesial — tapi ini tanggung jawab

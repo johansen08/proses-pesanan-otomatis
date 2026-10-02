@@ -34,7 +34,10 @@ memakai penanda maupun subfolder ini.
 Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 2 skenario -
 channel Lazada, dan kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia -
 lihat SKENARIO_URGENT), sebanyak mungkin per picklist (maks MAKS_PESANAN_PICKLIST, dipecah
-kalau lebih). Tidak ada validasi SKU sejenis (multi-SKU per pesanan boleh). **Alur berdiri
+kalau lebih). Tidak ada validasi SKU sejenis (multi-SKU per pesanan boleh). Pesanan yang jam
+pesannya (WIB) di atas jam cutoff skenario (Lazada > jam 14.00, GTL/SiCepat > jam 15.00)
+ditahan dulu, baru diproses otomatis setelah jam 16.00 (lihat JAM_CUTOFF_URGENT_LAZADA/
+JAM_CUTOFF_URGENT_GTL_SICEPAT, JAM_LANJUT_URGENT & _saring_jam_urgent()). **Alur berdiri
 sendiri** - dipanggil HANYA lewat main.py --urgent, TIDAK otomatis dipanggil oleh alur 1
 (--label --jalankan). Kalau perlu urgent diproses lebih dulu, itu harus dijalankan manual
 terpisah sebelum --label --jalankan (lihat README bagian "Picklist urgent").
@@ -122,9 +125,21 @@ CHANNEL_ID_LAZADA = 4
 # DILEPAS di sini, cukup filter kurir.
 KURIR_FILTER_URGENT_GTL_SICEPAT = ["gtl", "sicepat"]
 MAKS_PESANAN_PICKLIST = 200             # gabung sebanyak mungkin, pecah kalau lebih dari ini
+# Jam tunda per skenario urgent (WIB, HARI INI): pesanan yang jam pesannya di atas jam ini
+# belum "mendesak" - sengaja DITAHAN dulu (tidak masuk picklist) sampai JAM_LANJUT_URGENT,
+# bukan dibuang. Kebijakan tim: Lazada ditahan di atas jam 14.00, GTL/SiCepat ditahan di atas
+# jam 15.00 - keduanya baru dilanjutkan otomatis setelah jam 16.00 (lihat JAM_LANJUT_URGENT &
+# _saring_jam_urgent()). Pesanan tanpa transaction_date TIDAK ditahan (lebih aman langsung
+# diproses daripada tidak pernah tercek lagi).
+JAM_CUTOFF_URGENT_LAZADA = 14
+JAM_CUTOFF_URGENT_GTL_SICEPAT = 15
+# Setelah jam ini (WIB), jam tunda di atas diabaikan sepenuhnya - proses_urgent()/
+# rencana_urgent() berikutnya memproses SEMUA pesanan termasuk yang tadinya ditahan (selaras
+# dengan jadwal tim: proses-harian.bat TIPE 1 jam 16.00, lihat docs/jadwal-proses.md).
+JAM_LANJUT_URGENT = 16
 SKENARIO_URGENT = [
-    ("Lazada", [CHANNEL_ID_LAZADA], None),
-    ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT),
+    ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA),
+    ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT),
 ]
 
 # Picklist "sisa reguler" (lintas SKU, dibuat SETELAH picklist SKU spesial selesai): pesanan
@@ -442,13 +457,39 @@ def buat_picklist_channel(k: Klien, ids: list[int]) -> tuple[int, str, list[int]
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
-def rencana_urgent(k: Klien, skenario: list[tuple] | None = None) -> None:
+def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int,
+                       sekarang: datetime | None = None) -> tuple[list[dict], int]:
+    """Terapkan jam tunda urgent (lihat JAM_CUTOFF_URGENT_LAZADA/JAM_CUTOFF_URGENT_GTL_SICEPAT
+    & JAM_LANJUT_URGENT di atas): sebelum jam JAM_LANJUT_URGENT, pesanan yang jam pesannya
+    (WIB) di atas `jam_cutoff` HARI INI ditahan (belum diproses), sisanya diproses seperti
+    biasa. Setelah jam JAM_LANJUT_URGENT, semua pesanan diproses tanpa batas jam ini.
+    `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat dipanggil. Return (pesanan
+    yang boleh diproses sekarang, jumlah yang ditahan)."""
+    now = sekarang or datetime.now(WIB)
+    if now.hour >= JAM_LANJUT_URGENT:
+        return pesanan, 0
+    batas = now.replace(hour=jam_cutoff, minute=0, second=0, microsecond=0)
+    pakai, ditahan = [], 0
+    for o in pesanan:
+        ts = o.get("transaction_date")
+        if ts and datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB) > batas:
+            ditahan += 1
+            continue
+        pakai.append(o)
+    return pakai, ditahan
+
+
+def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
+                   sekarang: datetime | None = None) -> None:
     """Mode uji picklist urgent: hanya membaca data, tidak mengubah apa pun di Jubelio."""
-    for nama, channel_ids, couriers in skenario or SKENARIO_URGENT:
-        pesanan = ambil_pesanan_channel(k, channel_ids, couriers)
+    for nama, channel_ids, couriers, jam_cutoff in skenario or SKENARIO_URGENT:
+        mentah = ambil_pesanan_channel(k, channel_ids, couriers)
+        pesanan, ditahan = _saring_jam_urgent(mentah, jam_cutoff, sekarang)
         batch = bagi_batch([o["salesorder_id"] for o in pesanan])
-        log.info("[UJI] Urgent %-10s pesanan siap proses %3d -> %d picklist (maks %d/picklist)",
-                 nama, len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
+        tunda = (f" (+{ditahan} ditahan, jam pesan di atas {jam_cutoff:02d}.00 WIB, lanjut "
+                f"otomatis setelah jam {JAM_LANJUT_URGENT:02d}.00)" if ditahan else "")
+        log.info("[UJI] Urgent %-10s pesanan siap proses %3d -> %d picklist (maks %d/picklist)%s",
+                 nama, len(pesanan), len(batch), MAKS_PESANAN_PICKLIST, tunda)
 
 
 def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
@@ -491,17 +532,26 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
 
 
 def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
-                  skenario: list[tuple] | None = None) -> list[dict]:
+                  skenario: list[tuple] | None = None,
+                  sekarang: datetime | None = None) -> list[dict]:
     """Picklist urgent (channel Lazada; kurir GTL/SiCepat lintas channel - lihat
     SKENARIO_URGENT), sebanyak mungkin per picklist (maks MAKS_PESANAN_PICKLIST, dipecah kalau
     lebih). Alur berdiri sendiri, dipanggil HANYA lewat main.py --urgent (tidak otomatis
-    dipanggil dari alur --label --jalankan/SKU spesial). Kegagalan 1 skenario tidak
+    dipanggil dari alur --label --jalankan/SKU spesial). Pesanan yang jam pesannya di atas
+    jam cutoff skenario ditahan dulu (lihat _saring_jam_urgent()/JAM_LANJUT_URGENT), baru
+    diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. `sekarang`:
+    dipakai tes, default waktu sungguhan (WIB) saat dipanggil. Kegagalan 1 skenario tidak
     menghentikan yang lain."""
     hasil = []
-    for nama, channel_ids, couriers in skenario or SKENARIO_URGENT:
+    for nama, channel_ids, couriers, jam_cutoff in skenario or SKENARIO_URGENT:
         label = nama.upper()
         try:
-            pesanan = ambil_pesanan_channel(k, channel_ids, couriers)
+            mentah = ambil_pesanan_channel(k, channel_ids, couriers)
+            pesanan, ditahan = _saring_jam_urgent(mentah, jam_cutoff, sekarang)
+            if ditahan:
+                log.info("  %d pesanan %s ditahan (jam pesan di atas %02d.00 WIB), lanjut "
+                         "otomatis setelah jam %02d.00", ditahan, nama, jam_cutoff,
+                         JAM_LANJUT_URGENT)
             hasil += _proses_channel_batch(k, f"Urgent {nama}", label, pesanan,
                                            file_riwayat, folder_label)
         except Exception as e:      # noqa: BLE001 - channel lain & SKU spesial tetap lanjut

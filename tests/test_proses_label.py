@@ -583,6 +583,74 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     print("  skenario bisa dibatasi 1 channel saja (dipakai --channel)")
 
 
+def uji_urgent_jam_tunda_ditahan_lalu_lanjut_setelah_jam_16():
+    import datetime as dt
+
+    # Unit _saring_jam_urgent(): WIB 13:30 (<=14:00) lolos, WIB 14:30 (>14:00) ditahan,
+    # tanpa transaction_date tidak pernah ditahan (lebih aman diproses daripada hilang).
+    pesanan = [
+        {"salesorder_id": 1, "transaction_date": "2026-10-02T06:30:00Z"},   # 13:30 WIB
+        {"salesorder_id": 2, "transaction_date": "2026-10-02T07:30:00Z"},   # 14:30 WIB
+        {"salesorder_id": 3},
+    ]
+    sebelum_jam_16 = dt.datetime(2026, 10, 2, 13, 0, 0, tzinfo=pl.WIB)
+    pakai, ditahan = pl._saring_jam_urgent(pesanan, pl.JAM_CUTOFF_URGENT_LAZADA, sebelum_jam_16)
+    assert ditahan == 1 and {o["salesorder_id"] for o in pakai} == {1, 3}, (pakai, ditahan)
+    print("  Lazada jam 13:00: pesanan WIB 14:30 (di atas cutoff 14:00) ditahan, WIB 13:30 & "
+          "tanpa transaction_date tetap diproses")
+
+    # Setelah JAM_LANJUT_URGENT (16:00), cutoff diabaikan - semua pesanan (termasuk yang
+    # tadinya ditahan) langsung diproses.
+    setelah_jam_16 = dt.datetime(2026, 10, 2, 16, 0, 0, tzinfo=pl.WIB)
+    pakai2, ditahan2 = pl._saring_jam_urgent(pesanan, pl.JAM_CUTOFF_URGENT_LAZADA, setelah_jam_16)
+    assert ditahan2 == 0 and len(pakai2) == 3, (pakai2, ditahan2)
+    print("  setelah jam 16:00: batas jam diabaikan, semua pesanan (termasuk yang tadinya "
+          "ditahan) diproses")
+
+    # Integrasi: proses_urgent() dengan JubelioPalsuUrgent, salah satu pesanan Lazada &
+    # GTL/SiCepat diberi jam pesan di atas cutoff masing-masing.
+    j = JubelioPalsuUrgent()
+    j.pesanan_lazada[0]["transaction_date"] = "2026-10-02T07:30:00Z"   # 14:30 WIB -> ditahan
+    j.pesanan_gtl_sicepat[0]["transaction_date"] = "2026-10-02T08:30:00Z"   # 15:30 WIB -> ditahan
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+        panggilan.append((pid, pno, jumlah, sku, folder_label))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            hasil = pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label",
+                                     sekarang=sebelum_jam_16)
+    finally:
+        pl.lanjutkan_picklist = asli
+    per_sku = {h["SKU"]: h for h in hasil if h.get("No Picklist")}
+    assert per_sku["LAZADA"]["Total Pesanan"] == 2, per_sku      # 3 - 1 ditahan
+    assert sum(h["Total Pesanan"] for h in hasil if h["SKU"] == "GTL-SICEPAT") == 249, hasil
+    print("  proses_urgent() jam 13:00: 1 Lazada & 1 GTL/SiCepat ditahan, sisanya tetap jadi picklist")
+
+    # Dipanggil lagi setelah jam 16:00 (mis. siklus TIPE 1 berikutnya) -> yang tadinya
+    # ditahan ikut diproses, tanpa batas jam lagi.
+    j2 = JubelioPalsuUrgent()
+    j2.pesanan_lazada[0]["transaction_date"] = "2026-10-02T07:30:00Z"
+    j2.pesanan_gtl_sicepat[0]["transaction_date"] = "2026-10-02T08:30:00Z"
+    k2 = pl.Klien("TKN", sesi=j2, tidur=lambda s: None)
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            hasil2 = pl.proses_urgent(k2, Path(d) / "riwayat.xlsx", Path(d) / "label",
+                                      sekarang=setelah_jam_16)
+    finally:
+        pl.lanjutkan_picklist = asli
+    assert sum(h["Total Pesanan"] for h in hasil2 if h["SKU"] == "LAZADA") == 3, hasil2
+    assert sum(h["Total Pesanan"] for h in hasil2 if h["SKU"] == "GTL-SICEPAT") == 250, hasil2
+    print("  proses_urgent() jam 16:00: semua pesanan diproses, termasuk yang tadinya ditahan")
+
+
 class JubelioPalsuReguler:
     """Server tiruan khusus skenario picklist sisa reguler (TikTok Shop & Shopee)."""
 
