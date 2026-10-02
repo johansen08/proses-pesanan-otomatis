@@ -708,6 +708,38 @@ class JubelioPalsuReguler:
         raise AssertionError(f"POST tak dikenal {url}")
 
 
+class JubelioPalsuKombinasiRak:
+    """Server tiruan endpoint zones-racks-combination, 2 halaman (page_size kecil) supaya
+    paging ikut teruji."""
+
+    def __init__(self, kombinasi: list[str], page_size: int = 2):
+        self.kombinasi = kombinasi
+        self.page_size = page_size
+        self.log = []
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        self.log.append(("GET", url, params))
+        assert headers.get("authorization") == "TKN"
+        assert url.endswith("zones-racks-combination")
+        assert params.get("status") == "PAID"
+        assert params.get("combination_type") == "racks"
+        page = params["page"]
+        awal = (page - 1) * self.page_size
+        potongan = self.kombinasi[awal:awal + self.page_size]
+        data = [{"combination": c} for c in potongan]
+        return Resp(data={"data": data, "totalCount": len(self.kombinasi)})
+
+
+def uji_ambil_kombinasi_rak_buang_gabungan_dan_kosong():
+    kombinasi = ["", "2A-B1-1", "3A-C2-2", "2A-B1-1 - 3B-H1-2", "1B-A2-3"]
+    j = JubelioPalsuKombinasiRak(kombinasi, page_size=2)
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl.ambil_kombinasi_rak(k)
+    assert hasil == ["2A-B1-1", "3A-C2-2", "1B-A2-3"], hasil
+    assert len(j.log) == 3, "5 baris / page_size 2 -> 3 halaman"
+    print("  ambil_kombinasi_rak: string kosong & gabungan (\" - \") dibuang, paging jalan")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan

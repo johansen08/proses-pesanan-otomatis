@@ -153,6 +153,14 @@ KURIR_FILTER_REGULER = ["j&t", "spx"]
 LABEL_REGULER_1QTY = "1QTY-REGULER"     # 1 SKU, qty 1, tidak spesial
 LABEL_REGULER_KOMBINASI = "KOMBINASI-REGULER"   # sisanya (multi-baris/qty>1), tidak spesial
 
+# Pecah lagi bagian "1qty reguler" per grup rak gudang (lihat docs/superpowers/specs/
+# 2026-10-02-pecah-1qty-per-rak-design.md) - grup 1A sengaja tidak ada (tidak dipakai di
+# gudang ini, dikonfirmasi lewat sniff 02-10-2026). Urutan di sini = urutan pembuatan
+# picklist (bukan alfabetis) - diminta tim operasional supaya picker jalan runtut.
+GRUP_RAK = ["2A", "3A", "1B", "2B", "3B"]
+LABEL_RAK_LAINNYA = "LAINNYA"            # pesanan 1qty yang rak-nya di luar GRUP_RAK
+MAKS_KOMBINASI_PER_PANGGILAN = 40        # batasi panjang query combination[] per request
+
 # Picklist "Shopee Pagi" (lintas SKU): dijalankan MANUAL, 1x sehari jam 13:00 - bukan bagian
 # alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam pesannya (WIB)
 # maksimal jam 12:00 HARI INI, digabung jadi 1 picklist (dipecah kalau > MAKS_PESANAN_PICKLIST).
@@ -567,6 +575,26 @@ def ambil_pesanan_reguler(k: Klien, kurir: str | None = None) -> list[dict]:
     J&T/SPX (atau 1 kurir saja, lihat cari_pesanan()), lintas SKU (belum dipisah spesial/
     1 qty/kombinasi, lihat pisah_reguler())."""
     return ambil_pesanan_channel(k, CHANNEL_IDS_REGULER, _filter_kurir(kurir, KURIR_FILTER_REGULER))
+
+
+def ambil_kombinasi_rak(k: Klien) -> list[str]:
+    """Semua kombinasi rak TUNGGAL (bukan gabungan multi-rak dipisah " - ", bukan string
+    kosong) dari pesanan berstatus PAID, lewat sales/v2/orders/zones-racks-combination
+    (paging sampai habis). Dipakai untuk memetakan salesorder_id -> grup rak lewat
+    kelompokkan_kombinasi_per_grup() + ambil_id_per_grup_rak()."""
+    hasil, mentah, page = [], 0, 1
+    while True:
+        params = {"page": page, "q": "", "sort_by": "combination", "sort_direction": "asc",
+                  "page_size": 50, "combination_query": "", "location_ids[0]": -1,
+                  "combination_type": "racks", "status": "PAID"}
+        j = k.get("sales/v2/orders/zones-racks-combination", params)
+        data = j.get("data") or []
+        mentah += len(data)
+        hasil += [row["combination"] for row in data
+                 if row.get("combination") and " - " not in row["combination"]]
+        if not data or mentah >= int(j.get("totalCount") or 0):
+            return hasil
+        page += 1
 
 
 def pisah_reguler(pesanan: list[dict],
