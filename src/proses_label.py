@@ -652,6 +652,20 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
     return hasil
 
 
+def pisah_satu_qty_per_rak(satu_qty: list[dict],
+                           id_per_grup: dict[str, set[int]]) -> dict[str, list[dict]]:
+    """Partisi satu_qty (hasil pisah_reguler()[0]) ke grup rak (GRUP_RAK, urutan itu) +
+    LABEL_RAK_LAINNYA (pesanan yang salesorder_id-nya tidak cocok grup manapun di
+    id_per_grup - lihat ambil_id_per_grup_rak()). Murni logika data, tidak memanggil API."""
+    hasil = {grup: [] for grup in GRUP_RAK}
+    hasil[LABEL_RAK_LAINNYA] = []
+    for o in satu_qty:
+        grup_cocok = next((grup for grup in GRUP_RAK
+                           if o["salesorder_id"] in id_per_grup.get(grup, ())), None)
+        hasil[grup_cocok or LABEL_RAK_LAINNYA].append(o)
+    return hasil
+
+
 def pisah_reguler(pesanan: list[dict],
                   resi_spesial_semua: set[str]) -> tuple[list[dict], list[dict]]:
     """Keluarkan resi yang sudah termasuk SKU spesial hari ini, lalu pisah sisanya jadi

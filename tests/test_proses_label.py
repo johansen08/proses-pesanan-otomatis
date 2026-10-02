@@ -796,6 +796,23 @@ def uji_ambil_id_per_grup_rak_filter_dan_batching():
           "channel/kurir/tipe pesanan ikut diteruskan")
 
 
+def uji_pisah_satu_qty_per_rak():
+    satu_qty = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
+               {"salesorder_id": 2, "salesorder_no": "SO-2"},
+               {"salesorder_id": 3, "salesorder_no": "SO-3"},
+               {"salesorder_id": 4, "salesorder_no": "SO-4"}]
+    id_per_grup = {"2A": {1}, "3A": {2}, "1B": set(), "2B": set(), "3B": set()}
+    hasil = pl.pisah_satu_qty_per_rak(satu_qty, id_per_grup)
+    assert list(hasil.keys()) == pl.GRUP_RAK + [pl.LABEL_RAK_LAINNYA], hasil
+    assert [o["salesorder_no"] for o in hasil["2A"]] == ["SO-1"]
+    assert [o["salesorder_no"] for o in hasil["3A"]] == ["SO-2"]
+    assert hasil["1B"] == hasil["2B"] == hasil["3B"] == []
+    assert [o["salesorder_no"] for o in hasil[pl.LABEL_RAK_LAINNYA]] == ["SO-3", "SO-4"], \
+        "SO-3/SO-4 tidak ada di grup manapun -> masuk LAINNYA"
+    print("  pisah_satu_qty_per_rak: partisi per grup benar, sisa masuk LAINNYA, urutan "
+          "key = GRUP_RAK + LAINNYA")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan
