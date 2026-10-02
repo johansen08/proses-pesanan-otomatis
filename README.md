@@ -1,5 +1,39 @@
 # Proses Pesanan Otomatis — SKU Spesial
 
+Otomatisasi proses pesanan (picklist → resi → label pengiriman) untuk toko online yang
+memakai **Jubelio** sebagai sistem manajemen pesanan (order management system). Dibuat untuk
+tim operasional gudang/pengiriman yang setiap hari harus membuat picklist, meminta nomor
+resi, dan mencetak label pengiriman secara manual di Jubelio untuk ratusan pesanan dari
+beberapa marketplace (TikTok Shop, Shopee, Lazada, Tokopedia) sekaligus — pekerjaan yang
+tadinya berulang-ulang lewat antarmuka web Jubelio, sekarang dijalankan lewat satu perintah.
+
+**Tidak ada UI web.** Semuanya berupa CLI Python yang dijalankan lewat file `.bat` di
+Windows (klik dua kali, atau dipicu otomatis via Windows Task Scheduler), dipakai langsung
+oleh tim operasional tanpa perlu paham Python. Jubelio diakses lewat **API HTTP langsung**
+(bukan browser automation) menggunakan cookie token dari hasil login — lebih cepat dan lebih
+stabil dibanding men-drive browser, dengan `sniff/` (perekam traffic berbasis Playwright)
+sebagai alat bantu untuk merekam ulang alur API Jubelio kalau suatu saat mereka mengubahnya.
+
+Alur bisnis yang dicakup, sesuai aturan toko ini:
+
+- **SKU spesial** — SKU tertentu (lihat [docs/panduan-sku-spesial.md](docs/panduan-sku-spesial.md))
+  dipicklist terpisah per SKU supaya proses packing lebih cepat, alih-alih tercampur dengan
+  pesanan reguler.
+- **Urgent** (Lazada, serta kurir GTL/SiCepat lintas channel) — diproses lebih dulu/terpisah
+  karena punya tenggat pengiriman lebih ketat.
+- **Reguler** (sisa TikTok Shop & Shopee yang bukan SKU spesial) — dipecah 1 Qty vs Kombinasi
+  supaya packing lebih efisien.
+- **Shopee Pagi** dan **J&T Resi Siang** — dua batch manual 1x/hari yang mengejar jam cutoff
+  pengiriman kurir tertentu.
+- **Sampel/kreator** (pesanan TikTok Shop nilai 0) — tetap dipicklist & diberi label sendiri
+  alih-alih dibuang diam-diam, supaya tim tahu ke mana pesanan itu harus dikirim.
+
+Setiap langkah mencatat riwayat ke `riwayat_picklist.xlsx` dan mendeteksi anomali (nomor
+picklist yang terlompat karena Jubelio gagal buat picklist, atau pesanan yang sudah "Picking
+> Selesai" tapi tidak kunjung dapat resi) supaya tim admin/CS bisa ditindaklanjuti lebih awal.
+Hampir semua alur defaultnya **mode uji** (read-only, hanya menampilkan rencana) dan baru
+benar-benar mengubah data di Jubelio kalau diberi flag `--jalankan` secara eksplisit.
+
 Download **Laporan Siap Proses** dari Jubelio → hitung SKU spesial → PDF (tanggal, jam, tabel).
 
 Dengan `--label --jalankan`, program membuat picklist sungguhan di Jubelio lewat 2 alur
