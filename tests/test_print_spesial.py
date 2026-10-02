@@ -1,6 +1,7 @@
 """Uji print_spesial.py (bagian logika murni - pencarian folder sesi & penyaringan
-label SPESIAL). Bagian yang menjalankan SumatraPDF/subprocess sungguhan TIDAK diuji
-di sini (perlu SumatraPDF + printer sungguhan).
+label SPESIAL di subfolder SPESIAL folder sesi). Bagian yang menjalankan
+SumatraPDF/subprocess sungguhan TIDAK diuji di sini (perlu SumatraPDF + printer
+sungguhan).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_print_spesial.py
 """
@@ -56,20 +57,23 @@ def uji_folder_sesi_terbaru_tidak_ada_folder_sesi():
 def uji_daftar_label_spesial_hanya_bertanda_spesial_urut_nomor_pick():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat(folder,
+        subfolder = folder / "SPESIAL"
+        subfolder.mkdir()
+        _buat(subfolder,
              "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
              "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
              "PICK-000155700_SPESIAL_TRC9_2026-10-01_090000.pdf",
-             "PICK-000155999_1QTY-REGULER_2026-10-01_091500.pdf",   # bukan spesial
-             "PICK-000156000_KOMBINASI-REGULER_2026-10-01_091600.pdf",   # bukan spesial
              "catatan.txt")
+        _buat(folder,
+             "PICK-000155999_1QTY-REGULER_2026-10-01_091500.pdf",   # bukan spesial, di folder sesi
+             "PICK-000156000_KOMBINASI-REGULER_2026-10-01_091600.pdf")   # bukan spesial
         hasil = ps.daftar_label_spesial(folder)
         assert [f.name for f in hasil] == [
             "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
             "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
             "PICK-000155700_SPESIAL_TRC9_2026-10-01_090000.pdf",
         ], [f.name for f in hasil]
-        print("  daftar_label_spesial: hanya file _SPESIAL_, urut nomor PICK naik")
+        print("  daftar_label_spesial: hanya file _SPESIAL_ di subfolder SPESIAL, urut nomor PICK naik")
 
 
 def uji_daftar_label_spesial_folder_kosong():
@@ -81,7 +85,9 @@ def uji_daftar_label_spesial_folder_kosong():
 def uji_cari_nomor_terlompat_berurut_sempurna():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat(folder,
+        subfolder = folder / "SPESIAL"
+        subfolder.mkdir()
+        _buat(subfolder,
              "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
              "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
              "PICK-000155623_SPESIAL_TRC9_2026-10-01_090000.pdf")
@@ -93,7 +99,9 @@ def uji_cari_nomor_terlompat_berurut_sempurna():
 def uji_cari_nomor_terlompat_ada_yang_hilang():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat(folder,
+        subfolder = folder / "SPESIAL"
+        subfolder.mkdir()
+        _buat(subfolder,
              "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
              "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
              "PICK-000155625_SPESIAL_TRC9_2026-10-01_090000.pdf")
@@ -105,7 +113,9 @@ def uji_cari_nomor_terlompat_ada_yang_hilang():
 def uji_cari_nomor_terlompat_kurang_dari_2_file():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat(folder, "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf")
+        subfolder = folder / "SPESIAL"
+        subfolder.mkdir()
+        _buat(subfolder, "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf")
         file_pdf = ps.daftar_label_spesial(folder)
         assert ps.cari_nomor_terlompat(file_pdf) == []
         assert ps.cari_nomor_terlompat([]) == []

@@ -216,6 +216,8 @@ def uji_proses_lengkap():
         assert pdf.exists() and pdf.read_bytes().startswith(b"%PDF")
         assert pdf.name.startswith(f"PICK-000154839_SPESIAL_{SKU}_"), \
             f"nama file picklist SKU spesial harus memuat penanda SPESIAL: {pdf.name}"
+        assert pdf.parent.name == pl.TAG_SPESIAL and pdf.parent.parent == d / "label", \
+            f"label SKU spesial harus disimpan di subfolder {pl.TAG_SPESIAL}: {pdf}"
 
         posts = [(p, b) for m, p, b in j.log if m == "POST" and "core-api" in p]
         buat = [b for p, b in posts if p.endswith("wms/sales/picklists/") and not b["is_completed"]]

@@ -262,7 +262,7 @@ TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kur
 --tanpa-reguler --jalankan` / `jalankan.bat --label --kurir spx --tanpa-reguler --jalankan`
 (satu konfirmasi Y/N per TIPE). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
-- Label PDF: `label-pengiriman/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf`
+- Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL)
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
   File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
 - SKU dilewati jika pesanan tersisa < 3, stok kurang, pesanan dari lokasi berbeda,
@@ -372,9 +372,9 @@ cetak-label-spesial.bat
 ```
 
 Urutan kerja: cari folder sesi `label-pengiriman/YYYY-MM-DD/N` yang **terbaru** secara
-otomatis → saring file yang namanya mengandung `_SPESIAL_` → tampilkan daftar printer
-yang terhubung ke komputer → pilih nomor printer → konfirmasi (Y/N) → cetak satu per
-satu secara berurut.
+otomatis → cari file di subfolder `SPESIAL` folder sesi itu yang namanya mengandung
+`_SPESIAL_` → tampilkan daftar printer yang terhubung ke komputer → pilih nomor printer
+→ konfirmasi (Y/N) → cetak satu per satu secara berurut.
 
 Pilihan:
 

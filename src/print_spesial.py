@@ -1,8 +1,8 @@
 """Cetak bulk label pengiriman SPESIAL dari folder sesi label-pengiriman TERBARU.
 
-Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di folder
-sesi label-pengiriman/YYYY-MM-DD/N (dibuat proses_label.py alur SKU spesial, lihat
-TAG_SPESIAL di situ), menyaring yang namanya mengandung penanda `_SPESIAL_`
+Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di subfolder
+SPESIAL folder sesi label-pengiriman/YYYY-MM-DD/N/SPESIAL (dibuat proses_label.py alur SKU
+spesial, lihat TAG_SPESIAL di situ), menyaring yang namanya mengandung penanda `_SPESIAL_`
 (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf), lalu mencetaknya BERURUT
 (diurutkan dari nomor PICK terkecil - urutan dibuat, bukan abjad nama file) ke printer
 pilihan lewat SumatraPDF (-print-to, -silent).
@@ -60,6 +60,8 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+from proses_label import TAG_SPESIAL
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -129,10 +131,15 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
 
 
 def daftar_label_spesial(folder_sesi: Path) -> list[Path]:
-    """PDF label SPESIAL di `folder_sesi`, diurutkan dari nomor PICK terkecil (urutan
-    dibuat), BUKAN diurutkan abjad nama file apa adanya."""
+    """PDF label SPESIAL di subfolder `folder_sesi/SPESIAL` (lihat TAG_SPESIAL di
+    proses_label.py), diurutkan dari nomor PICK terkecil (urutan dibuat), BUKAN
+    diurutkan abjad nama file apa adanya. Kosong (bukan error) kalau subfolder-nya
+    belum ada - artinya belum ada label SPESIAL di sesi ini."""
+    folder_spesial = folder_sesi / TAG_SPESIAL
+    if not folder_spesial.is_dir():
+        return []
     berlabel = []
-    for f in folder_sesi.iterdir():
+    for f in folder_spesial.iterdir():
         if f.is_file():
             cocok = POLA_SPESIAL.match(f.name)
             if cocok:

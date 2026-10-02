@@ -9,13 +9,14 @@ pakai fiturnya sehari-hari.
 Mencetak ulang semua label SKU spesial — PDF yang namanya mengandung penanda
 `_SPESIAL_` (dibuat `proses_label.py` di alur `--label`, lihat
 [analisa-alur-cetak-label.md](analisa-alur-cetak-label.md)), mis.
-`PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf` — secara **bulk dan berurut**
-(nomor PICK terkecil/paling dulu dibuat, duluan dicetak), langsung ke printer
-pilihan, tanpa perlu buka file PDF satu-satu secara manual.
+`PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf`, dan disimpan di subfolder
+`SPESIAL` folder sesi — secara **bulk dan berurut** (nomor PICK terkecil/paling
+dulu dibuat, duluan dicetak), langsung ke printer pilihan, tanpa perlu buka file
+PDF satu-satu secara manual.
 
 **Program ini TIDAK membuat picklist/label baru.** Fungsinya cuma mencetak ulang
-PDF label yang sudah ada di folder `label-pengiriman/`. Picklist & label itu
-sendiri dibuat lewat alur `--label` (lihat README bagian 2).
+PDF label yang sudah ada di folder `label-pengiriman/<tanggal>/<sesi>/SPESIAL/`.
+Picklist & label itu sendiri dibuat lewat alur `--label` (lihat README bagian 2).
 
 ## 2. Download & setup SumatraPDF (sekali saja per PC)
 
@@ -82,7 +83,7 @@ Urutan kerja program:
 1. Cari folder sesi `label-pengiriman/YYYY-MM-DD/N` **terbaru** secara otomatis
    (dibandingkan dari tanggal lalu nomor urut sesi di nama folder, bukan dari waktu
    modifikasi file).
-2. Saring file yang namanya mengandung `_SPESIAL_`.
+2. Cari file di subfolder `SPESIAL` folder sesi itu yang namanya mengandung `_SPESIAL_`.
 3. Tampilkan daftar printer yang terhubung ke komputer (lewat `Get-Printer`
    PowerShell) — pilih nomor printer.
 4. Konfirmasi (Y/N) sebelum mulai cetak.

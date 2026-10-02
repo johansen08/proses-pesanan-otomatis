@@ -25,8 +25,11 @@ tunggal, qty 1, nilai != 0, SKU >= 3 resi sejenis - lihat panduan-sku-spesial.md
 SKU spesial itu sendiri TETAP menggabung J&T+SPX, `kurir` hanya membatasi resi mana yang
 benar-benar dipicklist). 1 picklist = 1 SKU, validasi SKU-nya sama semua lewat _cek_item().
 Nama file label PDF alur ini (dan hanya alur ini) disisipi penanda `SPESIAL`:
-`PICK-000xxxxxx_SPESIAL_<SKU>_<tanggal>_<jam>.pdf` (lihat TAG_SPESIAL, dipakai lewat
-parameter `tag` di lanjutkan_picklist()). Alur 2-5 TIDAK memakai penanda ini.
+`PICK-000xxxxxx_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, DAN disimpan di subfolder `SPESIAL`
+di dalam folder sesi (mis. `label-pengiriman/2026-10-02/1/SPESIAL/`, bukan langsung di
+`label-pengiriman/2026-10-02/1/`) - lihat TAG_SPESIAL, dipakai lewat parameter `tag` di
+lanjutkan_picklist() baik untuk penanda nama file maupun nama subfolder. Alur 2-5 TIDAK
+memakai penanda maupun subfolder ini.
 
 Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 2 skenario -
 channel Lazada, dan kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia -
@@ -88,7 +91,8 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # JADWAL-PROSES.md): nilai --kurir CLI ("jnt"/"spx") -> nilai filter kurir Jubelio.
 # kurir=None (default, dipakai TIPE 1/TIPE 4) = J&T dan SPX digabung seperti semula.
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
-# Penanda di nama file label PDF, HANYA untuk picklist SKU spesial (Alur 1 - proses()/
+# Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
+# (folder_label / TAG_SPESIAL), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
 # lanjutkan_picklist() dipanggil dari proses()). Alur 2-5 (urgent/reguler/Shopee Pagi/
 # J&T Resi Siang) tidak memakai tag ini, begitu juga lanjutkan() (resume generik lewat
 # --lanjut, tidak tahu picklist itu dari alur mana).
@@ -1022,7 +1026,10 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     """Langkah 3-6. Aman dipanggil ulang untuk picklist yang prosesnya terhenti.
     `nama_file`: varian `sku` yang dipakai untuk nama file PDF (mis. tanpa "&"); default
     sama dengan `sku`. `tag`: penanda opsional disisipkan setelah No Picklist di nama file
-    (mis. TAG_SPESIAL untuk Alur 1 - SKU spesial); default tanpa penanda."""
+    (mis. TAG_SPESIAL untuk Alur 1 - SKU spesial); default tanpa penanda. Kalau `tag` diisi,
+    file PDF-nya juga disimpan di subfolder `folder_label/<tag>` (bukan langsung di
+    `folder_label`), supaya folder sesi tidak penuh puluhan file SPESIAL bercampur label
+    lain - lihat TAG_SPESIAL."""
     log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, picklist_id)
 
@@ -1053,8 +1060,9 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     if ada_resi:
         log.info("  [6] Unduh label PDF (%d pesanan)", len(ada_resi))
         awalan = f"{picklist_no}_{tag}_" if tag else f"{picklist_no}_"
-        tujuan = folder_label / (f"{awalan}{_nama_file(nama_file or sku)}_"
-                                 f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
+        folder_tujuan = (folder_label / tag) if tag else folder_label
+        tujuan = folder_tujuan / (f"{awalan}{_nama_file(nama_file or sku)}_"
+                                  f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
         file_label = str(unduh_label(k, ada_resi, tujuan))
         log.info("  Label: %s", file_label)
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
