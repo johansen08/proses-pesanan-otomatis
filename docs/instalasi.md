@@ -7,14 +7,28 @@ Panduan ini untuk memindahkan proyek **proses-pesanan-otomatis** ke PC/laptop la
 > bagian **"Langkah instalasi"** secara berurutan lewat terminal (PowerShell/CMD),
 > lalu verifikasi dengan bagian **"Cek hasil instalasi"** di paling bawah.
 
-## 1. Yang harus dipindahkan dari PC lama
+## 1. Ambil kode program
 
-Salin folder proyek ini (`C:\proses-pesanan-otomatis` atau lokasi lain terserah),
-**termasuk** file-file berikut yang biasanya di-ignore git (`.gitignore`) tapi
-tetap perlu ikut dipindahkan supaya konfigurasi & riwayat tidak hilang:
+Kode program ini ada di GitHub: https://github.com/johansen08/proses-pesanan-otomatis
+(repo **public**, jadi `git clone` tidak perlu login). Pilih salah satu cara:
+
+**Cara A — `git clone` (disarankan, kalau Git sudah terpasang di PC baru)**
+
+```bash
+git clone https://github.com/johansen08/proses-pesanan-otomatis.git C:\proses-pesanan-otomatis
+```
+
+**Cara B — salin folder langsung dari PC lama** (USB/cloud, tanpa Git) — tetap bisa
+dipakai kalau PC baru tidak ada akses internet/Git.
+
+Kedua cara di atas **tidak** membawa file-file berikut, karena sengaja di-ignore git
+(`.gitignore`) — berisi kredensial atau data operasional, bukan kode program — jadi
+harus disiapkan/disalin manual sendiri di PC baru:
 
 - `.env` — isi kredensial Jubelio (lihat langkah 5 kalau mau isi baru saja)
-- `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat
+- `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat (salin dari PC
+  lama via USB/cloud kalau mau melanjutkan riwayat lama; kalau tidak, program akan
+  membuat riwayat baru dari nol)
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang
 di PC baru (langkah 3). Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`,
