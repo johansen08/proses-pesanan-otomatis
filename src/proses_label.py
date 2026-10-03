@@ -195,6 +195,12 @@ JEDA_COBA_CLIENT_REPORT_S = 5
 # request yang gagal, bukan mengulang dari awal langkah 3-6.
 MAKS_COBA_KONEKSI = 3
 JEDA_COBA_KONEKSI_S = 5
+# HTTP 429 (Too Many Requests) dari Jubelio - lihat jubelio.MAKS_COBA_429/_kirim_dengan_retry429
+# untuk latar belakang (kejadian 03-10-2026: 26+ picklist SKU spesial berturut-turut bikin
+# Jubelio membatasi laju). Dipasang di sini juga karena Klien dipakai untuk picklist/resi/label,
+# bukan cuma ambil_nilai_pesanan.
+MAKS_COBA_429 = jubelio.MAKS_COBA_429
+JEDA_COBA_429_S = jubelio.JEDA_COBA_429_S
 
 KOLOM_RIWAYAT = ["Waktu", "SKU", "No Picklist", "Total Pesanan", "Resi Keluar",
                  "File Label", "Catatan", "Durasi"]
@@ -229,16 +235,32 @@ class Klien:
 
     def _kirim(self, fn, *a, **kw):
         """Panggil `fn` (sesi.get/sesi.post), ulangi kalau koneksi putus di tengah jalan
-        (mis. ConnectionError/RemoteDisconnected, Timeout) - lihat MAKS_COBA_KONEKSI."""
+        (mis. ConnectionError/RemoteDisconnected, Timeout) - lihat MAKS_COBA_KONEKSI - atau
+        kalau Jubelio membalas HTTP 429 (Too Many Requests) - lihat MAKS_COBA_429."""
         for coba in range(1, MAKS_COBA_KONEKSI + 1):
             try:
-                return fn(*a, **kw)
+                r = fn(*a, **kw)
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 if coba == MAKS_COBA_KONEKSI:
                     raise
                 log.warning("  Koneksi putus (percobaan %d/%d): %s -> ulangi %d detik lagi",
                            coba, MAKS_COBA_KONEKSI, e, JEDA_COBA_KONEKSI_S)
                 self.tidur(JEDA_COBA_KONEKSI_S)
+                continue
+            if r.status_code == 429:
+                return self._kirim_ulang_429(fn, a, kw, r)
+            return r
+
+    def _kirim_ulang_429(self, fn, a, kw, r):
+        for coba in range(2, MAKS_COBA_429 + 1):
+            jeda = jubelio._jeda_retry_after(r, JEDA_COBA_429_S * (coba - 1))
+            log.warning("  HTTP 429 Too Many Requests (percobaan %d/%d) -> tunggu %s lagi",
+                       coba - 1, MAKS_COBA_429, durasi(jeda))
+            self.tidur(jeda)
+            r = fn(*a, **kw)
+            if r.status_code != 429:
+                return r
+        return r
 
     def get(self, path: str, params=None):
         r = self._kirim(self.sesi.get, f"{jubelio.API}/{path}", params=params,
