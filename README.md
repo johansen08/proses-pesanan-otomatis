@@ -187,11 +187,17 @@ lama (mis. sudah dipesan sejak sebelum jam 12 tapi baru diproses jam 1 siang) se
 picklist **pertama**, bukan tertahan di picklist belakangan. Berlaku juga di picklist sisa
 reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
 
-- **Lazada**: semua pesanan channel Lazada (`channel_id=4`).
+- **Lazada**: semua pesanan channel Lazada (`channel_id=4`), digabung jadi 1 picklist
+  (dipecah kalau > 200, lihat di atas).
 - **GTL-SiCepat**: semua pesanan kurir **GTL** atau **SiCepat**, **lintas channel** (TIDAK
   difilter channel). Urgent-nya ditentukan kurir, bukan channel, jadi pesanan Tokopedia
   **asli** (`channel_id=128`) *dan* "Shop | Tokopedia" (`channel_id=131076`, nama lain TikTok
-  Shop di Jubelio) dengan kurir itu sama-sama ikut.
+  Shop di Jubelio) dengan kurir itu sama-sama ikut. Volumenya besar, jadi dipecah per
+  **LANTAI** rak gudang (1/2/3/LAINNYA) — pola yang sama dengan bagian "kombinasi" picklist
+  sisa reguler (bagian 3 di bawah) lewat `_kelompok_kombinasi_per_lantai()`, tapi query rak
+  live-nya dibatasi kurir GTL/SiCepat (bukan J&T/SPX reguler). Label/nama file jadi
+  `GTL-SICEPAT-LANTAI1`/`GTL-SICEPAT-LANTAI2`/`GTL-SICEPAT-LANTAI3`/`GTL-SICEPAT-LAINNYA`,
+  masing-masing dipecah lagi kalau > 200 pesanan.
 
 **Jam tunda**: pesanan yang jam pesannya (WIB) masih di atas jam tunda hari itu belum
 dipicklist dulu — Lazada ditahan di atas jam 14.00, GTL/SiCepat di atas jam 15.00 — baru
@@ -217,8 +223,9 @@ mode uji (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),
   bukan SKU — mis. `label-pengiriman/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
-  `label-pengiriman/PICK-000155231_GTL-SICEPAT_2026-09-29_150612.pdf`. Tercatat juga di
-  `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` / `GTL-SICEPAT`.
+  `label-pengiriman/PICK-000155231_GTL-SICEPAT-LANTAI1_2026-09-29_150612.pdf`. Tercatat juga
+  di `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` /
+  `GTL-SICEPAT-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`.
 
 ## 2. Proses SKU spesial sampai label pengiriman (`--label`, `proses_label.py`)
 

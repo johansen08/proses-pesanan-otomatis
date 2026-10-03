@@ -346,7 +346,10 @@ def uji_lewati_jika_kurang_dari_3():
 
 
 class JubelioPalsuUrgent:
-    """Server tiruan khusus skenario picklist urgent (lintas SKU)."""
+    """Server tiruan khusus skenario picklist urgent (lintas SKU). GTL-SiCepat juga meniru
+    endpoint rak (zones-racks-combination + ready-to-process?combination[]=...) supaya
+    _kelompok_kombinasi_per_lantai() (pemecahan per LANTAI, lihat SKENARIO_URGENT) ikut
+    teruji, sama pola dengan JubelioPalsuReguler."""
 
     def __init__(self):
         self.log = []
@@ -357,20 +360,47 @@ class JubelioPalsuUrgent:
             for i in range(3)
         ] + [{"salesorder_id": 999, "source": 64, "shipper": "SPX",
               "grand_total": "35900.0000"}]     # Shopee nyelip
-        # 200 Tokopedia asli (source 128) + 50 TikTok "Shop | Tokopedia" (source 131076) -
-        # keduanya harus IKUT karena skenario ini tidak difilter channel, cuma kurir
+        # 200 Tokopedia asli (source 128, id 200-399) + 50 TikTok "Shop | Tokopedia"
+        # (source 131076, id 400-449) - keduanya harus IKUT karena skenario ini tidak
+        # difilter channel, cuma kurir.
         self.pesanan_gtl_sicepat = [
-            {"salesorder_id": 200 + i, "source": 128, "shipper": "GTL", "grand_total": "35900.0000"}
+            {"salesorder_id": 200 + i, "salesorder_no": f"SO-GTL-{200 + i}", "source": 128,
+             "shipper": "GTL", "grand_total": "35900.0000"}
             for i in range(200)
-        ] + [{"salesorder_id": 400 + i, "source": 131076, "shipper": "SiCepat",
-              "grand_total": "35900.0000"} for i in range(50)]
+        ] + [{"salesorder_id": 400 + i, "salesorder_no": f"SO-SICEPAT-{400 + i}", "source": 131076,
+              "shipper": "SiCepat", "grand_total": "35900.0000"} for i in range(50)]
+        # Rak 1 pesanan 1 kombinasi unik (lintas id 200-449): LANTAI1 = id 200-299 (100),
+        # LANTAI2 = id 300-369 (70), LANTAI3 = id 370-419 (50, nyebrang Tokopedia/TikTok),
+        # sisanya (id 420-449, 30) rak di luar LANTAI_RAK -> harus jatuh ke LAINNYA.
+        self.rak_gtl_sicepat = {}
+        for i in range(200, 300):
+            self.rak_gtl_sicepat[i] = f"1A-R{i}-1"
+        for i in range(300, 370):
+            self.rak_gtl_sicepat[i] = f"2A-R{i}-1"
+        for i in range(370, 420):
+            self.rak_gtl_sicepat[i] = f"3A-R{i}-1"
+        for i in range(420, 450):
+            self.rak_gtl_sicepat[i] = f"4C-R{i}-1"
+        self.kombinasi_rak_gtl_sicepat = list(self.rak_gtl_sicepat.values())
         self.picklist_no = 0
         self.stok_kosong_ids: set[int] = set()
 
     def get(self, url, params=None, headers=None, timeout=None, cookies=None):
         self.log.append(("GET", url, params))
         assert headers.get("authorization") == "TKN"
+        if url.endswith("zones-racks-combination"):
+            assert params.get("status") == "PAID" and params.get("combination_type") == "racks"
+            data = [{"combination": c} for c in self.kombinasi_rak_gtl_sicepat]
+            return Resp(data={"data": data, "totalCount": len(data)})
         if url.endswith("ready-to-process/"):
+            combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+            if combos:
+                assert "channel_ids[0]" not in params, \
+                    "GTL/SiCepat urgent lintas channel -> jangan difilter channel_ids"
+                assert params.get("couriers[0]") == "gtl" and params.get("couriers[1]") == "sicepat"
+                cocok = [so for so, c in self.rak_gtl_sicepat.items() if c in combos]
+                return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
+                                  "totalCount": len(cocok)})
             assert params.get("sort_by") == "transaction_date" and params.get("sort_direction") == "ASC", \
                 "resi terlama harus diambil duluan, supaya masuk picklist pertama kalau dipecah"
             assert "order_type[0]" not in params, \
@@ -557,19 +587,29 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     finally:
         pl.lanjutkan_picklist = asli
 
-    assert all(sku in ("LAZADA", "GTL-SICEPAT") for _, _, _, sku, _ in panggilan), panggilan
+    label_gtl_sicepat = {"GTL-SICEPAT-LANTAI1", "GTL-SICEPAT-LANTAI2", "GTL-SICEPAT-LANTAI3",
+                        "GTL-SICEPAT-LAINNYA"}
+    assert all(sku in ({"LAZADA"} | label_gtl_sicepat) for _, _, _, sku, _ in panggilan), panggilan
     per_channel = {}
     for h in hasil:
         per_channel.setdefault(h["SKU"], []).append(h)
     assert len(per_channel["LAZADA"]) == 1
     assert per_channel["LAZADA"][0]["Total Pesanan"] == 3
     assert per_channel["LAZADA"][0]["File Label"] == f"{per_channel['LAZADA'][0]['No Picklist']}_LAZADA_x.pdf"
-    assert len(per_channel["GTL-SICEPAT"]) == 2, "250 pesanan -> 2 picklist (200 + 50)"
-    assert per_channel["GTL-SICEPAT"][0]["Total Pesanan"] == 200
-    assert per_channel["GTL-SICEPAT"][1]["Total Pesanan"] == 50
-    assert len(baris) == 1 + 3, "3 picklist urgent tercatat di riwayat"
-    print("  proses_urgent: 3 pesanan Lazada -> 1 picklist, 250 GTL/SiCepat -> 2 picklist "
-          "(200+50), nama file pakai label skenario (mis. PICK-..._LAZADA_...)")
+    assert set(per_channel) == {"LAZADA"} | label_gtl_sicepat, \
+        "GTL/SiCepat dipecah per lantai (1/2/3/LAINNYA), masing-masing picklist sendiri"
+    assert per_channel["GTL-SICEPAT-LANTAI1"][0]["Total Pesanan"] == 100, \
+        "id 200-299 (rak 1A) -> LANTAI1"
+    assert per_channel["GTL-SICEPAT-LANTAI2"][0]["Total Pesanan"] == 70, \
+        "id 300-369 (rak 2A) -> LANTAI2"
+    assert per_channel["GTL-SICEPAT-LANTAI3"][0]["Total Pesanan"] == 50, \
+        "id 370-419 (rak 3A, nyebrang Tokopedia/TikTok) -> LANTAI3"
+    assert per_channel["GTL-SICEPAT-LAINNYA"][0]["Total Pesanan"] == 30, \
+        "id 420-449 (rak 4C, di luar LANTAI_RAK) -> LAINNYA"
+    assert len(baris) == 1 + 5, "1 Lazada + 4 picklist GTL/SiCepat (per lantai) tercatat di riwayat"
+    print("  proses_urgent: 3 pesanan Lazada -> 1 picklist, 250 GTL/SiCepat -> 4 picklist "
+          "per LANTAI (100+70+50+30), nama file pakai label skenario+lantai (mis. "
+          "PICK-..._GTL-SICEPAT-LANTAI1_...)")
 
     # --channel: cuma jalankan 1 skenario
     skenario_lazada = [s for s in pl.SKENARIO_URGENT if s[0] == "Lazada"]
@@ -630,7 +670,8 @@ def uji_urgent_jam_tunda_ditahan_lalu_lanjut_setelah_jam_16():
         pl.lanjutkan_picklist = asli
     per_sku = {h["SKU"]: h for h in hasil if h.get("No Picklist")}
     assert per_sku["LAZADA"]["Total Pesanan"] == 2, per_sku      # 3 - 1 ditahan
-    assert sum(h["Total Pesanan"] for h in hasil if h["SKU"] == "GTL-SICEPAT") == 249, hasil
+    assert sum(h["Total Pesanan"] for h in hasil
+              if h["SKU"].startswith("GTL-SICEPAT")) == 249, hasil
     print("  proses_urgent() jam 13:00: 1 Lazada & 1 GTL/SiCepat ditahan, sisanya tetap jadi picklist")
 
     # Dipanggil lagi setelah jam 16:00 (mis. siklus TIPE 1 berikutnya) -> yang tadinya
@@ -647,7 +688,8 @@ def uji_urgent_jam_tunda_ditahan_lalu_lanjut_setelah_jam_16():
     finally:
         pl.lanjutkan_picklist = asli
     assert sum(h["Total Pesanan"] for h in hasil2 if h["SKU"] == "LAZADA") == 3, hasil2
-    assert sum(h["Total Pesanan"] for h in hasil2 if h["SKU"] == "GTL-SICEPAT") == 250, hasil2
+    assert sum(h["Total Pesanan"] for h in hasil2
+              if h["SKU"].startswith("GTL-SICEPAT")) == 250, hasil2
     print("  proses_urgent() jam 16:00: semua pesanan diproses, termasuk yang tadinya ditahan")
 
 

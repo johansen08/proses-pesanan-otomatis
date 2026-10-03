@@ -23,10 +23,11 @@ PERTAMA di tiap TIPE proses-harian.bat (sebelum urgent). Berdiri sendiri lewat -
     python src/main.py --sampel --jalankan
 
 Picklist urgent (proses_label.py): TIDAK bagian dari alur "--label --jalankan" (menu 3 di
-menu.bat cuma untuk kurir J&T/SPX). 2 skenario: channel Lazada, dan kurir GTL/SiCepat
-(lintas channel - baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok, urgent-nya
-ditentukan kurir bukan channel). Berdiri sendiri lewat --urgent (sampai label PDF juga),
-boleh dibatasi 1 skenario saja lewat --channel:
+menu.bat cuma untuk kurir J&T/SPX). 2 skenario: channel Lazada (1 picklist gabungan), dan
+kurir GTL/SiCepat (lintas channel - baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok,
+urgent-nya ditentukan kurir bukan channel), dipecah per LANTAI rak gudang (1/2/3/LAINNYA) sama
+pola dengan bagian kombinasi picklist sisa reguler. Berdiri sendiri lewat --urgent (sampai
+label PDF juga), boleh dibatasi 1 skenario saja lewat --channel:
     python src/main.py --urgent                          # MODE UJI: hanya tampilkan rencana
     python src/main.py --urgent --channel lazada --jalankan
     python src/main.py --urgent --channel gtl-sicepat --jalankan
@@ -238,8 +239,8 @@ def _main() -> int:
                         "urgent; tanpa --jalankan = mode uji)")
     ap.add_argument("--urgent", action="store_true",
                     help="hanya buat picklist urgent (channel Lazada, kurir GTL/SiCepat lintas "
-                        "channel) sampai label PDF, tanpa proses SKU spesial "
-                        "(tanpa --jalankan = mode uji)")
+                        "channel - GTL/SiCepat dipecah per lantai rak gudang) sampai label "
+                        "PDF, tanpa proses SKU spesial (tanpa --jalankan = mode uji)")
     ap.add_argument("--channel", choices=["lazada", "gtl-sicepat"],
                     help="dipakai bersama --urgent: batasi ke 1 skenario saja")
     ap.add_argument("--reguler", action="store_true",

@@ -139,9 +139,14 @@ JAM_CUTOFF_URGENT_GTL_SICEPAT = 15
 # rencana_urgent() berikutnya memproses SEMUA pesanan termasuk yang tadinya ditahan (selaras
 # dengan jadwal tim: proses-harian.bat TIPE 1 jam 16.00, lihat docs/jadwal-proses.md).
 JAM_LANJUT_URGENT = 16
+# GTL-SiCepat (lintas channel, volumenya besar) dipecah per LANTAI rak gudang (sama pola
+# dengan bagian "kombinasi" picklist sisa reguler, lihat _kelompok_kombinasi_per_lantai() -
+# live API ready-to-process dibatasi channel_ids/couriers skenario ini, bukan
+# CHANNEL_IDS_REGULER/KURIR_FILTER_REGULER). Lazada (volume kecil) TETAP 1 picklist gabungan
+# seperti semula - elemen ke-5 tuple ini (`per_lantai`) yang membedakan.
 SKENARIO_URGENT = [
-    ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA),
-    ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT),
+    ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA, False),
+    ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT, True),
 ]
 
 # Picklist "sisa reguler" (lintas SKU, dibuat SETELAH picklist SKU spesial selesai): pesanan
@@ -518,15 +523,27 @@ def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int,
 
 def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
                    sekarang: datetime | None = None) -> None:
-    """Mode uji picklist urgent: hanya membaca data, tidak mengubah apa pun di Jubelio."""
-    for nama, channel_ids, couriers, jam_cutoff in skenario or SKENARIO_URGENT:
+    """Mode uji picklist urgent: hanya membaca data, tidak mengubah apa pun di Jubelio.
+    Skenario `per_lantai` (GTL-SiCepat) ditampilkan dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA
+    (lihat _kelompok_kombinasi_per_lantai())."""
+    for nama, channel_ids, couriers, jam_cutoff, per_lantai in skenario or SKENARIO_URGENT:
         mentah = ambil_pesanan_channel(k, channel_ids, couriers)
         pesanan, ditahan = _saring_jam_urgent(mentah, jam_cutoff, sekarang)
-        batch = bagi_batch([o["salesorder_id"] for o in pesanan])
         tunda = (f" (+{ditahan} ditahan, jam pesan di atas {jam_cutoff:02d}.00 WIB, lanjut "
                 f"otomatis setelah jam {JAM_LANJUT_URGENT:02d}.00)" if ditahan else "")
-        log.info("[UJI] Urgent %-10s pesanan siap proses %3d -> %d picklist (maks %d/picklist)%s",
-                 nama, len(pesanan), len(batch), MAKS_PESANAN_PICKLIST, tunda)
+        if not per_lantai:
+            batch = bagi_batch([o["salesorder_id"] for o in pesanan])
+            log.info("[UJI] Urgent %-10s pesanan siap proses %3d -> %d picklist (maks %d/picklist)%s",
+                     nama, len(pesanan), len(batch), MAKS_PESANAN_PICKLIST, tunda)
+            continue
+        log.info("[UJI] Urgent %-10s pesanan siap proses %3d, dipecah per lantai%s",
+                 nama, len(pesanan), tunda)
+        per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=channel_ids,
+                                                couriers=couriers)
+        for lt, sub in per_lt.items():
+            batch = bagi_batch([o["salesorder_id"] for o in sub])
+            log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
+                     _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
 
 
 def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
@@ -576,11 +593,14 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     lebih). Alur berdiri sendiri, dipanggil HANYA lewat main.py --urgent (tidak otomatis
     dipanggil dari alur --label --jalankan/SKU spesial). Pesanan yang jam pesannya di atas
     jam cutoff skenario ditahan dulu (lihat _saring_jam_urgent()/JAM_LANJUT_URGENT), baru
-    diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. `sekarang`:
-    dipakai tes, default waktu sungguhan (WIB) saat dipanggil. Kegagalan 1 skenario tidak
-    menghentikan yang lain."""
+    diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. Skenario
+    `per_lantai` (GTL-SiCepat) dipecah jadi picklist per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
+    _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
+    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. `sekarang`: dipakai tes, default
+    waktu sungguhan (WIB) saat dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan
+    yang lain."""
     hasil = []
-    for nama, channel_ids, couriers, jam_cutoff in skenario or SKENARIO_URGENT:
+    for nama, channel_ids, couriers, jam_cutoff, per_lantai in skenario or SKENARIO_URGENT:
         label = nama.upper()
         try:
             mentah = ambil_pesanan_channel(k, channel_ids, couriers)
@@ -589,8 +609,15 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
                 log.info("  %d pesanan %s ditahan (jam pesan di atas %02d.00 WIB), lanjut "
                          "otomatis setelah jam %02d.00", ditahan, nama, jam_cutoff,
                          JAM_LANJUT_URGENT)
-            hasil += _proses_channel_batch(k, f"Urgent {nama}", label, pesanan,
-                                           file_riwayat, folder_label)
+            if per_lantai:
+                per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=channel_ids,
+                                                        couriers=couriers)
+                subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+                hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat,
+                                             folder_label, kurir=None, prefix="Urgent")
+            else:
+                hasil += _proses_channel_batch(k, f"Urgent {nama}", label, pesanan,
+                                               file_riwayat, folder_label)
         except Exception as e:      # noqa: BLE001 - channel lain & SKU spesial tetap lanjut
             log.exception("  GAGAL urgent %s: %s", nama, e)
             hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
@@ -901,17 +928,23 @@ def _kelompok_1qty_per_rak(k: Klien, satu_qty: list[dict],
 
 
 def _kelompok_kombinasi_per_lantai(k: Klien, kombinasi: list[dict],
-                                   lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
+                                   lantai_dari_excel: dict[str, str] | None = None,
+                                   channel_ids: list[int] | None = CHANNEL_IDS_REGULER,
+                                   couriers: list[str] | None = KURIR_FILTER_REGULER) -> dict[str, list[dict]]:
     """Sama polanya dengan _kelompok_1qty_per_rak() tapi granularitas LANTAI (bukan grup rak)
     dan kombinasi rak TIDAK dibuang gabungannya (lihat ambil_kombinasi_rak_semua()) - pesanan
     kombinasi (qty>1/multi-SKU) lazim tersebar di >1 rak sekaligus. `ambil_id_per_grup_rak()`
     dipakai ulang apa adanya (generik atas dict apa pun, tidak ada logika grup-rak spesifik di
-    dalamnya). Kalau pengambilan data rak live API gagal, SEMUA pesanan kombinasi jatuh ke
-    lantai_dari_excel/LABEL_RAK_LAINNYA, tidak menghentikan proses reguler lainnya."""
+    dalamnya), dibatasi `channel_ids`/`couriers` - default skenario reguler
+    (CHANNEL_IDS_REGULER/KURIR_FILTER_REGULER), tapi dioverride skenario urgent GTL-SiCepat
+    (channel_ids=None, couriers=KURIR_FILTER_URGENT_GTL_SICEPAT) lewat proses_urgent()/
+    rencana_urgent() supaya query ready-to-process-nya cocok dengan lingkup `kombinasi` yang
+    masuk. Kalau pengambilan data rak live API gagal, SEMUA pesanan kombinasi jatuh ke
+    lantai_dari_excel/LABEL_RAK_LAINNYA, tidak menghentikan proses lainnya."""
     try:
         kombinasi_rak = ambil_kombinasi_rak_semua(k)
         id_per_lantai = ambil_id_per_grup_rak(k, kelompokkan_kombinasi_per_lantai(kombinasi_rak),
-                                              CHANNEL_IDS_REGULER, KURIR_FILTER_REGULER)
+                                              channel_ids, couriers)
     except Exception as e:      # noqa: BLE001 - jangan gagalkan kombinasi gara2 gagal rak
         log.warning("  Gagal ambil data rak (%s) - semua kombinasi masuk kelompok \"%s\"/Excel",
                    e, LABEL_RAK_LAINNYA)
@@ -955,20 +988,23 @@ def _label_lantai(lantai: str) -> str:
 
 
 def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, list[dict]],
-                        file_riwayat: Path, folder_label: Path, kurir: str | None) -> list[dict]:
-    """Proses tiap sub-kelompok (grup rak utk 1qty, lantai utk kombinasi - key subkelompok
-    dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat _label_lantai())
-    lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
+                        file_riwayat: Path, folder_label: Path, kurir: str | None,
+                        prefix: str = "Reguler") -> list[dict]:
+    """Proses tiap sub-kelompok (grup rak utk 1qty, lantai utk kombinasi/urgent GTL-SiCepat -
+    key subkelompok dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat
+    _label_lantai()) lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak
+    menghentikan yang lain. `prefix`: "Reguler" (default, dipakai proses_reguler()) atau
+    "Urgent" (proses_urgent(), skenario per_lantai - lihat SKENARIO_URGENT)."""
     hasil = []
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
         try:
-            hasil += _proses_channel_batch(k, f"Reguler {_nama_kurir(nama_x, kurir)}",
+            hasil += _proses_channel_batch(k, f"{prefix} {_nama_kurir(nama_x, kurir)}",
                                            _label_kurir(label_x, kurir), pesanan,
                                            file_riwayat, folder_label,
                                            label_file=_label_kurir_file(label_x, kurir))
         except Exception as e:      # noqa: BLE001 - sub-kelompok lain tetap lanjut
-            log.exception("  GAGAL reguler %s: %s", nama_x, e)
+            log.exception("  GAGAL %s %s: %s", prefix.lower(), nama_x, e)
             hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
                           "SKU": _label_kurir(label_x, kurir), "Catatan": f"GAGAL: {e}"})
     return hasil
