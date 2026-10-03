@@ -601,11 +601,11 @@ def ambil_pesanan_reguler(k: Klien, kurir: str | None = None) -> list[dict]:
     return ambil_pesanan_channel(k, CHANNEL_IDS_REGULER, _filter_kurir(kurir, KURIR_FILTER_REGULER))
 
 
-def ambil_kombinasi_rak(k: Klien) -> list[str]:
-    """Semua kombinasi rak TUNGGAL (bukan gabungan multi-rak dipisah " - ", bukan string
-    kosong) dari pesanan berstatus PAID, lewat sales/v2/orders/zones-racks-combination
-    (paging sampai habis). Dipakai untuk memetakan salesorder_id -> grup rak lewat
-    kelompokkan_kombinasi_per_grup() + ambil_id_per_grup_rak()."""
+def _ambil_kombinasi_rak_mentah(k: Klien) -> list[str]:
+    """Semua kombinasi rak NON-KOSONG (tunggal MAUPUN gabungan multi-rak dipisah " - ") dari
+    pesanan berstatus PAID, lewat sales/v2/orders/zones-racks-combination (paging sampai
+    habis). Dipakai bersama ambil_kombinasi_rak() (1qty - buang gabungan) dan
+    ambil_kombinasi_rak_semua() (kombinasi - simpan gabungan)."""
     hasil, mentah, page = [], 0, 1
     while True:
         params = {"page": page, "q": "", "sort_by": "combination", "sort_direction": "asc",
@@ -614,11 +614,26 @@ def ambil_kombinasi_rak(k: Klien) -> list[str]:
         j = k.get("sales/v2/orders/zones-racks-combination", params)
         data = j.get("data") or []
         mentah += len(data)
-        hasil += [row["combination"] for row in data
-                 if row.get("combination") and " - " not in row["combination"]]
+        hasil += [row["combination"] for row in data if row.get("combination")]
         if not data or mentah >= int(j.get("totalCount") or 0):
             return hasil
         page += 1
+
+
+def ambil_kombinasi_rak(k: Klien) -> list[str]:
+    """Semua kombinasi rak TUNGGAL (bukan gabungan multi-rak dipisah " - ") dari pesanan
+    berstatus PAID. Dipakai untuk memetakan salesorder_id -> grup rak lewat
+    kelompokkan_kombinasi_per_grup() + ambil_id_per_grup_rak() (bagian 1qty - 1 pesanan 1 item
+    selalu di 1 rak)."""
+    return [c for c in _ambil_kombinasi_rak_mentah(k) if " - " not in c]
+
+
+def ambil_kombinasi_rak_semua(k: Klien) -> list[str]:
+    """Semua kombinasi rak TUNGGAL MAUPUN GABUNGAN dari pesanan berstatus PAID. Dipakai bagian
+    kombinasi reguler (qty>1/multi-SKU, lazim tersebar di >1 rak sekaligus) lewat
+    kelompokkan_kombinasi_per_lantai() + ambil_id_per_grup_rak() - beda dengan
+    ambil_kombinasi_rak() yang membuang kombinasi gabungan."""
+    return _ambil_kombinasi_rak_mentah(k)
 
 
 def kelompokkan_kombinasi_per_grup(kombinasi: list[str]) -> dict[str, list[str]]:

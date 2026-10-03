@@ -753,6 +753,16 @@ def uji_ambil_kombinasi_rak_buang_gabungan_dan_kosong():
     print("  ambil_kombinasi_rak: string kosong & gabungan (\" - \") dibuang, paging jalan")
 
 
+def uji_ambil_kombinasi_rak_semua_simpan_gabungan():
+    kombinasi = ["", "2A-B1-1", "3A-C2-2", "2A-B1-1 - 3B-H1-2", "1B-A2-3"]
+    j = JubelioPalsuKombinasiRak(kombinasi, page_size=2)
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl.ambil_kombinasi_rak_semua(k)
+    assert hasil == ["2A-B1-1", "3A-C2-2", "2A-B1-1 - 3B-H1-2", "1B-A2-3"], hasil
+    print("  ambil_kombinasi_rak_semua: string kosong dibuang, TAPI gabungan (\" - \") "
+          "TETAP disimpan (beda dengan ambil_kombinasi_rak())")
+
+
 def uji_kelompokkan_kombinasi_per_grup():
     kombinasi = ["2A-B1-1", "2A-B2-2", "3A-C2-2", "1B-A2-3", "2B-D1-1", "3B-E1-1",
                  "4C-F1-1", "1A-X1-1"]
