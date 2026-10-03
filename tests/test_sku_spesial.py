@@ -174,6 +174,40 @@ def uji_grup_rak_per_pesanan_fallback_sku_dasar_bundle_bd():
           "SKU dasarnya (dari pesanan lain)")
 
 
+def uji_lantai_per_pesanan_longgar_beda_zona_sama_lantai():
+    df = _df([
+        ("A", "X", 1, "SPX Hemat", "2A-B1-1"),
+        ("A", "Y", 1, "SPX Hemat", "2B-C2-2"),   # beda grup rak (2A vs 2B) tapi SAMA lantai
+    ])
+    hasil = ss.lantai_per_pesanan(df, ["1", "2", "3"])
+    assert hasil == {"A": "2"}, hasil
+    print("  lantai_per_pesanan: beda grup rak (2A vs 2B) tapi 1 lantai -> tetap terdeteksi "
+          "(lebih longgar dari grup_rak_per_pesanan)")
+
+
+def uji_lantai_per_pesanan_beda_lantai_diabaikan():
+    df = _df([
+        ("B", "X", 1, "SPX Hemat", "1B-A1-1"),
+        ("B", "Y", 1, "SPX Hemat", "2A-B1-1"),   # beda lantai -> ambigu
+    ])
+    hasil = ss.lantai_per_pesanan(df, ["1", "2", "3"])
+    assert hasil == {}, hasil
+    print("  lantai_per_pesanan: beda lantai dalam 1 pesanan -> tidak dimasukkan (ambigu)")
+
+
+def uji_lantai_per_pesanan_abaikan_tl_dan_fallback_sku_dasar():
+    df = _df([
+        ("C", "TL001", 1, "SPX Hemat", "1B-A5-2"),
+        ("C", "PTAA-22", 1, "SPX Hemat", "2B-B6-3"),
+        ("D", "BD-MX-5054-2", 1, "SPX Hemat", None),
+        ("E", "MX-5054-2", 2, "J&T Express Hemat", "2B-A1-2"),
+    ])
+    hasil = ss.lantai_per_pesanan(df, ["1", "2", "3"])
+    assert hasil == {"C": "2", "D": "2", "E": "2"}, hasil
+    print("  lantai_per_pesanan: aturan abaikan-TL dan fallback bundle \"BD-\" tetap berlaku "
+          "di granularitas lantai")
+
+
 def uji_min_resi_tepat_batas():
     df2 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(2)])
     df3 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(3)])

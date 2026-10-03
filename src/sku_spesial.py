@@ -117,18 +117,15 @@ def _grup_dari_rak(rak, grup_rak: list[str]) -> str | None:
     return prefix if prefix in grup_rak else None
 
 
-def grup_rak_per_pesanan(df: pd.DataFrame, grup_rak: list[str]) -> dict[str, str]:
-    """"No pesanan" -> grup rak (prefix sebelum '-' pertama di kolom Rak Excel). Dipakai
-    proses_label.py sebagai fallback penentu grup rak khusus SKU bundling: API live Jubelio
-    selalu melaporkan location_id -1 (lokasi virtual, bukan rak fisik) untuk item bundle,
-    padahal kolom Rak di Excel ini tetap berisi rak fisik asli tiap komponennya (ditemukan
-    03-10-2026 - lihat catatan di proses_label.py). Untuk tiap pesanan: (1) abaikan komponen
-    berawalan AWALAN_KOMPONEN_DIABAIKAN (TL) kalau ada komponen lain yang bisa dipakai, (2)
-    kalau baris yang tersisa kompak 1 grup -> pakai grup itu, (3) kalau tidak ada Rak sama
-    sekali di baris pesanan itu (mis. SKU bundle sendiri belum dialokasikan Jubelio) -> coba
-    rak dominan SKU dasarnya (strip AWALAN_BUNDLE_SKU_DASAR) dari _rak_dominan_per_sku(), (4)
-    kalau masih ambigu (beda grup) atau tidak ketemu -> pesanan itu TIDAK dimasukkan ke hasil
-    (biar pemanggil pakai fallback lain / LAINNYA)."""
+def _klasifikasi_per_pesanan(df: pd.DataFrame, klasifikasi) -> dict[str, str]:
+    """Inti bersama grup_rak_per_pesanan() & lantai_per_pesanan(): untuk tiap pesanan, abaikan
+    komponen berawalan AWALAN_KOMPONEN_DIABAIKAN (TL) kalau ada komponen lain, lalu
+    klasifikasikan Rak tiap baris yang tersisa lewat `klasifikasi(rak) -> key | None`. Kalau
+    baris yang dipakai kompak 1 key -> pakai key itu; kalau tidak ada key sama sekali (mis. SKU
+    bundle sendiri belum dialokasikan Jubelio) -> coba klasifikasikan rak dominan SKU dasarnya
+    (strip AWALAN_BUNDLE_SKU_DASAR) lewat `klasifikasi` yang sama; kalau masih ambigu (>1 key
+    beda) atau tidak ketemu -> pesanan itu TIDAK dimasukkan ke hasil (biar pemanggil pakai
+    fallback lain / LAINNYA)."""
     rak_dominan_sku = _rak_dominan_per_sku(df)
     hasil = {}
     for no, grup_df in df.groupby("No pesanan"):
@@ -136,23 +133,44 @@ def grup_rak_per_pesanan(df: pd.DataFrame, grup_rak: list[str]) -> dict[str, str
                                   .str.startswith(AWALAN_KOMPONEN_DIABAIKAN)]
         baris = tanpa_diabaikan if not tanpa_diabaikan.empty else grup_df
 
-        prefixes = {g for g in (_grup_dari_rak(r, grup_rak) for r in baris["Rak"]) if g}
-        if len(prefixes) == 1:
-            hasil[str(no)] = next(iter(prefixes))
+        kunci = {kk for kk in (klasifikasi(r) for r in baris["Rak"]) if kk}
+        if len(kunci) == 1:
+            hasil[str(no)] = next(iter(kunci))
             continue
-        if prefixes:
-            continue   # >1 grup beda tanpa cara membedakan lagi -> ambigu, jangan ditebak
+        if kunci:
+            continue   # >1 key beda tanpa cara membedakan lagi -> ambigu, jangan ditebak
 
-        prefixes_dasar = set()
+        kunci_dasar = set()
         for sku in baris["SKU"].astype(str):
             dasar = sku[len(aw):] if (aw := next((a for a in AWALAN_BUNDLE_SKU_DASAR
                                                   if sku.upper().startswith(a)), None)) else sku
-            g = _grup_dari_rak(rak_dominan_sku.get(dasar), grup_rak)
-            if g:
-                prefixes_dasar.add(g)
-        if len(prefixes_dasar) == 1:
-            hasil[str(no)] = next(iter(prefixes_dasar))
+            kk = klasifikasi(rak_dominan_sku.get(dasar))
+            if kk:
+                kunci_dasar.add(kk)
+        if len(kunci_dasar) == 1:
+            hasil[str(no)] = next(iter(kunci_dasar))
     return hasil
+
+
+def grup_rak_per_pesanan(df: pd.DataFrame, grup_rak: list[str]) -> dict[str, str]:
+    """"No pesanan" -> grup rak (prefix sebelum '-' pertama di kolom Rak Excel). Dipakai
+    proses_label.py sebagai fallback penentu grup rak khusus SKU bundling: API live Jubelio
+    selalu melaporkan location_id -1 (lokasi virtual, bukan rak fisik) untuk item bundle,
+    padahal kolom Rak di Excel ini tetap berisi rak fisik asli tiap komponennya (ditemukan
+    03-10-2026 - lihat catatan di proses_label.py). Lihat _klasifikasi_per_pesanan() untuk
+    aturan abaikan-TL/fallback-rak-dominan-SKU-dasarnya."""
+    return _klasifikasi_per_pesanan(df, lambda rak: _grup_dari_rak(rak, grup_rak))
+
+
+def lantai_per_pesanan(df: pd.DataFrame, lantai_list: list[str]) -> dict[str, str]:
+    """"No pesanan" -> lantai (digit pertama Rak Excel). Sama alasan & aturan dengan
+    grup_rak_per_pesanan() (lihat _klasifikasi_per_pesanan()) - cuma granularitas lebih
+    longgar: "2A" dan "2B" dianggap SAMA (lantai "2"). Dipakai fallback bagian kombinasi
+    reguler (proses_label.py) yang lazim tersebar di >1 rak dalam 1 lantai yang sama."""
+    def klasifikasi(rak):
+        lt = _lantai(rak)
+        return lt if lt in lantai_list else None
+    return _klasifikasi_per_pesanan(df, klasifikasi)
 
 
 def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None = None):
