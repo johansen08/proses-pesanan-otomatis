@@ -163,6 +163,11 @@ GRUP_RAK = ["2A", "3A", "1B", "2B", "3B"]
 LABEL_RAK_LAINNYA = "LAINNYA"            # pesanan 1qty yang rak-nya di luar GRUP_RAK
 MAKS_KOMBINASI_PER_PANGGILAN = 40        # batasi panjang query combination[] per request
 
+# Grup rak untuk bagian "kombinasi" reguler: lebih longgar dari GRUP_RAK (per LANTAI, bukan
+# per grup rak) karena pesanan kombinasi (qty>1/multi-SKU) lazim tersebar di >1 rak sekaligus -
+# urutan sama dengan WARNA_LANTAI di sku_spesial.py.
+LANTAI_RAK = ["1", "2", "3"]
+
 # Picklist "Shopee Pagi" (lintas SKU): dijalankan MANUAL, 1x sehari jam 13:00 - bukan bagian
 # alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam pesannya (WIB)
 # maksimal jam 12:00 HARI INI, digabung jadi 1 picklist (dipecah kalau > MAKS_PESANAN_PICKLIST).
@@ -634,6 +639,33 @@ def ambil_kombinasi_rak_semua(k: Klien) -> list[str]:
     kelompokkan_kombinasi_per_lantai() + ambil_id_per_grup_rak() - beda dengan
     ambil_kombinasi_rak() yang membuang kombinasi gabungan."""
     return _ambil_kombinasi_rak_mentah(k)
+
+
+def lantai_dari_kombinasi(kombinasi: str) -> str | None:
+    """Lantai (digit pertama tiap segmen rak) kalau SEMUA segmen kombinasi (dipisah " - " utk
+    gabungan multi-rak, lihat ambil_kombinasi_rak_semua()) sepakat 1 lantai yang ada di
+    LANTAI_RAK; None kalau campur lantai atau ada segmen yang lantainya tidak valid."""
+    lantai = set()
+    for segmen in kombinasi.split(" - "):
+        segmen = segmen.strip()
+        digit = segmen[0] if segmen and segmen[0].isdigit() else None
+        if digit not in LANTAI_RAK:
+            return None
+        lantai.add(digit)
+    return next(iter(lantai)) if len(lantai) == 1 else None
+
+
+def kelompokkan_kombinasi_per_lantai(kombinasi: list[str]) -> dict[str, list[str]]:
+    """Kelompokkan string kombinasi rak (tunggal maupun gabungan, lihat
+    ambil_kombinasi_rak_semua()) ke LANTAI_RAK lewat lantai_dari_kombinasi(). Kombinasi yang
+    lantainya tidak bisa dipastikan (campur/tak dikenal) diabaikan di sini - pesanan dengan
+    kombinasi itu otomatis masuk LABEL_RAK_LAINNYA lewat pisah_kombinasi_per_lantai()."""
+    hasil = {lt: [] for lt in LANTAI_RAK}
+    for c in kombinasi:
+        lt = lantai_dari_kombinasi(c)
+        if lt:
+            hasil[lt].append(c)
+    return hasil
 
 
 def kelompokkan_kombinasi_per_grup(kombinasi: list[str]) -> dict[str, list[str]]:

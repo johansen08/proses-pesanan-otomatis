@@ -763,6 +763,29 @@ def uji_ambil_kombinasi_rak_semua_simpan_gabungan():
           "TETAP disimpan (beda dengan ambil_kombinasi_rak())")
 
 
+def uji_lantai_dari_kombinasi():
+    assert pl.lantai_dari_kombinasi("2A-B1-1") == "2"
+    assert pl.lantai_dari_kombinasi("1B-A3-4 - 1B-A4-2") == "1", \
+        "gabungan tapi semua segmen 1 lantai -> lantai itu"
+    assert pl.lantai_dari_kombinasi("1B-A3-4 - 2A-E1-4") is None, \
+        "gabungan campur lantai -> None (ambigu)"
+    assert pl.lantai_dari_kombinasi("4C-X-1") is None, "lantai di luar LANTAI_RAK -> None"
+    assert pl.lantai_dari_kombinasi("") is None
+    print("  lantai_dari_kombinasi: gabungan 1 lantai terdeteksi, campur/tak dikenal -> None")
+
+
+def uji_kelompokkan_kombinasi_per_lantai():
+    kombinasi = ["2A-B1-1", "3A-C2-2", "1B-A2-3", "1B-A3-4 - 1B-A4-2",
+                "1B-A3-4 - 2A-E1-4", "4C-X-1"]
+    hasil = pl.kelompokkan_kombinasi_per_lantai(kombinasi)
+    assert list(hasil.keys()) == pl.LANTAI_RAK, hasil
+    assert hasil["1"] == ["1B-A2-3", "1B-A3-4 - 1B-A4-2"]
+    assert hasil["2"] == ["2A-B1-1"]
+    assert hasil["3"] == ["3A-C2-2"]
+    print("  kelompokkan_kombinasi_per_lantai: gabungan 1 lantai ikut masuk, campur lantai "
+          "& lantai tak dikenal diabaikan, urutan key = LANTAI_RAK")
+
+
 def uji_kelompokkan_kombinasi_per_grup():
     kombinasi = ["2A-B1-1", "2A-B2-2", "3A-C2-2", "1B-A2-3", "2B-D1-1", "3B-E1-1",
                  "4C-F1-1", "1A-X1-1"]
