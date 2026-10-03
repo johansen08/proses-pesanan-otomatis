@@ -845,70 +845,83 @@ def _tag_spesial(kurir: str | None) -> str:
     return f"{KURIR_LABEL_FILE[kurir]}_{TAG_SPESIAL}" if kurir else TAG_SPESIAL
 
 
+def _label_lantai(lantai: str) -> str:
+    """"1"/"2"/"3" -> "LANTAI1"/"LANTAI2"/"LANTAI3"; LABEL_RAK_LAINNYA dikembalikan apa
+    adanya."""
+    return f"LANTAI{lantai}" if lantai in LANTAI_RAK else lantai
+
+
+def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, list[dict]],
+                        file_riwayat: Path, folder_label: Path, kurir: str | None) -> list[dict]:
+    """Proses tiap sub-kelompok (grup rak utk 1qty, lantai utk kombinasi - key subkelompok
+    dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat _label_lantai())
+    lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
+    hasil = []
+    for sub, pesanan in subkelompok.items():
+        nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
+        try:
+            hasil += _proses_channel_batch(k, f"Reguler {_nama_kurir(nama_x, kurir)}",
+                                           _label_kurir(label_x, kurir), pesanan,
+                                           file_riwayat, folder_label,
+                                           label_file=_label_kurir_file(label_x, kurir))
+        except Exception as e:      # noqa: BLE001 - sub-kelompok lain tetap lanjut
+            log.exception("  GAGAL reguler %s: %s", nama_x, e)
+            hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
+                          "SKU": _label_kurir(label_x, kurir), "Catatan": f"GAGAL: {e}"})
+    return hasil
+
+
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
                     kurir: str | None = None,
-                    grup_dari_excel: dict[str, str] | None = None) -> None:
+                    grup_dari_excel: dict[str, str] | None = None,
+                    lantai_dari_excel: dict[str, str] | None = None) -> None:
     """Mode uji picklist sisa reguler: hanya membaca data, tidak mengubah apa pun di Jubelio.
-    `kurir`: lihat cari_pesanan(). Bagian "1qty" dipecah lagi per grup rak - lihat
-    _kelompok_1qty_per_rak()/GRUP_RAK. `grup_dari_excel`: lihat pisah_satu_qty_per_rak()
-    (fallback khusus SKU bundling)."""
+    `kurir`: lihat cari_pesanan(). Bagian "1qty" dipecah per grup rak (lihat
+    _kelompok_1qty_per_rak()/GRUP_RAK, `grup_dari_excel`: fallback SKU bundling). Bagian
+    "kombinasi" dipecah per lantai (lihat _kelompok_kombinasi_per_lantai()/LANTAI_RAK,
+    `lantai_dari_excel`: fallback SKU bundling)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     for kunci, (nama, _, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
-            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel).items():
-                batch = bagi_batch([o["salesorder_id"] for o in pesanan])
-                log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist "
-                         "(maks %d/picklist)", _nama_kurir(f"{nama} {grup}", kurir),
-                         len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
-            continue
-        pesanan = kelompok[idx]
-        batch = bagi_batch([o["salesorder_id"] for o in pesanan])
-        log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist (maks %d/picklist)",
-                 _nama_kurir(nama, kurir), len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
+            subkelompok = _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel)
+        else:   # "kombinasi"
+            per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
+            subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
+        for sub, pesanan in subkelompok.items():
+            batch = bagi_batch([o["salesorder_id"] for o in pesanan])
+            log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist "
+                     "(maks %d/picklist)", _nama_kurir(f"{nama} {sub}", kurir),
+                     len(pesanan), len(batch), MAKS_PESANAN_PICKLIST)
 
 
 def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    folder_label: Path, bagian: str | None = None,
                    kurir: str | None = None,
-                   grup_dari_excel: dict[str, str] | None = None) -> list[dict]:
+                   grup_dari_excel: dict[str, str] | None = None,
+                   lantai_dari_excel: dict[str, str] | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
-    (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU
-    1 qty yang tidak spesial - dipecah lagi per grup rak (lihat _kelompok_1qty_per_rak(),
-    GRUP_RAK; kegagalan 1 grup tidak menghentikan grup lain), (2) kombinasi/multi-baris/qty>1
-    (tidak dipecah per rak). Dipanggil SETELAH proses SKU spesial selesai (perlu
+    (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU 1 qty yang
+    tidak spesial - dipecah per grup rak (lihat _kelompok_1qty_per_rak(), GRUP_RAK), (2)
+    kombinasi/multi-baris/qty>1 - dipecah per lantai (lihat _kelompok_kombinasi_per_lantai(),
+    LANTAI_RAK). Kegagalan 1 sub-kelompok tidak menghentikan sub-kelompok lain (lihat
+    _proses_subkelompok()). Dipanggil SETELAH proses SKU spesial selesai (perlu
     resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per picklist (maks
-    MAKS_PESANAN_PICKLIST, dipecah kalau lebih). `grup_dari_excel`: lihat
-    pisah_satu_qty_per_rak() (fallback khusus SKU bundling)."""
+    MAKS_PESANAN_PICKLIST, dipecah kalau lebih). `grup_dari_excel`/`lantai_dari_excel`: lihat
+    pisah_satu_qty_per_rak()/pisah_kombinasi_per_lantai() (fallback khusus SKU bundling)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     hasil = []
     for kunci, (nama, label, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
-            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel).items():
-                nama_grup, label_grup = f"{nama} {grup}", f"{label}-{grup}"
-                try:
-                    hasil += _proses_channel_batch(
-                        k, f"Reguler {_nama_kurir(nama_grup, kurir)}",
-                        _label_kurir(label_grup, kurir), pesanan, file_riwayat, folder_label,
-                        label_file=_label_kurir_file(label_grup, kurir))
-                except Exception as e:      # noqa: BLE001 - grup lain tetap lanjut
-                    log.exception("  GAGAL reguler %s: %s", nama_grup, e)
-                    hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
-                                  "SKU": _label_kurir(label_grup, kurir),
-                                  "Catatan": f"GAGAL: {e}"})
-            continue
-        try:
-            hasil += _proses_channel_batch(k, f"Reguler {_nama_kurir(nama, kurir)}",
-                                           _label_kurir(label, kurir), kelompok[idx],
-                                           file_riwayat, folder_label,
-                                           label_file=_label_kurir_file(label, kurir))
-        except Exception as e:      # noqa: BLE001 - bagian lain tetap lanjut
-            log.exception("  GAGAL reguler %s: %s", nama, e)
-            hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
-                          "SKU": _label_kurir(label, kurir), "Catatan": f"GAGAL: {e}"})
+            subkelompok = _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel)
+        else:   # "kombinasi"
+            per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
+            subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
+        hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat, folder_label,
+                                     kurir)
     return hasil
 
 

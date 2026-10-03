@@ -677,7 +677,11 @@ class JubelioPalsuReguler:
         # Rak per pesanan 1qty (SO-3/4/5/8 - lihat docstring di atas): SO-3 grup 2A, SO-4 grup
         # 3A, SO-8 grup 2B, SO-5 rak di luar 5 grup target -> harus jatuh ke LAINNYA. Grup 1B
         # & 3B sengaja TIDAK punya pesanan sama sekali -> harus dilewati tanpa bikin picklist.
-        self.rak = {3: "2A-B1-1", 4: "3A-C2-2", 5: "4C-D3-3", 8: "2B-E4-4"}
+        self.rak = {3: "2A-B1-1", 4: "3A-C2-2", 5: "4C-D3-3", 8: "2B-E4-4",
+                   # SO-6 (kombinasi, qty 2): 2 komponen, 2 rak beda tapi SAMA lantai (1) ->
+                   # harus terdeteksi LANTAI1. SO-7 (kombinasi, qty 3): 2 rak beda LANTAI
+                   # (1 & 2) -> harus jatuh ke LAINNYA.
+                   6: "1B-G1-1 - 1B-G2-2", 7: "1B-G3-3 - 2B-G4-4"}
         self.kombinasi_rak = list(self.rak.values()) + ["1B-F5-5", "3B-G6-6"]
         self.picklist_no = 0
 
@@ -957,14 +961,19 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
     assert per_label["1QTY-REGULER-LAINNYA"]["Total Pesanan"] == 1, per_label
     assert "1QTY-REGULER-1B" not in per_label and "1QTY-REGULER-3B" not in per_label, \
         "grup tanpa pesanan (1B, 3B) tidak boleh bikin picklist"
-    assert per_label["KOMBINASI-REGULER"]["Total Pesanan"] == 2
+    assert per_label["KOMBINASI-REGULER-LANTAI1"]["Total Pesanan"] == 1, per_label
+    assert per_label["KOMBINASI-REGULER-LAINNYA"]["Total Pesanan"] == 1, per_label
+    assert "KOMBINASI-REGULER-LANTAI2" not in per_label \
+        and "KOMBINASI-REGULER-LANTAI3" not in per_label, \
+        "lantai tanpa pesanan (2, 3) tidak boleh bikin picklist"
     assert list(per_label.keys()) == ["1QTY-REGULER-2A", "1QTY-REGULER-3A",
                                       "1QTY-REGULER-2B", "1QTY-REGULER-LAINNYA",
-                                      "KOMBINASI-REGULER"], \
-        "urutan harus ikut GRUP_RAK (2A,3A,1B,2B,3B) lalu LAINNYA - 1B/3B dilewati krn kosong"
-    assert len(baris) == 1 + 5, "5 picklist reguler tercatat di riwayat (4 grup rak + kombinasi)"
-    print("  proses_reguler: 1qty dipecah per grup rak (2A/3A/2B/LAINNYA, 1B & 3B dilewati "
-          "krn kosong), KOMBINASI-REGULER tetap 1 picklist gabungan")
+                                      "KOMBINASI-REGULER-LANTAI1",
+                                      "KOMBINASI-REGULER-LAINNYA"], \
+        "urutan harus ikut GRUP_RAK lalu LAINNYA (1qty), baru LANTAI_RAK lalu LAINNYA (kombinasi)"
+    assert len(baris) == 1 + 6, "6 picklist reguler tercatat di riwayat"
+    print("  proses_reguler: 1qty dipecah per grup rak (2A/3A/2B/LAINNYA), kombinasi dipecah "
+          "per lantai (LANTAI1 dari SO-6 gabungan 1 lantai, LAINNYA dari SO-7 campur lantai)")
 
     # bagian="1qty": cuma proses bagian itu
     pl.lanjutkan_picklist = stub
@@ -976,7 +985,19 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
         pl.lanjutkan_picklist = asli
     assert {h["SKU"] for h in hasil} == {"1QTY-REGULER-2A", "1QTY-REGULER-3A",
                                          "1QTY-REGULER-2B", "1QTY-REGULER-LAINNYA"}, hasil
-    print("  bagian bisa dibatasi 1qty (dipecah per grup rak) atau kombinasi saja")
+    print("  bagian bisa dibatasi 1qty (dipecah per grup rak)")
+
+    # bagian="kombinasi": cuma proses bagian itu
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            hasil = pl.proses_reguler(k, resi_spesial_semua, Path(d) / "r2.xlsx",
+                                      Path(d) / "label", bagian="kombinasi")
+    finally:
+        pl.lanjutkan_picklist = asli
+    assert {h["SKU"] for h in hasil} == {"KOMBINASI-REGULER-LANTAI1",
+                                         "KOMBINASI-REGULER-LAINNYA"}, hasil
+    print("  bagian bisa dibatasi kombinasi saja (dipecah per lantai)")
 
 
 class JubelioPalsuGagalRak:
