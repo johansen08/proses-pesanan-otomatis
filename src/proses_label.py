@@ -614,7 +614,7 @@ def _ambil_kombinasi_rak_mentah(k: Klien) -> list[str]:
     hasil, mentah, page = [], 0, 1
     while True:
         params = {"page": page, "q": "", "sort_by": "combination", "sort_direction": "asc",
-                  "page_size": 50, "combination_query": "", "location_ids[0]": -1,
+                  "page_size": 200, "combination_query": "", "location_ids[0]": -1,
                   "combination_type": "racks", "status": "PAID"}
         j = k.get("sales/v2/orders/zones-racks-combination", params)
         data = j.get("data") or []
@@ -1269,14 +1269,15 @@ def selesaikan_picking(k: Klien, picklist_id: int) -> None:
 def pesanan_selesai_pick(k: Klien, picklist_no: str, jumlah: int) -> list[dict]:
     batas = time.monotonic() + TUNGGU_FINISH_PICK_S
     while True:
-        hasil, page = [], 1
+        hasil, ambil, page = [], 0, 1
         while True:
             j = k.get("wms/sales/v2/orders/finish-pick/", {
-                "q": picklist_no, "page": page, "page_size": 25, "is_printed": 0,
+                "q": picklist_no, "page": page, "page_size": 200, "is_printed": 0,
                 "sort_by": "transaction_date", "sort_direction": "DESC"})
             data = j.get("data") or []
+            ambil += len(data)
             hasil += [o for o in data if o.get("picklist_no") in (None, picklist_no)]
-            if not data or page * 25 >= int(j.get("totalCount") or 0):
+            if not data or ambil >= int(j.get("totalCount") or 0):
                 break
             page += 1
         if len(hasil) >= jumlah or time.monotonic() > batas:

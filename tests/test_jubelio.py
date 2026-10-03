@@ -209,9 +209,9 @@ class SesiPalsu:
 
 
 def uji_ambil_nilai_pesanan_gabung_semua_halaman():
-    # page_size tetap 25 di jubelio.py -> untuk memaksa halaman ke-2 benar-benar diambil,
-    # halaman pertama harus penuh (25 item) dan totalCount > 25.
-    halaman1 = [{"salesorder_no": f"X{i}", "grand_total": "1000.0000"} for i in range(25)]
+    # page_size tetap 200 di jubelio.py -> untuk memaksa halaman ke-2 benar-benar diambil,
+    # halaman pertama harus penuh (200 item) dan totalCount > 200.
+    halaman1 = [{"salesorder_no": f"X{i}", "grand_total": "1000.0000"} for i in range(200)]
     halaman2 = [{"salesorder_no": "C", "grand_total": "5000.0000"}]
     sesi = SesiPalsu([halaman1, halaman2], hasil_q={})
     lama = {}
@@ -222,7 +222,7 @@ def uji_ambil_nilai_pesanan_gabung_semua_halaman():
         nilai = jb.ambil_nilai_pesanan("TKN", {"X0", "C"})
     finally:
         requests.Session = lama["Session"]
-    assert nilai["X0"] == 1000.0 and nilai["C"] == 5000.0 and len(nilai) == 26, nilai
+    assert nilai["X0"] == 1000.0 and nilai["C"] == 5000.0 and len(nilai) == 201, nilai
     halaman_diminta = sorted({p["page"] for p in sesi.log if not p.get("q")})
     assert halaman_diminta == [1, 2], halaman_diminta
     print("  ambil_nilai_pesanan: halaman ke-2 ikut diambil & digabung selama totalCount > "

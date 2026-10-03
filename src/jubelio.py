@@ -23,7 +23,8 @@ API = "https://open.jubelio.com/core-api"
 URL_LOGIN = f"{API}/login"
 URL_LAPORAN = f"{API}/reports/sales-list/ready-to-pick-list/"
 URL_PESANAN = f"{API}/wms/sales/v2/orders/ready-to-process/"
-MAKS_HALAMAN = 400          # pengaman: 400 x 25 = 10.000 pesanan
+UKURAN_HALAMAN_PESANAN = 200  # maksimum yang didukung API Jubelio - kurangi jumlah request
+MAKS_HALAMAN = 50          # pengaman: 50 x 200 = 10.000 pesanan
 
 # Jubelio membalas HTTP 429 (Too Many Requests) kalau request terlalu rapat - kejadian
 # 03-10-2026: setelah ~26 picklist SKU spesial berturut-turut, 2 SKU terakhir gagal 429, lalu
@@ -108,7 +109,7 @@ def ambil_url_laporan(token: str, timeout: int = 60) -> str:
 
 
 def _halaman_pesanan(sesi: requests.Session, token: str, page: int, q: str = "",
-                     page_size: int = 25, timeout: int = 60) -> dict:
+                     page_size: int = UKURAN_HALAMAN_PESANAN, timeout: int = 60) -> dict:
     r = _kirim_dengan_retry429(sesi.get, URL_PESANAN, headers=_header(token), timeout=timeout,
                                params={"page": page, "q": q, "sort_by": "transaction_date",
                                        "page_size": page_size, "sort_direction": "DESC"})
@@ -141,7 +142,7 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
             total = j.get("totalCount", total)
             for o in data:
                 nilai[o["salesorder_no"]] = _angka(o.get("grand_total"))
-            if not data or (total is not None and page * 25 >= int(total)):
+            if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
                 break
             page += 1
 
