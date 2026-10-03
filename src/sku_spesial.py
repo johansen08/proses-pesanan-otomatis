@@ -90,20 +90,68 @@ def _rak_dominan(rak: pd.Series) -> str:
     return terisi.mode().iat[0]
 
 
+# Prefix SKU komponen "tali/strap" pada bundle PTAA (mis. TL001, TL003) - item ini SUDAH ada
+# di meja packer (dipasok terpisah), jadi rak/lantainya TIDAK dipertimbangkan saat menentukan
+# grup rak bundle PTAA (picker kadang tidak perlu ambil lagi) - dikonfirmasi tim 03-10-2026
+# (contoh: PTAA-71 = TL001 rak 1B + PTAA-22 rak 2B -> grup yang dipakai 2B, abaikan TL001).
+AWALAN_KOMPONEN_DIABAIKAN = ("TL",)
+# Prefix bundle yang SKU dasarnya didapat dengan membuang prefix ini (mis. "BD-MX-5054-2" ->
+# "MX-5054-2") - dipakai saat baris pesanan si bundle sendiri tidak py Rak sama sekali (belum
+# dialokasikan Jubelio), fallback ke rak yang paling sering dipakai SKU dasar itu di SKU lain
+# (lihat _rak_dominan_per_sku()) - dikonfirmasi tim 03-10-2026.
+AWALAN_BUNDLE_SKU_DASAR = ("BD-",)
+
+
+def _rak_dominan_per_sku(df: pd.DataFrame) -> dict[str, str]:
+    """SKU -> rak yang paling sering dipakai SKU itu, diagregasi dari SEMUA baris Excel (lintas
+    pesanan) - dipakai grup_rak_per_pesanan() sebagai fallback kedua utk bundle yang baris
+    pesanannya sendiri tidak py Rak (mis. "BD-MX-5054-2" tidak py Rak, tapi SKU dasarnya
+    "MX-5054-2" muncul dgn Rak asli di pesanan lain)."""
+    return df.groupby("SKU")["Rak"].agg(_rak_dominan).to_dict()
+
+
+def _grup_dari_rak(rak, grup_rak: list[str]) -> str | None:
+    if pd.isna(rak) or rak in ("", "-"):
+        return None
+    prefix = str(rak).split("-", 1)[0]
+    return prefix if prefix in grup_rak else None
+
+
 def grup_rak_per_pesanan(df: pd.DataFrame, grup_rak: list[str]) -> dict[str, str]:
     """"No pesanan" -> grup rak (prefix sebelum '-' pertama di kolom Rak Excel). Dipakai
     proses_label.py sebagai fallback penentu grup rak khusus SKU bundling: API live Jubelio
     selalu melaporkan location_id -1 (lokasi virtual, bukan rak fisik) untuk item bundle,
     padahal kolom Rak di Excel ini tetap berisi rak fisik asli tiap komponennya (ditemukan
-    03-10-2026 - lihat catatan di proses_label.py). Kalau semua baris 1 pesanan kompak 1 grup
-    -> pakai grup itu; kalau beda grup, rak kosong, atau prefix-nya di luar grup_rak -> pesanan
-    itu TIDAK dimasukkan ke hasil (biar pemanggil pakai fallback lain / LAINNYA)."""
+    03-10-2026 - lihat catatan di proses_label.py). Untuk tiap pesanan: (1) abaikan komponen
+    berawalan AWALAN_KOMPONEN_DIABAIKAN (TL) kalau ada komponen lain yang bisa dipakai, (2)
+    kalau baris yang tersisa kompak 1 grup -> pakai grup itu, (3) kalau tidak ada Rak sama
+    sekali di baris pesanan itu (mis. SKU bundle sendiri belum dialokasikan Jubelio) -> coba
+    rak dominan SKU dasarnya (strip AWALAN_BUNDLE_SKU_DASAR) dari _rak_dominan_per_sku(), (4)
+    kalau masih ambigu (beda grup) atau tidak ketemu -> pesanan itu TIDAK dimasukkan ke hasil
+    (biar pemanggil pakai fallback lain / LAINNYA)."""
+    rak_dominan_sku = _rak_dominan_per_sku(df)
     hasil = {}
     for no, grup_df in df.groupby("No pesanan"):
-        prefixes = {r.split("-", 1)[0] for r in grup_df["Rak"].dropna()
-                   if r and r != "-" and r.split("-", 1)[0] in grup_rak}
+        tanpa_diabaikan = grup_df[~grup_df["SKU"].astype(str).str.upper()
+                                  .str.startswith(AWALAN_KOMPONEN_DIABAIKAN)]
+        baris = tanpa_diabaikan if not tanpa_diabaikan.empty else grup_df
+
+        prefixes = {g for g in (_grup_dari_rak(r, grup_rak) for r in baris["Rak"]) if g}
         if len(prefixes) == 1:
             hasil[str(no)] = next(iter(prefixes))
+            continue
+        if prefixes:
+            continue   # >1 grup beda tanpa cara membedakan lagi -> ambigu, jangan ditebak
+
+        prefixes_dasar = set()
+        for sku in baris["SKU"].astype(str):
+            dasar = sku[len(aw):] if (aw := next((a for a in AWALAN_BUNDLE_SKU_DASAR
+                                                  if sku.upper().startswith(a)), None)) else sku
+            g = _grup_dari_rak(rak_dominan_sku.get(dasar), grup_rak)
+            if g:
+                prefixes_dasar.add(g)
+        if len(prefixes_dasar) == 1:
+            hasil[str(no)] = next(iter(prefixes_dasar))
     return hasil
 
 

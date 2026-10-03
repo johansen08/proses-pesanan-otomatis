@@ -143,6 +143,37 @@ def uji_grup_rak_per_pesanan_konflik_atau_tidak_dikenal_diabaikan():
           "kosong -> tidak dimasukkan (biar fallback lain yg menentukan)")
 
 
+def uji_grup_rak_per_pesanan_abaikan_komponen_tl_pada_konflik():
+    # PTAA-71: TL001 (1B) + PTAA-22 (2B) - beda grup, tapi TL diabaikan -> pakai grup PTAA-22
+    df = _df([
+        ("F", "TL001", 1, "SPX Hemat", "1B-A5-2"),
+        ("F", "PTAA-22", 1, "SPX Hemat", "2B-B6-3"),
+    ])
+    hasil = ss.grup_rak_per_pesanan(df, ["2A", "3A", "1B", "2B", "3B"])
+    assert hasil == {"F": "2B"}, hasil
+    print("  grup_rak_per_pesanan: komponen TL diabaikan saat beda grup dgn komponen lain "
+          "(PTAA-22) -> pakai grup komponen non-TL")
+
+
+def uji_grup_rak_per_pesanan_hanya_komponen_tl_tetap_dipakai():
+    df = _df([("G", "TL005", 1, "SPX Hemat", "3A-C1-1")])
+    hasil = ss.grup_rak_per_pesanan(df, ["2A", "3A", "1B", "2B", "3B"])
+    assert hasil == {"G": "3A"}, hasil
+    print("  grup_rak_per_pesanan: kalau cuma ada komponen TL sendirian (tidak ada komponen "
+          "lain), tetap dipakai raknya")
+
+
+def uji_grup_rak_per_pesanan_fallback_sku_dasar_bundle_bd():
+    df = _df([
+        ("H", "BD-MX-5054-2", 1, "SPX Hemat", None),            # bundle sendiri blm py rak
+        ("I", "MX-5054-2", 2, "J&T Express Hemat", "2B-A1-2"),  # SKU dasar di pesanan lain
+    ])
+    hasil = ss.grup_rak_per_pesanan(df, ["2A", "3A", "1B", "2B", "3B"])
+    assert hasil == {"H": "2B", "I": "2B"}, hasil
+    print("  grup_rak_per_pesanan: bundle \"BD-\" tanpa rak sendiri -> fallback ke rak dominan "
+          "SKU dasarnya (dari pesanan lain)")
+
+
 def uji_min_resi_tepat_batas():
     df2 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(2)])
     df3 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(3)])
