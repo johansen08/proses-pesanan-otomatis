@@ -119,6 +119,30 @@ def uji_rak_dominan_kosong_jadi_strip():
     print("  rak kosong untuk semua resi SKU itu: No Rak jadi '-'")
 
 
+def uji_grup_rak_per_pesanan_kompak_satu_grup():
+    df = _df([
+        ("A", "PTAA-47", 1, "SPX Hemat", "1B-A4-2"),
+        ("A", "TL003", 1, "SPX Hemat", "1B-A5-2"),
+        ("B", "MX-5054-7", 3, "J&T Express Hemat", "2B-A1-2"),
+    ])
+    hasil = ss.grup_rak_per_pesanan(df, ["2A", "3A", "1B", "2B", "3B"])
+    assert hasil == {"A": "1B", "B": "2B"}, hasil
+    print("  grup_rak_per_pesanan: komponen bundle beda rak tapi 1 grup -> grup itu terdeteksi")
+
+
+def uji_grup_rak_per_pesanan_konflik_atau_tidak_dikenal_diabaikan():
+    df = _df([
+        ("C", "X", 1, "SPX Hemat", "1B-A1-1"),
+        ("C", "Y", 1, "SPX Hemat", "2A-B1-1"),     # beda grup -> konflik, diabaikan
+        ("D", "Z", 1, "SPX Hemat", "4C-X-1"),      # prefix di luar grup_rak -> diabaikan
+        ("E", "W", 1, "SPX Hemat", None),          # tidak ada rak -> diabaikan
+    ])
+    hasil = ss.grup_rak_per_pesanan(df, ["2A", "3A", "1B", "2B", "3B"])
+    assert hasil == {}, hasil
+    print("  grup_rak_per_pesanan: beda grup dalam 1 pesanan, prefix tak dikenal, atau rak "
+          "kosong -> tidak dimasukkan (biar fallback lain yg menentukan)")
+
+
 def uji_min_resi_tepat_batas():
     df2 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(2)])
     df3 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(3)])

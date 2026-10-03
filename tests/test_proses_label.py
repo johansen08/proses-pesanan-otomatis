@@ -826,6 +826,27 @@ def uji_pisah_satu_qty_per_rak():
           "key = GRUP_RAK + LAINNYA")
 
 
+def uji_pisah_satu_qty_per_rak_fallback_excel_untuk_bundle():
+    # SO-1 ketemu lewat id_per_grup (live API) -> itu yang dipakai, BUKAN grup_dari_excel
+    # (walau grup_dari_excel bilang beda) - live API tetap prioritas pertama.
+    # SO-2 tidak ketemu lewat id_per_grup (khas SKU bundling - location_id API -1/virtual)
+    # tapi ketemu di grup_dari_excel -> pakai itu.
+    # SO-3 tidak ketemu di manapun -> LAINNYA.
+    satu_qty = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
+               {"salesorder_id": 2, "salesorder_no": "SO-2"},
+               {"salesorder_id": 3, "salesorder_no": "SO-3"}]
+    id_per_grup = {"2A": {1}, "3A": set(), "1B": set(), "2B": set(), "3B": set()}
+    grup_dari_excel = {"SO-1": "3A", "SO-2": "1B"}
+    hasil = pl.pisah_satu_qty_per_rak(satu_qty, id_per_grup, grup_dari_excel)
+    assert [o["salesorder_no"] for o in hasil["2A"]] == ["SO-1"], \
+        "live API (id_per_grup) tetap prioritas di atas grup_dari_excel"
+    assert [o["salesorder_no"] for o in hasil["1B"]] == ["SO-2"], \
+        "SO-2 (khas bundle) cuma ketemu lewat grup_dari_excel"
+    assert [o["salesorder_no"] for o in hasil[pl.LABEL_RAK_LAINNYA]] == ["SO-3"]
+    print("  pisah_satu_qty_per_rak: grup_dari_excel jadi fallback (live API tetap prioritas), "
+          "dipakai khusus pesanan yang tidak ketemu lewat API (mis. SKU bundling)")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan

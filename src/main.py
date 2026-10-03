@@ -75,7 +75,7 @@ import pandas as pd
 import peringatan_picklist
 import peringatan_resi
 from proses_label import durasi
-from sku_spesial import baca_excel, buat_pdf, hitung_sku_spesial, resi_kandidat
+from sku_spesial import baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial, resi_kandidat
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
@@ -322,7 +322,7 @@ def _main() -> int:
             # PDF BELUM dibuat di sini: dibuat proses_label_sku() setelah proses SKU spesial
             # betul-betul jalan, dari jumlah pesanan AKTUAL yang berhasil dipicklist (bisa
             # beda dari kandidat di atas kalau ada yang dilewati/gagal/stok kosong).
-            return proses_label_sku(log, token, tabel, ringkasan, args, lama_daftar, waktu)
+            return proses_label_sku(log, token, df, tabel, ringkasan, args, lama_daftar, waktu)
 
         FOLDER_PDF.mkdir(exist_ok=True)
         pdf = FOLDER_PDF / f"SKU_Spesial_{waktu:%Y-%m-%d_%H%M}.pdf"
@@ -332,14 +332,14 @@ def _main() -> int:
         log.info("Daftar resi spesial (urut rak) dibuat dalam %s", durasi(lama_daftar))
 
         if args.label:
-            return proses_label_sku(log, token, tabel, ringkasan, args, lama_daftar, waktu)
+            return proses_label_sku(log, token, df, tabel, ringkasan, args, lama_daftar, waktu)
         return 0
     except Exception as e:   # noqa: BLE001 - catat semua kegagalan ke log
         log.exception("GAGAL: %s", e)
         return 1
 
 
-def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, args,
+def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict, args,
                      lama_daftar: float, waktu: datetime) -> int:
     import proses_label
 
@@ -353,6 +353,10 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
 
     k = proses_label.Klien(token)
     rak_per_sku = dict(zip(tabel["SKU"], tabel["No Rak"]))
+    # Fallback khusus SKU bundling utk picklist 1qty reguler (lihat proses_reguler()):
+    # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
+    # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
+    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
     if not args.jalankan:
         if not resi_per_sku:
             log.info("Tidak ada SKU spesial untuk diproses")
@@ -361,7 +365,8 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
         proses_label.rencana(k, resi_per_sku, rak_per_sku, args.kurir)
         if not args.sku and not args.tanpa_reguler:
             resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
-            proses_label.rencana_reguler(k, resi_spesial_semua, kurir=args.kurir)
+            proses_label.rencana_reguler(k, resi_spesial_semua, kurir=args.kurir,
+                                         grup_dari_excel=grup_dari_excel)
         return 0
 
     hasil, lama_proses = [], 0.0
@@ -405,7 +410,8 @@ def proses_label_sku(log: logging.Logger, token: str, tabel, ringkasan: dict, ar
         resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
         log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
         hasil_reguler = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT,
-                                                     FOLDER_LABEL_SESI, kurir=args.kurir)
+                                                     FOLDER_LABEL_SESI, kurir=args.kurir,
+                                                     grup_dari_excel=grup_dari_excel)
 
     diproses = [h["detik"] for h in hasil if h.get("No Picklist")]
     log.info("Waktu buat daftar resi spesial : %s", durasi(lama_daftar))
@@ -470,14 +476,19 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
     log.info("%d resi SKU spesial hari ini (dikeluarkan dari picklist reguler)",
              len(resi_spesial_semua))
+    # Fallback khusus SKU bundling utk picklist 1qty reguler (lihat proses_reguler()):
+    # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
+    # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
+    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
 
     k = proses_label.Klien(token)
     if not args.jalankan:
         log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_reguler(k, resi_spesial_semua, args.bagian, args.kurir)
+        proses_label.rencana_reguler(k, resi_spesial_semua, args.bagian, args.kurir,
+                                     grup_dari_excel=grup_dari_excel)
         return 0
     hasil = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI,
-                                        args.bagian, args.kurir)
+                                        args.bagian, args.kurir, grup_dari_excel=grup_dari_excel)
     gagal = cetak_bermasalah(hasil)
     log.info("SELESAI reguler: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")

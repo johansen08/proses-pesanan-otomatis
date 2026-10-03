@@ -90,6 +90,23 @@ def _rak_dominan(rak: pd.Series) -> str:
     return terisi.mode().iat[0]
 
 
+def grup_rak_per_pesanan(df: pd.DataFrame, grup_rak: list[str]) -> dict[str, str]:
+    """"No pesanan" -> grup rak (prefix sebelum '-' pertama di kolom Rak Excel). Dipakai
+    proses_label.py sebagai fallback penentu grup rak khusus SKU bundling: API live Jubelio
+    selalu melaporkan location_id -1 (lokasi virtual, bukan rak fisik) untuk item bundle,
+    padahal kolom Rak di Excel ini tetap berisi rak fisik asli tiap komponennya (ditemukan
+    03-10-2026 - lihat catatan di proses_label.py). Kalau semua baris 1 pesanan kompak 1 grup
+    -> pakai grup itu; kalau beda grup, rak kosong, atau prefix-nya di luar grup_rak -> pesanan
+    itu TIDAK dimasukkan ke hasil (biar pemanggil pakai fallback lain / LAINNYA)."""
+    hasil = {}
+    for no, grup_df in df.groupby("No pesanan"):
+        prefixes = {r.split("-", 1)[0] for r in grup_df["Rak"].dropna()
+                   if r and r != "-" and r.split("-", 1)[0] in grup_rak}
+        if len(prefixes) == 1:
+            hasil[str(no)] = next(iter(prefixes))
+    return hasil
+
+
 def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None = None):
     """nilai_pesanan: {No pesanan: grand_total}. None = aturan nilai 0 tidak dipakai."""
     df = _tandai(df)

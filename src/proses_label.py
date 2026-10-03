@@ -654,16 +654,24 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
     return hasil
 
 
-def pisah_satu_qty_per_rak(satu_qty: list[dict],
-                           id_per_grup: dict[str, set[int]]) -> dict[str, list[dict]]:
+def pisah_satu_qty_per_rak(satu_qty: list[dict], id_per_grup: dict[str, set[int]],
+                           grup_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
     """Partisi satu_qty (hasil pisah_reguler()[0]) ke grup rak (GRUP_RAK, urutan itu) +
-    LABEL_RAK_LAINNYA (pesanan yang salesorder_id-nya tidak cocok grup manapun di
-    id_per_grup - lihat ambil_id_per_grup_rak()). Murni logika data, tidak memanggil API."""
+    LABEL_RAK_LAINNYA. Grup ditentukan dulu lewat id_per_grup (salesorder_id, dari live API -
+    lihat ambil_id_per_grup_rak()); kalau tidak cocok di situ, coba `grup_dari_excel`
+    (salesorder_no -> grup, dari sku_spesial.grup_rak_per_pesanan() - fallback KHUSUS SKU
+    bundling: API live Jubelio selalu melaporkan location_id -1/virtual untuk item bundle,
+    jadi tidak pernah ketemu lewat id_per_grup, padahal kolom Rak di Excel tetap berisi rak
+    fisik asli komponennya, ditemukan 03-10-2026). Sisanya masuk LABEL_RAK_LAINNYA. Murni
+    logika data, tidak memanggil API."""
+    grup_dari_excel = grup_dari_excel or {}
     hasil = {grup: [] for grup in GRUP_RAK}
     hasil[LABEL_RAK_LAINNYA] = []
     for o in satu_qty:
         grup_cocok = next((grup for grup in GRUP_RAK
                            if o["salesorder_id"] in id_per_grup.get(grup, ())), None)
+        if grup_cocok is None:
+            grup_cocok = grup_dari_excel.get(o["salesorder_no"])
         hasil[grup_cocok or LABEL_RAK_LAINNYA].append(o)
     return hasil
 
@@ -678,23 +686,26 @@ def pisah_reguler(pesanan: list[dict],
     return satu_qty, kombinasi
 
 
-def _kelompok_1qty_per_rak(k: Klien, satu_qty: list[dict]) -> dict[str, list[dict]]:
+def _kelompok_1qty_per_rak(k: Klien, satu_qty: list[dict],
+                           grup_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
     """Bungkus ambil_kombinasi_rak()+kelompokkan_kombinasi_per_grup()+ambil_id_per_grup_rak()+
     pisah_satu_qty_per_rak(): hasilnya peta grup -> daftar pesanan 1qty (urutan GRUP_RAK +
     LABEL_RAK_LAINNYA). Selalu query rak dengan CHANNEL_IDS_REGULER + KURIR_FILTER_REGULER
     penuh (bukan parameter `kurir` dari proses_reguler()) karena cuma dipakai cek keanggotaan
-    salesorder_id - `satu_qty` yang masuk ke sini sudah difilter kurir sebelumnya. Kalau
-    pengambilan data rak gagal (API down dsb), SEMUA pesanan 1qty jatuh ke LABEL_RAK_LAINNYA
-    supaya tidak ada yang hilang, tidak menghentikan proses reguler lainnya."""
+    salesorder_id - `satu_qty` yang masuk ke sini sudah difilter kurir sebelumnya. `grup_dari_excel`
+    (opsional, dari sku_spesial.grup_rak_per_pesanan()): fallback khusus SKU bundling - lihat
+    pisah_satu_qty_per_rak(). Kalau pengambilan data rak live API gagal (API down dsb), SEMUA
+    pesanan 1qty jatuh ke grup_dari_excel/LABEL_RAK_LAINNYA supaya tidak ada yang hilang, tidak
+    menghentikan proses reguler lainnya."""
     try:
         kombinasi = ambil_kombinasi_rak(k)
         id_per_grup = ambil_id_per_grup_rak(k, kelompokkan_kombinasi_per_grup(kombinasi),
                                             CHANNEL_IDS_REGULER, KURIR_FILTER_REGULER)
     except Exception as e:      # noqa: BLE001 - jangan gagalkan seluruh 1qty gara2 gagal rak
-        log.warning("  Gagal ambil data rak (%s) - semua 1qty masuk kelompok \"%s\"",
+        log.warning("  Gagal ambil data rak (%s) - semua 1qty masuk kelompok \"%s\"/Excel",
                    e, LABEL_RAK_LAINNYA)
         id_per_grup = {}
-    return pisah_satu_qty_per_rak(satu_qty, id_per_grup)
+    return pisah_satu_qty_per_rak(satu_qty, id_per_grup, grup_dari_excel)
 
 
 _BAGIAN_REGULER = {
@@ -727,16 +738,18 @@ def _tag_spesial(kurir: str | None) -> str:
 
 
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
-                    kurir: str | None = None) -> None:
+                    kurir: str | None = None,
+                    grup_dari_excel: dict[str, str] | None = None) -> None:
     """Mode uji picklist sisa reguler: hanya membaca data, tidak mengubah apa pun di Jubelio.
     `kurir`: lihat cari_pesanan(). Bagian "1qty" dipecah lagi per grup rak - lihat
-    _kelompok_1qty_per_rak()/GRUP_RAK."""
+    _kelompok_1qty_per_rak()/GRUP_RAK. `grup_dari_excel`: lihat pisah_satu_qty_per_rak()
+    (fallback khusus SKU bundling)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     for kunci, (nama, _, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
-            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx]).items():
+            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel).items():
                 batch = bagi_batch([o["salesorder_id"] for o in pesanan])
                 log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist "
                          "(maks %d/picklist)", _nama_kurir(f"{nama} {grup}", kurir),
@@ -750,21 +763,23 @@ def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None =
 
 def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    folder_label: Path, bagian: str | None = None,
-                   kurir: str | None = None) -> list[dict]:
+                   kurir: str | None = None,
+                   grup_dari_excel: dict[str, str] | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
     (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU
     1 qty yang tidak spesial - dipecah lagi per grup rak (lihat _kelompok_1qty_per_rak(),
     GRUP_RAK; kegagalan 1 grup tidak menghentikan grup lain), (2) kombinasi/multi-baris/qty>1
     (tidak dipecah per rak). Dipanggil SETELAH proses SKU spesial selesai (perlu
     resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per picklist (maks
-    MAKS_PESANAN_PICKLIST, dipecah kalau lebih)."""
+    MAKS_PESANAN_PICKLIST, dipecah kalau lebih). `grup_dari_excel`: lihat
+    pisah_satu_qty_per_rak() (fallback khusus SKU bundling)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     hasil = []
     for kunci, (nama, label, idx) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
-            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx]).items():
+            for grup, pesanan in _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel).items():
                 nama_grup, label_grup = f"{nama} {grup}", f"{label}-{grup}"
                 try:
                     hasil += _proses_channel_batch(
