@@ -174,6 +174,19 @@ def uji_grup_rak_per_pesanan_fallback_sku_dasar_bundle_bd():
           "SKU dasarnya (dari pesanan lain)")
 
 
+def uji_sku_bundle_per_pesanan_hanya_rak_kosong_dan_tidak_ambigu():
+    df = _df([
+        ("A", "T01-PTAA-66", 1, "SPX Hemat", None),       # bundle, Rak kosong -> kandidat
+        ("B", "X", 1, "SPX Hemat", "1B-A1-1"),            # Rak terisi -> bukan kandidat
+        ("C", "SKU1", 1, "SPX Hemat", None),
+        ("C", "SKU2", 1, "SPX Hemat", None),               # 2 SKU beda, Rak sama2 kosong -> ambigu
+    ])
+    hasil = ss.sku_bundle_per_pesanan(df)
+    assert hasil == {"A": "T01-PTAA-66"}, hasil
+    print("  sku_bundle_per_pesanan: hanya pesanan Rak kosong & 1 SKU yang diambil "
+          "(bukan terisi, bukan ambigu >1 SKU)")
+
+
 def uji_lantai_per_pesanan_longgar_beda_zona_sama_lantai():
     df = _df([
         ("A", "X", 1, "SPX Hemat", "2A-B1-1"),

@@ -173,6 +173,29 @@ def lantai_per_pesanan(df: pd.DataFrame, lantai_list: list[str]) -> dict[str, st
     return _klasifikasi_per_pesanan(df, klasifikasi)
 
 
+def sku_bundle_per_pesanan(df: pd.DataFrame) -> dict[str, str]:
+    """"No pesanan" -> SKU, utk pesanan yang kolom Rak-nya KOSONG di Excel (ciri khas SKU
+    bundle - lihat grup_rak_per_pesanan(): Excel cuma punya 1 baris SKU bundle itu sendiri,
+    tidak pernah meledak jadi baris komponen seperti di picklist fisik, jadi kolom Rak-nya
+    tidak pernah terisi lewat jalur manapun - fallback _rak_dominan_per_sku()/AWALAN_BUNDLE_
+    SKU_DASAR di _klasifikasi_per_pesanan() pun ikut gagal kalau SKU bundle itu TIDAK berawalan
+    salah satu AWALAN_BUNDLE_SKU_DASAR, mis. "T01-PTAA-66"/"T01-PTAA-77", ditemukan 03-10-2026).
+
+    Dipakai proses_label.grup_rak_bundle_live()/lantai_bundle_live() sebagai daftar kandidat
+    SKU yang perlu dicoba diresolusi lewat API live Jubelio (variations/v2/,
+    v2/inventory/items/) - fallback yang LEBIH DIUTAMAKAN daripada Excel utk SKU bundling,
+    karena menemukan rak fisik komponen langsung dari master data, bukan menebak dari baris
+    Excel yang memang tidak ada. Pesanan dengan >1 SKU beda di baris Rak kosongnya dilewati
+    (ambigu, bukan kasus 1-SKU-bundle biasa)."""
+    kosong = df[df["Rak"].isna() | df["Rak"].astype(str).isin(("", "-"))]
+    hasil = {}
+    for no, grup_df in kosong.groupby("No pesanan"):
+        skus = set(grup_df["SKU"].astype(str))
+        if len(skus) == 1:
+            hasil[str(no)] = next(iter(skus))
+    return hasil
+
+
 def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None = None):
     """nilai_pesanan: {No pesanan: grand_total}. None = aturan nilai 0 tidak dipakai."""
     df = _tandai(df)

@@ -76,7 +76,7 @@ import peringatan_picklist
 import peringatan_resi
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
-                         lantai_per_pesanan, resi_kandidat)
+                         lantai_per_pesanan, resi_kandidat, sku_bundle_per_pesanan)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
@@ -340,6 +340,22 @@ def _main() -> int:
         return 1
 
 
+def _lengkapi_fallback_bundle(k, df, grup_dari_excel: dict, lantai_dari_excel: dict) -> tuple[dict, dict]:
+    """Lengkapi fallback Excel (grup_rak_per_pesanan()/lantai_per_pesanan(), selalu gagal utk
+    SKU bundling - lihat catatan di situ) dengan fallback live API (proses_label.
+    grup_rak_bundle_live()/lantai_bundle_live(), lewat master data Jubelio - lihat
+    sku_spesial.sku_bundle_per_pesanan()). Live LEBIH DIUTAMAKAN (menang kalau ada hasil),
+    Excel tetap jadi fallback terakhir utk kasus lain yang bukan bundling."""
+    import proses_label
+
+    sku_bundle = sku_bundle_per_pesanan(df)
+    if not sku_bundle:
+        return grup_dari_excel, lantai_dari_excel
+    grup_live = proses_label.grup_rak_bundle_live(k, sku_bundle, proses_label.GRUP_RAK)
+    lantai_live = proses_label.lantai_bundle_live(k, sku_bundle, proses_label.LANTAI_RAK)
+    return {**grup_dari_excel, **grup_live}, {**lantai_dari_excel, **lantai_live}
+
+
 def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict, args,
                      lama_daftar: float, waktu: datetime) -> int:
     import proses_label
@@ -359,6 +375,8 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
     grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
     lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
+    grup_dari_excel, lantai_dari_excel = _lengkapi_fallback_bundle(
+        k, df, grup_dari_excel, lantai_dari_excel)
     if not args.jalankan:
         if not resi_per_sku:
             log.info("Tidak ada SKU spesial untuk diproses")
@@ -487,6 +505,8 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
 
     k = proses_label.Klien(token)
+    grup_dari_excel, lantai_dari_excel = _lengkapi_fallback_bundle(
+        k, df, grup_dari_excel, lantai_dari_excel)
     if not args.jalankan:
         log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
         proses_label.rencana_reguler(k, resi_spesial_semua, args.bagian, args.kurir,

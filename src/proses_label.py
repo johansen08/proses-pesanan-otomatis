@@ -86,7 +86,7 @@ import requests
 import jubelio
 import peringatan_picklist
 import peringatan_resi
-from sku_spesial import KURIR_DIIZINKAN, MIN_RESI
+from sku_spesial import AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
 
 REPORT_API = "https://report-prod.jubelio.com/api/reports"
 KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
@@ -721,6 +721,109 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
                 page += 1
         hasil[grup] = ids
     return hasil
+
+
+# ===================================================== fallback SKU bundling (live, master data)
+def _item_variasi(k: Klien, kode: str) -> dict | None:
+    """Cari 1 item exact match `item_code` (case-insensitive, lewat pencarian substring
+    variations/v2/) - field "rack_no" di endpoint ini adalah rak MASTER STATIS per item,
+    sudah lama ditempel di kartu item, beda dengan location_id di items-to-pick/
+    ready-to-process yang selalu -1/virtual untuk item bundle. Inilah yang dicetak Jubelio di
+    laporan "Picklist Gudang" sebagai "<item_code>-<rack_no>" (ditemukan lewat sniff
+    03-10-2026 - lihat memori project_1qty_per_rak_grup). None kalau tidak ketemu (SKU sudah
+    dihapus dsb). Dipakai _grup_bundle_live()."""
+    j = k.get("variations/v2/", {"page": 1, "q": kode, "page_size": 25, "sort_direction": "NONE"})
+    for row in j.get("data") or []:
+        if str(row.get("item_code", "")).upper() == kode.upper():
+            return row
+    return None
+
+
+def _komposisi_bundle(k: Klien, item_id: int) -> list[dict]:
+    """Komponen ASLI SKU bundle (mis. SKU jualan "T01-PTAA-66" -> komponen "T01-PTAA-50" +
+    "TL003") lewat v2/inventory/items/{item_id} -> bundles_variants[].compositions[]
+    (ditemukan sniff 03-10-2026). Kosong kalau item bukan bundle/tidak ada datanya."""
+    j = k.get(f"v2/inventory/items/{item_id}")
+    hasil = []
+    for bv in j.get("bundles_variants") or []:
+        hasil += bv.get("compositions") or []
+    return hasil
+
+
+def _grup_bundle_live(k: Klien, sku: str, klasifikasi) -> str | None:
+    """Resolusi 1 SKU bundle -> key (grup rak/lantai, lewat `klasifikasi(rack_no) -> key|None`)
+    lewat master data Jubelio: cari item SKU itu, ambil komponennya (_komposisi_bundle()),
+    abaikan komponen berawalan AWALAN_KOMPONEN_DIABAIKAN (TL - sama aturan dengan
+    sku_spesial._klasifikasi_per_pesanan()) kalau ada komponen lain, lalu klasifikasikan
+    `rack_no` tiap komponen yang tersisa. None kalau SKU itu bukan bundle, item/komponennya
+    tidak ketemu, komponen tersebar >1 key beda (ambigu), atau panggilan API gagal - ini
+    fallback TAMBAHAN, tidak boleh menghentikan proses reguler kalau API bermasalah."""
+    try:
+        item = _item_variasi(k, sku)
+        if not item or not item.get("is_bundle"):
+            return None
+        komponen = _komposisi_bundle(k, item["item_id"])
+        tanpa_tl = [c for c in komponen if not str(c.get("item_code", "")).upper()
+                   .startswith(AWALAN_KOMPONEN_DIABAIKAN)]
+        kunci = set()
+        for c in (tanpa_tl or komponen):
+            comp = _item_variasi(k, str(c.get("item_code", "")))
+            kk = klasifikasi(comp.get("rack_no")) if comp else None
+            if kk:
+                kunci.add(kk)
+        return next(iter(kunci)) if len(kunci) == 1 else None
+    except Exception as e:      # noqa: BLE001 - fallback tambahan, jangan gagalkan proses reguler
+        log.warning("  Gagal resolusi rak bundle live utk SKU %s: %s", sku, e)
+        return None
+
+
+def _prefix_rak(rak, grup_rak: list[str]) -> str | None:
+    if rak in (None, "", "-"):
+        return None
+    prefix = str(rak).split("-", 1)[0]
+    return prefix if prefix in grup_rak else None
+
+
+def _lantai_rak(rak, lantai_list: list[str]) -> str | None:
+    if rak in (None, "", "-"):
+        return None
+    digit = str(rak)[0]
+    return digit if digit in lantai_list else None
+
+
+def _rak_bundle_live_per_pesanan(k: Klien, sku_per_pesanan: dict[str, str], klasifikasi) -> dict[str, str]:
+    """Bungkus _grup_bundle_live() per pesanan, DIKACHE per SKU (bukan per pesanan) supaya 1
+    picklist dengan banyak pesanan SKU bundle yang sama cukup query live sekali."""
+    cache: dict[str, str | None] = {}
+    hasil = {}
+    for no, sku in sku_per_pesanan.items():
+        if sku not in cache:
+            cache[sku] = _grup_bundle_live(k, sku, klasifikasi)
+        if cache[sku]:
+            hasil[no] = cache[sku]
+    return hasil
+
+
+def grup_rak_bundle_live(k: Klien, sku_per_pesanan: dict[str, str],
+                         grup_rak: list[str]) -> dict[str, str]:
+    """"No pesanan" -> grup rak untuk SKU bundling, diresolusi lewat master data Jubelio
+    (variations/v2/, v2/inventory/items/ - lihat _grup_bundle_live()), BUKAN lewat kolom Rak
+    Excel yang memang tidak pernah terisi untuk SKU bundle (lihat sku_spesial.
+    sku_bundle_per_pesanan()). Fallback ini LEBIH DIUTAMAKAN daripada sku_spesial.
+    grup_rak_per_pesanan()/Excel - dipanggil main.py sebelum proses_reguler()/rencana_reguler(),
+    hasilnya di-merge ke grup_dari_excel (live menang kalau ada, Excel tetap fallback
+    terakhir utk kasus lain yang bukan bundling). `sku_per_pesanan`: dari sku_spesial.
+    sku_bundle_per_pesanan(df)."""
+    return _rak_bundle_live_per_pesanan(k, sku_per_pesanan,
+                                        lambda rak: _prefix_rak(rak, grup_rak))
+
+
+def lantai_bundle_live(k: Klien, sku_per_pesanan: dict[str, str],
+                       lantai_list: list[str]) -> dict[str, str]:
+    """Sama seperti grup_rak_bundle_live() tapi granularitas LANTAI (digit pertama rack_no,
+    "2A"/"2B" dianggap sama) - dipakai fallback bagian kombinasi reguler."""
+    return _rak_bundle_live_per_pesanan(k, sku_per_pesanan,
+                                        lambda rak: _lantai_rak(rak, lantai_list))
 
 
 def pisah_satu_qty_per_rak(satu_qty: list[dict], id_per_grup: dict[str, set[int]],

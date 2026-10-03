@@ -884,6 +884,119 @@ def uji_pisah_satu_qty_per_rak_fallback_excel_untuk_bundle():
           "dipakai khusus pesanan yang tidak ketemu lewat API (mis. SKU bundling)")
 
 
+class JubelioPalsuBundleLive:
+    """Server tiruan variations/v2/ (cari item, field "rack_no" = rak master statis) &
+    v2/inventory/items/{id} (bundles_variants[].compositions[] = komponen asli bundle) -
+    dipakai uji grup_rak_bundle_live()/lantai_bundle_live() (lihat sniff 03-10-2026)."""
+
+    def __init__(self, items: dict[str, dict], komposisi: dict[int, list[dict]]):
+        self.items = items            # item_code -> {"item_id", "item_code", "is_bundle", "rack_no"}
+        self.komposisi = komposisi    # item_id (bundle) -> compositions
+        self.log = []
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        self.log.append((urlsplit(url).path, dict(params or {})))
+        assert headers.get("authorization") == "TKN"
+        if url.endswith("variations/v2/"):
+            q = (params or {}).get("q", "").upper()
+            data = [v for k, v in self.items.items() if q in k.upper()]
+            return Resp(data={"data": data, "totalCount": len(data)})
+        m = re.search(r"v2/inventory/items/(\d+)$", url)
+        if m:
+            return Resp(data={"bundles_variants": [{"compositions": self.komposisi.get(int(m.group(1)), [])}]})
+        raise AssertionError(f"url tak dikenal: {url}")
+
+
+_ITEM_PTAA77 = {"item_id": 1, "item_code": "T01-PTAA-77", "is_bundle": True, "rack_no": None}
+_ITEM_PTAA47 = {"item_id": 2, "item_code": "T01-PTAA-47", "is_bundle": False, "rack_no": "1B-A4-2"}
+_ITEM_TL003 = {"item_id": 3, "item_code": "TL003", "is_bundle": False, "rack_no": "1B-A5-2"}
+_KOMPOSISI_PTAA77 = [{"item_id": 2, "item_code": "T01-PTAA-47"}, {"item_id": 3, "item_code": "TL003"}]
+
+
+def uji_item_variasi_cocok_exact_bukan_substring():
+    items = {"T01-PTAA-47": _ITEM_PTAA47, "T01-PTAA-4": {**_ITEM_PTAA47, "item_id": 9}}
+    j = JubelioPalsuBundleLive(items, {})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl._item_variasi(k, "T01-PTAA-47")
+    assert hasil["item_id"] == 2, hasil
+    assert pl._item_variasi(k, "TIDAK-ADA") is None
+    print("  _item_variasi: exact match item_code (bukan substring pertama yang kebetulan cocok)")
+
+
+def uji_komposisi_bundle_dari_bundles_variants():
+    j = JubelioPalsuBundleLive({}, {1: _KOMPOSISI_PTAA77})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl._komposisi_bundle(k, 1)
+    assert hasil == _KOMPOSISI_PTAA77, hasil
+    print("  _komposisi_bundle: compositions diambil dari bundles_variants[]")
+
+
+def uji_grup_bundle_live_abaikan_komponen_tl():
+    # T01-PTAA-77 -> komponen T01-PTAA-47 (1B) + TL003 (1B juga, tapi tetap diabaikan dulu) ->
+    # grup diambil dari komponen non-TL (T01-PTAA-47).
+    items = {"T01-PTAA-77": _ITEM_PTAA77, "T01-PTAA-47": _ITEM_PTAA47, "TL003": _ITEM_TL003}
+    j = JubelioPalsuBundleLive(items, {1: _KOMPOSISI_PTAA77})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl._grup_bundle_live(k, "T01-PTAA-77", lambda rak: pl._prefix_rak(rak, pl.GRUP_RAK))
+    assert hasil == "1B", hasil
+    print("  _grup_bundle_live: SKU bundle (T01-PTAA-77) -> resolusi grup rak lewat komponen "
+          "non-TL (T01-PTAA-47), konsisten dgn sniff 03-10-2026")
+
+
+def uji_grup_bundle_live_bukan_bundle_jadi_none():
+    items = {"X": {"item_id": 9, "item_code": "X", "is_bundle": False, "rack_no": "2A-B1-1"}}
+    j = JubelioPalsuBundleLive(items, {})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    assert pl._grup_bundle_live(k, "X", lambda rak: pl._prefix_rak(rak, pl.GRUP_RAK)) is None
+    print("  _grup_bundle_live: SKU bukan bundle (is_bundle False) -> None (biar fallback lain)")
+
+
+def uji_grup_bundle_live_komponen_tersebar_beda_grup_jadi_none():
+    komponen_a = {"item_id": 2, "item_code": "KOMP-A", "is_bundle": False, "rack_no": "1B-A1-1"}
+    komponen_b = {"item_id": 3, "item_code": "KOMP-B", "is_bundle": False, "rack_no": "2A-B1-1"}
+    bundle = {"item_id": 1, "item_code": "BUNDLE-X", "is_bundle": True, "rack_no": None}
+    items = {"BUNDLE-X": bundle, "KOMP-A": komponen_a, "KOMP-B": komponen_b}
+    komposisi = {1: [{"item_id": 2, "item_code": "KOMP-A"}, {"item_id": 3, "item_code": "KOMP-B"}]}
+    j = JubelioPalsuBundleLive(items, komposisi)
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    assert pl._grup_bundle_live(k, "BUNDLE-X", lambda rak: pl._prefix_rak(rak, pl.GRUP_RAK)) is None
+    print("  _grup_bundle_live: komponen tersebar >1 grup beda -> None (ambigu)")
+
+
+def uji_grup_bundle_live_gagal_api_tidak_melempar():
+    class JubelioPalsuError:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            raise ConnectionError("putus")
+    k = pl.Klien("TKN", sesi=JubelioPalsuError(), tidur=lambda s: None)
+    hasil = pl._grup_bundle_live(k, "APA-SAJA", lambda rak: pl._prefix_rak(rak, pl.GRUP_RAK))
+    assert hasil is None, hasil
+    print("  _grup_bundle_live: API gagal (koneksi putus dsb) -> None, tidak melempar exception "
+          "(fallback tambahan, tidak boleh menggagalkan proses reguler)")
+
+
+def uji_grup_rak_bundle_live_cache_per_sku():
+    items = {"T01-PTAA-77": _ITEM_PTAA77, "T01-PTAA-47": _ITEM_PTAA47, "TL003": _ITEM_TL003}
+    j = JubelioPalsuBundleLive(items, {1: _KOMPOSISI_PTAA77})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    sku_per_pesanan = {"SO-1": "T01-PTAA-77", "SO-2": "T01-PTAA-77"}   # 2 pesanan, SKU sama
+    hasil = pl.grup_rak_bundle_live(k, sku_per_pesanan, pl.GRUP_RAK)
+    assert hasil == {"SO-1": "1B", "SO-2": "1B"}, hasil
+    panggilan_komposisi = [p for p in j.log if p[0].endswith("v2/inventory/items/1")]
+    assert len(panggilan_komposisi) == 1, \
+        "SKU bundle sama dipakai 2 pesanan -> komposisi cuma dicek sekali (dicache per SKU)"
+    print("  grup_rak_bundle_live: hasil benar per pesanan, dicache per SKU (bukan per pesanan) "
+          "supaya SKU bundle yang sama tidak query live berulang")
+
+
+def uji_lantai_bundle_live():
+    items = {"T01-PTAA-77": _ITEM_PTAA77, "T01-PTAA-47": _ITEM_PTAA47, "TL003": _ITEM_TL003}
+    j = JubelioPalsuBundleLive(items, {1: _KOMPOSISI_PTAA77})
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    hasil = pl.lantai_bundle_live(k, {"SO-1": "T01-PTAA-77"}, pl.LANTAI_RAK)
+    assert hasil == {"SO-1": "1"}, hasil
+    print("  lantai_bundle_live: granularitas lantai (digit pertama rack_no) dari SKU bundle")
+
+
 def uji_pisah_kombinasi_per_lantai():
     kombinasi = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
                 {"salesorder_id": 2, "salesorder_no": "SO-2"},
