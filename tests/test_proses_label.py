@@ -998,6 +998,18 @@ def uji_kelompok_1qty_per_rak_fallback_saat_gagal_ambil_kombinasi():
           "LAINNYA, tidak melempar exception")
 
 
+def uji_kelompok_kombinasi_per_lantai_fallback_saat_gagal_ambil_kombinasi():
+    k = pl.Klien("TKN", sesi=JubelioPalsuGagalRak(), tidur=lambda s: None)
+    kombinasi = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
+                {"salesorder_id": 2, "salesorder_no": "SO-2"}]
+    hasil = pl._kelompok_kombinasi_per_lantai(k, kombinasi)
+    assert list(hasil.keys()) == pl.LANTAI_RAK + [pl.LABEL_RAK_LAINNYA], hasil
+    assert all(hasil[lt] == [] for lt in pl.LANTAI_RAK), hasil
+    assert [o["salesorder_no"] for o in hasil[pl.LABEL_RAK_LAINNYA]] == ["SO-1", "SO-2"], hasil
+    print("  _kelompok_kombinasi_per_lantai: gagal ambil kombinasi rak -> semua pesanan "
+          "jatuh ke LAINNYA, tidak melempar exception")
+
+
 def uji_rencana_reguler_mode_uji_tidak_mengubah_apapun():
     j = JubelioPalsuReguler()
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)

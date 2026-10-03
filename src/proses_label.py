@@ -797,6 +797,25 @@ def _kelompok_1qty_per_rak(k: Klien, satu_qty: list[dict],
     return pisah_satu_qty_per_rak(satu_qty, id_per_grup, grup_dari_excel)
 
 
+def _kelompok_kombinasi_per_lantai(k: Klien, kombinasi: list[dict],
+                                   lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
+    """Sama polanya dengan _kelompok_1qty_per_rak() tapi granularitas LANTAI (bukan grup rak)
+    dan kombinasi rak TIDAK dibuang gabungannya (lihat ambil_kombinasi_rak_semua()) - pesanan
+    kombinasi (qty>1/multi-SKU) lazim tersebar di >1 rak sekaligus. `ambil_id_per_grup_rak()`
+    dipakai ulang apa adanya (generik atas dict apa pun, tidak ada logika grup-rak spesifik di
+    dalamnya). Kalau pengambilan data rak live API gagal, SEMUA pesanan kombinasi jatuh ke
+    lantai_dari_excel/LABEL_RAK_LAINNYA, tidak menghentikan proses reguler lainnya."""
+    try:
+        kombinasi_rak = ambil_kombinasi_rak_semua(k)
+        id_per_lantai = ambil_id_per_grup_rak(k, kelompokkan_kombinasi_per_lantai(kombinasi_rak),
+                                              CHANNEL_IDS_REGULER, KURIR_FILTER_REGULER)
+    except Exception as e:      # noqa: BLE001 - jangan gagalkan kombinasi gara2 gagal rak
+        log.warning("  Gagal ambil data rak (%s) - semua kombinasi masuk kelompok \"%s\"/Excel",
+                   e, LABEL_RAK_LAINNYA)
+        id_per_lantai = {}
+    return pisah_kombinasi_per_lantai(kombinasi, id_per_lantai, lantai_dari_excel)
+
+
 _BAGIAN_REGULER = {
     "1qty": ("1 Qty Reguler", LABEL_REGULER_1QTY, 0),
     "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1),
