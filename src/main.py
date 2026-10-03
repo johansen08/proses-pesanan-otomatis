@@ -75,7 +75,8 @@ import pandas as pd
 import peringatan_picklist
 import peringatan_resi
 from proses_label import durasi
-from sku_spesial import baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial, resi_kandidat
+from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
+                         lantai_per_pesanan, resi_kandidat)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
@@ -357,6 +358,7 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
     # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
     grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
+    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
     if not args.jalankan:
         if not resi_per_sku:
             log.info("Tidak ada SKU spesial untuk diproses")
@@ -366,7 +368,8 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         if not args.sku and not args.tanpa_reguler:
             resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
             proses_label.rencana_reguler(k, resi_spesial_semua, kurir=args.kurir,
-                                         grup_dari_excel=grup_dari_excel)
+                                         grup_dari_excel=grup_dari_excel,
+                                         lantai_dari_excel=lantai_dari_excel)
         return 0
 
     hasil, lama_proses = [], 0.0
@@ -411,7 +414,8 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
         hasil_reguler = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT,
                                                      FOLDER_LABEL_SESI, kurir=args.kurir,
-                                                     grup_dari_excel=grup_dari_excel)
+                                                     grup_dari_excel=grup_dari_excel,
+                                                     lantai_dari_excel=lantai_dari_excel)
 
     diproses = [h["detik"] for h in hasil if h.get("No Picklist")]
     log.info("Waktu buat daftar resi spesial : %s", durasi(lama_daftar))
@@ -480,15 +484,18 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
     # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
     grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
+    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
 
     k = proses_label.Klien(token)
     if not args.jalankan:
         log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
         proses_label.rencana_reguler(k, resi_spesial_semua, args.bagian, args.kurir,
-                                     grup_dari_excel=grup_dari_excel)
+                                     grup_dari_excel=grup_dari_excel,
+                                     lantai_dari_excel=lantai_dari_excel)
         return 0
     hasil = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI,
-                                        args.bagian, args.kurir, grup_dari_excel=grup_dari_excel)
+                                        args.bagian, args.kurir, grup_dari_excel=grup_dari_excel,
+                                        lantai_dari_excel=lantai_dari_excel)
     gagal = cetak_bermasalah(hasil)
     log.info("SELESAI reguler: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
