@@ -745,6 +745,26 @@ def pisah_satu_qty_per_rak(satu_qty: list[dict], id_per_grup: dict[str, set[int]
     return hasil
 
 
+def pisah_kombinasi_per_lantai(kombinasi: list[dict], id_per_lantai: dict[str, set[int]],
+                               lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
+    """Partisi kombinasi (hasil pisah_reguler()[1]) ke lantai (LANTAI_RAK, urutan itu) +
+    LABEL_RAK_LAINNYA. Lantai ditentukan dulu lewat id_per_lantai (salesorder_id, dari live
+    API - lihat ambil_id_per_grup_rak()); kalau tidak cocok, coba `lantai_dari_excel`
+    (salesorder_no -> lantai, dari sku_spesial.lantai_per_pesanan() - fallback SKU bundling,
+    sama alasannya dengan pisah_satu_qty_per_rak()). Sisanya masuk LABEL_RAK_LAINNYA (termasuk
+    pesanan yang item-itemnya tersebar di >1 lantai). Murni logika data, tidak memanggil API."""
+    lantai_dari_excel = lantai_dari_excel or {}
+    hasil = {lt: [] for lt in LANTAI_RAK}
+    hasil[LABEL_RAK_LAINNYA] = []
+    for o in kombinasi:
+        lt_cocok = next((lt for lt in LANTAI_RAK
+                         if o["salesorder_id"] in id_per_lantai.get(lt, ())), None)
+        if lt_cocok is None:
+            lt_cocok = lantai_dari_excel.get(o["salesorder_no"])
+        hasil[lt_cocok or LABEL_RAK_LAINNYA].append(o)
+    return hasil
+
+
 def pisah_reguler(pesanan: list[dict],
                   resi_spesial_semua: set[str]) -> tuple[list[dict], list[dict]]:
     """Keluarkan resi yang sudah termasuk SKU spesial hari ini, lalu pisah sisanya jadi

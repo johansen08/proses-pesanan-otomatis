@@ -880,6 +880,26 @@ def uji_pisah_satu_qty_per_rak_fallback_excel_untuk_bundle():
           "dipakai khusus pesanan yang tidak ketemu lewat API (mis. SKU bundling)")
 
 
+def uji_pisah_kombinasi_per_lantai():
+    kombinasi = [{"salesorder_id": 1, "salesorder_no": "SO-1"},
+                {"salesorder_id": 2, "salesorder_no": "SO-2"},
+                {"salesorder_id": 3, "salesorder_no": "SO-3"},
+                {"salesorder_id": 4, "salesorder_no": "SO-4"}]
+    id_per_lantai = {"1": {1}, "2": set(), "3": set()}
+    lantai_dari_excel = {"SO-2": "3"}
+    hasil = pl.pisah_kombinasi_per_lantai(kombinasi, id_per_lantai, lantai_dari_excel)
+    assert list(hasil.keys()) == pl.LANTAI_RAK + [pl.LABEL_RAK_LAINNYA], hasil
+    assert [o["salesorder_no"] for o in hasil["1"]] == ["SO-1"], \
+        "SO-1 ketemu lewat live API (id_per_lantai)"
+    assert [o["salesorder_no"] for o in hasil["3"]] == ["SO-2"], \
+        "SO-2 tidak ketemu lewat API, tapi ketemu lewat lantai_dari_excel (fallback bundle)"
+    assert hasil["2"] == []
+    assert [o["salesorder_no"] for o in hasil[pl.LABEL_RAK_LAINNYA]] == ["SO-3", "SO-4"], \
+        "SO-3/SO-4 tidak ketemu di manapun -> LAINNYA"
+    print("  pisah_kombinasi_per_lantai: live API prioritas, lantai_dari_excel fallback, "
+          "sisa masuk LAINNYA, urutan key = LANTAI_RAK + LAINNYA")
+
+
 def uji_reguler_maksimal_200_per_picklist():
     # pisah_reguler() murni fungsi data (tanpa API); bagi_batch() dipakai proses_reguler()
     # lewat _proses_channel_batch() yang sama persis dengan proses_urgent() -> cukup buktikan
