@@ -1195,25 +1195,43 @@ def uji_rencana_reguler_mode_uji_tidak_mengubah_apapun():
 
 
 class JubelioPalsuShopeePagi:
-    """Server tiruan khusus skenario picklist Shopee Pagi (filter channel + jam pesan)."""
+    """Server tiruan khusus skenario picklist Shopee Pagi (filter channel + jam pesan), juga
+    meniru endpoint rak (zones-racks-combination + ready-to-process?combination[]=...) supaya
+    pemecahan per LANTAI (_kelompok_kombinasi_per_lantai(), lihat proses_shopee_pagi()) ikut
+    teruji."""
 
     def __init__(self):
         self.log = []
         # source 64 = Shopee (izin); source 4 = Lazada nyelip (harus dibuang lagi di kita)
         self.pesanan = [
-            {"salesorder_id": 1, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
-            {"salesorder_id": 2, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T04:59:59.000Z"},  # 11:59:59 WIB
-            {"salesorder_id": 3, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:00.000Z"},  # 12:00:00 WIB, pas batas -> ikut
-            {"salesorder_id": 4, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:01.000Z"},  # 12:00:01 WIB -> tidak ikut
-            {"salesorder_id": 5, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T06:00:00.000Z"},  # 13:00 WIB -> tidak ikut
-            {"salesorder_id": 6, "source": 4, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},   # Lazada nyelip
+            {"salesorder_id": 1, "salesorder_no": "SO-SP-1", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
+            {"salesorder_id": 2, "salesorder_no": "SO-SP-2", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T04:59:59.000Z"},  # 11:59:59 WIB
+            {"salesorder_id": 3, "salesorder_no": "SO-SP-3", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:00.000Z"},  # 12:00:00 WIB, pas batas -> ikut
+            {"salesorder_id": 4, "salesorder_no": "SO-SP-4", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T05:00:01.000Z"},  # 12:00:01 WIB -> tidak ikut
+            {"salesorder_id": 5, "salesorder_no": "SO-SP-5", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T06:00:00.000Z"},  # 13:00 WIB -> tidak ikut
+            {"salesorder_id": 6, "salesorder_no": "SO-SP-6", "source": 4, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},   # Lazada nyelip
         ]
+        # Rak pesanan yang ikut (id 1-3): id 1 & 2 di LANTAI1, id 3 rak di luar LANTAI_RAK -> LAINNYA.
+        self.rak = {1: "1A-X1-1", 2: "1A-X2-2", 3: "9Z-X3-3"}
+        self.kombinasi_rak = list(self.rak.values())
         self.picklist_no = 0
 
     def get(self, url, params=None, headers=None, timeout=None, cookies=None):
         self.log.append(("GET", url, params))
         assert headers.get("authorization") == "TKN"
+        if url.endswith("zones-racks-combination"):
+            assert params.get("status") == "PAID" and params.get("combination_type") == "racks"
+            data = [{"combination": c} for c in self.kombinasi_rak]
+            return Resp(data={"data": data, "totalCount": len(data)})
         if url.endswith("ready-to-process/"):
+            combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+            if combos:
+                assert params.get("channel_ids[0]") == pl.CHANNEL_ID_SHOPEE
+                assert [params[f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
+                    == pl.TIPE_PESANAN_FILTER, "channel Shopee -> pesanan kilat harus difilter"
+                cocok = [so for so, c in self.rak.items() if c in combos]
+                return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
+                                  "totalCount": len(cocok)})
             assert params.get("channel_ids[0]") == pl.CHANNEL_ID_SHOPEE
             assert "channel_ids[1]" not in params, "Shopee Pagi cuma channel Shopee"
             assert [params[f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
@@ -1263,40 +1281,67 @@ def uji_shopee_pagi_filter_channel_dan_jam_cutoff():
         with tempfile.TemporaryDirectory() as d:
             riwayat = Path(d) / "riwayat.xlsx"
             # proses_shopee_pagi() sendiri pakai waktu sungguhan (dipanggil manual jam 13:00,
-            # bukan lewat parameter) -> di sini cukup uji lewat pemanggilan langsung supaya
-            # deterministik, ambil_pesanan_shopee_pagi() sudah diuji terpisah di atas
+            # bukan lewat parameter) -> di sini panggil langsung tahapan yang sama persis
+            # dengan isi proses_shopee_pagi() (ambil_pesanan_shopee_pagi() dengan sekarang=
+            # supaya deterministik, lalu _kelompok_kombinasi_per_lantai()+_proses_subkelompok())
+            # supaya pemecahan per LANTAI ikut teruji tanpa tergantung tanggal sungguhan.
             pesanan = pl.ambil_pesanan_shopee_pagi(k, sekarang=sekarang)
-            hasil = pl._proses_channel_batch(k, "Shopee Pagi", pl.LABEL_SHOPEE_PAGI, pesanan,
-                                             riwayat, Path(d) / "label")
+            per_lt = pl._kelompok_kombinasi_per_lantai(k, pesanan,
+                                                       channel_ids=[pl.CHANNEL_ID_SHOPEE],
+                                                       couriers=None)
+            subkelompok = {pl._label_lantai(lt): p for lt, p in per_lt.items()}
+            hasil = pl._proses_subkelompok(k, "Shopee Pagi", pl.LABEL_SHOPEE_PAGI, subkelompok,
+                                           riwayat, Path(d) / "label", kurir=None, prefix="")
     finally:
         pl.lanjutkan_picklist = asli
 
-    assert len(hasil) == 1 and hasil[0]["SKU"] == "SHOPEE-PAGI" and hasil[0]["Total Pesanan"] == 3
-    assert panggilan[0][3] == "SHOPEE-PAGI"
-    print("  proses_shopee_pagi: 3 pesanan -> 1 picklist SHOPEE-PAGI")
+    per_label = {h["SKU"]: h for h in hasil}
+    assert set(per_label) == {"SHOPEE-PAGI-LANTAI1", "SHOPEE-PAGI-LAINNYA"}, per_label
+    assert per_label["SHOPEE-PAGI-LANTAI1"]["Total Pesanan"] == 2, "id 1 & 2 (rak 1A) -> LANTAI1"
+    assert per_label["SHOPEE-PAGI-LAINNYA"]["Total Pesanan"] == 1, \
+        "id 3 (rak di luar LANTAI_RAK) -> LAINNYA"
+    assert {p[3] for p in panggilan} == {"SHOPEE-PAGI-LANTAI1", "SHOPEE-PAGI-LAINNYA"}
+    print("  proses_shopee_pagi: 3 pesanan -> 2 picklist per lantai "
+          "(SHOPEE-PAGI-LANTAI1/SHOPEE-PAGI-LAINNYA)")
 
 
 class JubelioPalsuJntSiang:
     """Server tiruan khusus skenario picklist J&T Resi Siang (filter channel + kurir +
-    jam pesan)."""
+    jam pesan), juga meniru endpoint rak (zones-racks-combination +
+    ready-to-process?combination[]=...) supaya pemecahan per LANTAI
+    (_kelompok_kombinasi_per_lantai(), lihat proses_jnt_siang()) ikut teruji."""
 
     def __init__(self):
         self.log = []
         # channel 131076 = TikTok Shop (izin); channel 64 = Shopee nyelip (harus dibuang lagi)
         self.pesanan = [
-            {"salesorder_id": 1, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
-            {"salesorder_id": 2, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T07:59:59.000Z"},  # 14:59:59 WIB
-            {"salesorder_id": 3, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:00.000Z"},  # 15:00:00 WIB, pas batas -> ikut
-            {"salesorder_id": 4, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:01.000Z"},  # 15:00:01 WIB -> tidak ikut
-            {"salesorder_id": 5, "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T09:00:00.000Z"},  # 16:00 WIB -> tidak ikut
-            {"salesorder_id": 6, "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},      # Shopee nyelip
+            {"salesorder_id": 1, "salesorder_no": "SO-JS-1", "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},  # 09:00 WIB
+            {"salesorder_id": 2, "salesorder_no": "SO-JS-2", "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T07:59:59.000Z"},  # 14:59:59 WIB
+            {"salesorder_id": 3, "salesorder_no": "SO-JS-3", "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:00.000Z"},  # 15:00:00 WIB, pas batas -> ikut
+            {"salesorder_id": 4, "salesorder_no": "SO-JS-4", "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T08:00:01.000Z"},  # 15:00:01 WIB -> tidak ikut
+            {"salesorder_id": 5, "salesorder_no": "SO-JS-5", "source": 131076, "grand_total": "35900.0000", "transaction_date": "2026-09-29T09:00:00.000Z"},  # 16:00 WIB -> tidak ikut
+            {"salesorder_id": 6, "salesorder_no": "SO-JS-6", "source": 64, "grand_total": "35900.0000", "transaction_date": "2026-09-29T02:00:00.000Z"},      # Shopee nyelip
         ]
+        # Rak pesanan yang ikut (id 1-3): id 1 & 2 di LANTAI2, id 3 rak di luar LANTAI_RAK -> LAINNYA.
+        self.rak = {1: "2A-Y1-1", 2: "2A-Y2-2", 3: "9Z-Y3-3"}
+        self.kombinasi_rak = list(self.rak.values())
         self.picklist_no = 0
 
     def get(self, url, params=None, headers=None, timeout=None, cookies=None):
         self.log.append(("GET", url, params))
         assert headers.get("authorization") == "TKN"
+        if url.endswith("zones-racks-combination"):
+            assert params.get("status") == "PAID" and params.get("combination_type") == "racks"
+            data = [{"combination": c} for c in self.kombinasi_rak]
+            return Resp(data={"data": data, "totalCount": len(data)})
         if url.endswith("ready-to-process/"):
+            combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+            if combos:
+                assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
+                assert params.get("couriers[0]") == "j&t"
+                cocok = [so for so, c in self.rak.items() if c in combos]
+                return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
+                                  "totalCount": len(cocok)})
             assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
             assert "channel_ids[1]" not in params, "J&T Resi Siang cuma channel TikTok Shop"
             assert params.get("couriers[0]") == "j&t" and "couriers[1]" not in params, \
@@ -1346,17 +1391,28 @@ def uji_jnt_siang_filter_channel_kurir_dan_jam_cutoff():
         with tempfile.TemporaryDirectory() as d:
             riwayat = Path(d) / "riwayat.xlsx"
             # proses_jnt_siang() sendiri pakai waktu sungguhan (dipanggil manual jam 15:00,
-            # bukan lewat parameter) -> di sini cukup uji lewat pemanggilan langsung supaya
-            # deterministik, ambil_pesanan_jnt_siang() sudah diuji terpisah di atas
+            # bukan lewat parameter) -> di sini panggil langsung tahapan yang sama persis
+            # dengan isi proses_jnt_siang() (ambil_pesanan_jnt_siang() dengan sekarang= supaya
+            # deterministik, lalu _kelompok_kombinasi_per_lantai()+_proses_subkelompok())
+            # supaya pemecahan per LANTAI ikut teruji tanpa tergantung tanggal sungguhan.
             pesanan = pl.ambil_pesanan_jnt_siang(k, sekarang=sekarang)
-            hasil = pl._proses_channel_batch(k, "J&T Resi Siang", pl.LABEL_JNT_SIANG, pesanan,
-                                             riwayat, Path(d) / "label")
+            per_lt = pl._kelompok_kombinasi_per_lantai(k, pesanan,
+                                                       channel_ids=[pl.CHANNEL_ID_TIKTOK_SHOP],
+                                                       couriers=["j&t"])
+            subkelompok = {pl._label_lantai(lt): p for lt, p in per_lt.items()}
+            hasil = pl._proses_subkelompok(k, "J&T Resi Siang", pl.LABEL_JNT_SIANG, subkelompok,
+                                           riwayat, Path(d) / "label", kurir=None, prefix="")
     finally:
         pl.lanjutkan_picklist = asli
 
-    assert len(hasil) == 1 and hasil[0]["SKU"] == "JNT-SIANG" and hasil[0]["Total Pesanan"] == 3
-    assert panggilan[0][3] == "JNT-SIANG"
-    print("  proses_jnt_siang: 3 pesanan -> 1 picklist JNT-SIANG")
+    per_label = {h["SKU"]: h for h in hasil}
+    assert set(per_label) == {"JNT-SIANG-LANTAI2", "JNT-SIANG-LAINNYA"}, per_label
+    assert per_label["JNT-SIANG-LANTAI2"]["Total Pesanan"] == 2, "id 1 & 2 (rak 2A) -> LANTAI2"
+    assert per_label["JNT-SIANG-LAINNYA"]["Total Pesanan"] == 1, \
+        "id 3 (rak di luar LANTAI_RAK) -> LAINNYA"
+    assert {p[3] for p in panggilan} == {"JNT-SIANG-LANTAI2", "JNT-SIANG-LAINNYA"}
+    print("  proses_jnt_siang: 3 pesanan -> 2 picklist per lantai "
+          "(JNT-SIANG-LANTAI2/JNT-SIANG-LAINNYA)")
 
 
 def uji_cek_item_bundle_hanya_ptaa_boleh_spesial():

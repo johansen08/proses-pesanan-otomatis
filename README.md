@@ -348,8 +348,10 @@ satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 **Dijalankan MANUAL 1x sehari** (mis. jam 13:00) — **bukan** bagian alur otomatis
 `--label --jalankan`, dan **tidak** perlu download/hitung Excel. Semua pesanan Siap Proses
 channel **Shopee** saja (`channel_id=64`, tanpa filter kurir) yang jam pesannya (WIB)
-**maksimal jam 12:00 siang hari ini**, digabung jadi 1 picklist (dipecah kalau > 200),
-diproses SAMPAI label PDF juga.
+**maksimal jam 12:00 siang hari ini**, dipecah per **LANTAI** rak gudang (1/2/3/LAINNYA) —
+pola yang sama dengan bagian "kombinasi" picklist sisa reguler/urgent GTL-SiCepat lewat
+`_kelompok_kombinasi_per_lantai()` — masing-masing dipecah lagi kalau > 200 pesanan, diproses
+SAMPAI label PDF juga.
 
 ```bash
 jalankan.bat --shopee-pagi               # mode uji
@@ -358,18 +360,20 @@ jalankan.bat --shopee-pagi --jalankan    # sungguhan
 
 `proses-harian.bat` TIPE 2, langkah "SPX <= 12.00 (SPX RESI PAGI)" = `jalankan.bat --shopee-pagi
 --jalankan` (dijalankan cukup 1x sehari, jangan diulang di TIPE 3). `proses-harian-uji.bat` = versi mode
-uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat: `SHOPEE-PAGI`, mis.
-`label-pengiriman/PICK-000155400_SHOPEE-PAGI_...pdf`.
+uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat:
+`SHOPEE-PAGI-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
+`label-pengiriman/PICK-000155400_SHOPEE-PAGI-LANTAI1_...pdf`.
 
 ## 5. Picklist J&T Resi Siang (`--jnt-siang`)
 
 **Dijalankan MANUAL 1x sehari** (mis. jam 15:00) — **bukan** bagian alur otomatis
 `--label --jalankan`, dan **tidak** perlu download/hitung Excel. Semua pesanan Siap Proses
 channel **TikTok Shop** (`channel_id=131076`), kurir **J&T saja**, yang jam pesannya (WIB)
-**maksimal jam 15:00 hari ini**, digabung jadi 1 picklist (dipecah kalau > 200), diproses
+**maksimal jam 15:00 hari ini**, dipecah per **LANTAI** rak gudang (1/2/3/LAINNYA, sama pola
+dengan SPX Resi Pagi di atas), masing-masing dipecah lagi kalau > 200 pesanan, diproses
 SAMPAI label PDF juga. Aturan bisnis J&T: pesanan TikTok Shop wajib keluar hari itu lewat J&T
-harus digabung 1 picklist paling lambat jam 15.00 (sejajar dengan aturan SPX Resi Pagi di
-atas, beda kurir dan beda jam cutoff — lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)).
+paling lambat jam 15.00 (sejajar dengan aturan SPX Resi Pagi di atas, beda kurir dan beda jam
+cutoff — lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)).
 
 ```bash
 jalankan.bat --jnt-siang               # mode uji
@@ -379,7 +383,8 @@ jalankan.bat --jnt-siang --jalankan    # sungguhan
 `proses-harian.bat` TIPE 4, langkah "J&T <= 15.00 (J&T RESI SIANG)" =
 `jalankan.bat --jnt-siang --jalankan` (dijalankan cukup 1x sehari, jangan diulang di siklus
 setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
-SKU di riwayat: `JNT-SIANG`, mis. `label-pengiriman/PICK-000155500_JNT-SIANG_...pdf`.
+SKU di riwayat: `JNT-SIANG-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
+`label-pengiriman/PICK-000155500_JNT-SIANG-LANTAI1_...pdf`.
 
 ## Cetak bulk label SPESIAL (`cetak-label-spesial.bat`, `src/print_spesial.py`)
 

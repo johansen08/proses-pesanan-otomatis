@@ -52,14 +52,16 @@ dipicklist:
 
 Picklist Shopee Pagi (proses_label.py): dijalankan MANUAL 1x sehari (mis. jam 13:00), BUKAN
 bagian alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam pesannya (WIB)
-maksimal jam 12 siang hari ini, digabung jadi 1 picklist:
+maksimal jam 12 siang hari ini, dipecah per LANTAI rak gudang (1/2/3/LAINNYA) - sama pola
+dengan bagian kombinasi picklist sisa reguler/urgent GTL-SiCepat:
     python src/main.py --shopee-pagi                      # MODE UJI: hanya tampilkan rencana
     python src/main.py --shopee-pagi --jalankan
 
 Picklist J&T Resi Siang (proses_label.py): dijalankan MANUAL 1x sehari (mis. jam 15:00), BUKAN
 bagian alur otomatis --label --jalankan. Semua pesanan channel TikTok Shop, kurir J&T, yang
-jam pesannya (WIB) maksimal jam 15 siang hari ini, digabung jadi 1 picklist (aturan bisnis
-J&T: wajib keluar TikTok Shop paling lambat jam 15.00 - lihat docs/jadwal-proses.md):
+jam pesannya (WIB) maksimal jam 15 siang hari ini, dipecah per LANTAI rak gudang (1/2/3/
+LAINNYA, sama pola dengan Shopee Pagi di atas) - aturan bisnis J&T: wajib keluar TikTok Shop
+paling lambat jam 15.00, lihat docs/jadwal-proses.md:
     python src/main.py --jnt-siang                        # MODE UJI: hanya tampilkan rencana
     python src/main.py --jnt-siang --jalankan
 """
@@ -256,13 +258,14 @@ def _main() -> int:
                         "dan SPX digabung seperti semula (TIPE 1/TIPE 4)")
     ap.add_argument("--shopee-pagi", action="store_true",
                     help="hanya buat picklist Shopee Pagi (channel Shopee, jam pesan s.d. "
-                        "12:00 WIB hari ini) sampai label PDF - dijalankan manual 1x sehari, "
-                        "BUKAN bagian alur otomatis --label (tanpa --jalankan = mode uji)")
+                        "12:00 WIB hari ini, dipecah per lantai rak gudang) sampai label PDF "
+                        "- dijalankan manual 1x sehari, BUKAN bagian alur otomatis --label "
+                        "(tanpa --jalankan = mode uji)")
     ap.add_argument("--jnt-siang", action="store_true",
                     help="hanya buat picklist J&T Resi Siang (channel TikTok Shop, kurir "
-                        "J&T, jam pesan s.d. 15:00 WIB hari ini) sampai label PDF - "
-                        "dijalankan manual 1x sehari, BUKAN bagian alur otomatis --label "
-                        "(tanpa --jalankan = mode uji)")
+                        "J&T, jam pesan s.d. 15:00 WIB hari ini, dipecah per lantai rak "
+                        "gudang) sampai label PDF - dijalankan manual 1x sehari, BUKAN "
+                        "bagian alur otomatis --label (tanpa --jalankan = mode uji)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",

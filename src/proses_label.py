@@ -994,12 +994,15 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
     key subkelompok dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat
     _label_lantai()) lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak
     menghentikan yang lain. `prefix`: "Reguler" (default, dipakai proses_reguler()) atau
-    "Urgent" (proses_urgent(), skenario per_lantai - lihat SKENARIO_URGENT)."""
+    "Urgent" (proses_urgent(), skenario per_lantai - lihat SKENARIO_URGENT); string kosong
+    (proses_shopee_pagi()/proses_jnt_siang()) melewatkan prefix sama sekali (nama skenarionya
+    sendiri sudah jelas tanpa awalan)."""
     hasil = []
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
+        tampil = _nama_kurir(nama_x, kurir)
         try:
-            hasil += _proses_channel_batch(k, f"{prefix} {_nama_kurir(nama_x, kurir)}",
+            hasil += _proses_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
                                            _label_kurir(label_x, kurir), pesanan,
                                            file_riwayat, folder_label,
                                            label_file=_label_kurir_file(label_x, kurir))
@@ -1085,21 +1088,33 @@ def ambil_pesanan_shopee_pagi(k: Klien, jam: int = JAM_CUTOFF_SHOPEE_PAGI,
 
 
 def rencana_shopee_pagi(k: Klien) -> None:
-    """Mode uji picklist Shopee Pagi: hanya membaca data, tidak mengubah apa pun di Jubelio."""
+    """Mode uji picklist Shopee Pagi: hanya membaca data, tidak mengubah apa pun di Jubelio.
+    Dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat _kelompok_kombinasi_per_lantai()), sama
+    pola dengan bagian kombinasi picklist sisa reguler/urgent GTL-SiCepat."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    batch = bagi_batch([o["salesorder_id"] for o in pesanan])
-    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d -> "
-             "%d picklist (maks %d/picklist)", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan),
-             len(batch), MAKS_PESANAN_PICKLIST)
+    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
+             "per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
+                                            couriers=None)
+    for lt, sub in per_lt.items():
+        batch = bagi_batch([o["salesorder_id"] for o in sub])
+        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
+                 _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
 
 
 def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
     """Picklist Shopee Pagi: semua pesanan Shopee yang jam pesannya (WIB) maksimal jam 12
-    siang hari ini, digabung jadi 1 picklist (dipecah kalau > MAKS_PESANAN_PICKLIST). Dipanggil
-    MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur otomatis --label --jalankan."""
+    siang hari ini, dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
+    _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), masing-masing dipecah lagi kalau
+    > MAKS_PESANAN_PICKLIST. Label/nama file jadi "SHOPEE-PAGI-LANTAI1" dst, bukan
+    "SHOPEE-PAGI" polos. Dipanggil MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur
+    otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    return _proses_channel_batch(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, pesanan,
-                                 file_riwayat, folder_label)
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
+                                            couriers=None)
+    subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+    return _proses_subkelompok(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, subkelompok,
+                               file_riwayat, folder_label, kurir=None, prefix="")
 
 
 # ==================================================== 1e. picklist J&T Resi Siang
@@ -1125,22 +1140,33 @@ def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
 
 def rencana_jnt_siang(k: Klien) -> None:
     """Mode uji picklist J&T Resi Siang: hanya membaca data, tidak mengubah apa pun di
-    Jubelio."""
+    Jubelio. Dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
+    _kelompok_kombinasi_per_lantai()), sama pola dengan bagian kombinasi picklist sisa
+    reguler/urgent GTL-SiCepat/Shopee Pagi."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    batch = bagi_batch([o["salesorder_id"] for o in pesanan])
-    log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d -> "
-             "%d picklist (maks %d/picklist)", JAM_CUTOFF_JNT_SIANG, len(pesanan),
-             len(batch), MAKS_PESANAN_PICKLIST)
+    log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
+             "per lantai", JAM_CUTOFF_JNT_SIANG, len(pesanan))
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_TIKTOK_SHOP],
+                                            couriers=["j&t"])
+    for lt, sub in per_lt.items():
+        batch = bagi_batch([o["salesorder_id"] for o in sub])
+        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
+                 _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
 
 
 def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
     """Picklist J&T Resi Siang: semua pesanan channel TikTok Shop, kurir J&T, yang jam
-    pesannya (WIB) maksimal jam 15 siang hari ini, digabung jadi 1 picklist (dipecah kalau
-    > MAKS_PESANAN_PICKLIST). Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
-    otomatis --label --jalankan."""
+    pesannya (WIB) maksimal jam 15 siang hari ini, dipecah per LANTAI rak gudang (1/2/3/
+    LAINNYA - lihat _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), masing-masing
+    dipecah lagi kalau > MAKS_PESANAN_PICKLIST. Label/nama file jadi "JNT-SIANG-LANTAI1" dst,
+    bukan "JNT-SIANG" polos. Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
+    otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    return _proses_channel_batch(k, "J&T Resi Siang", LABEL_JNT_SIANG, pesanan,
-                                 file_riwayat, folder_label)
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_TIKTOK_SHOP],
+                                            couriers=["j&t"])
+    subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+    return _proses_subkelompok(k, "J&T Resi Siang", LABEL_JNT_SIANG, subkelompok,
+                               file_riwayat, folder_label, kurir=None, prefix="")
 
 
 # ============================================================== 2. picklist
