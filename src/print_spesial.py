@@ -1,13 +1,23 @@
-"""Cetak bulk label pengiriman SPESIAL dari folder sesi label-pengiriman TERBARU.
+"""Cetak bulk label pengiriman (SPESIAL/URGENT/SATUAN/KOMBINASI) dari folder sesi
+label-pengiriman TERBARU.
 
-Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di subfolder
-SPESIAL folder sesi label-pengiriman/YYYY-MM-DD/N/SPESIAL (atau JNT_SPESIAL/SPX_SPESIAL
-kalau --kurir jnt/spx dipakai saat proses - dibuat proses_label.py alur SKU spesial, lihat
-TAG_SPESIAL & _tag_spesial() di situ), menyaring yang namanya mengandung penanda
-`_SPESIAL_` (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf atau
-PICK-000155621_JNT_SPESIAL_TRC1_2026-10-01_080302.pdf), lalu mencetaknya BERURUT
-(diurutkan dari nomor PICK terkecil - urutan dibuat, bukan abjad nama file) ke printer
-pilihan lewat SumatraPDF (-print-to, -silent).
+Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di
+subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
+  --jenis spesial    -> subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1, SKU
+                        spesial - lihat TAG_SPESIAL & _tag_spesial() di
+                        proses_label.py), HANYA file bertanda `_SPESIAL_` yang ikut
+                        (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf).
+  --jenis urgent     -> subfolder URGENT saja (Alur 2, Lazada & GTL-SiCepat - TIDAK
+                        ada varian kurir), SEMUA PDF di subfolder itu ikut (nama file
+                        variatif, mis. Lazada/GTL-SiCepat-LANTAI1).
+  --jenis satuan     -> subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3 bagian "1qty"),
+                        SEMUA PDF ikut (mis. 1QTY-REGULER-2A).
+  --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
+                        bagian "kombinasi"), SEMUA PDF ikut (mis.
+                        KOMBINASI-REGULER-LANTAI2).
+Semua jenis dicetak BERURUT (nomor PICK terkecil dulu, nomor diekstrak dari awal nama
+file - lihat POLA_SPESIAL/POLA_PICK) ke printer pilihan lewat SumatraPDF (-print-to,
+-silent).
 
 Sebelum mencetak (alur folder sesi, bukan `--ulang`), nomor PICK label yang ditemukan dicek
 berurut atau tidak (lihat cari_nomor_terlompat()) - kalau ada nomor yang hilang di tengah
@@ -16,14 +26,16 @@ sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masu
 (masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
 meski pakai --tanpa-konfirmasi.
 
-Pemakaian:
-    .venv\\Scripts\\python.exe src\\print_spesial.py
+Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-urgent.bat/
+cetak-label-satuan.bat/cetak-label-kombinasi.bat, masing-masing isinya cuma
+memanggil ini dengan --jenis tetap):
+    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis spesial
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
-    .venv\\Scripts\\python.exe src\\print_spesial.py --folder label-pengiriman/2026-10-01/3
+    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis urgent --folder label-pengiriman/2026-10-01/3
         # pakai folder sesi tertentu, bukan yang terbaru
-    .venv\\Scripts\\python.exe src\\print_spesial.py --tanpa-konfirmasi
+    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis satuan --tanpa-konfirmasi
         # lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)
-    .venv\\Scripts\\python.exe src\\print_spesial.py --ulang logs\\gagal_cetak_2026-10-01_153000.txt
+    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis kombinasi --ulang logs\\gagal_cetak_2026-10-01_153000.txt
         # cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "gagal" di bawah)
 
 Perlu SumatraPDF terinstall (gratis, https://www.sumatrapdfreader.org/) - lokasi
@@ -380,7 +392,10 @@ def baca_daftar_ulang(file_daftar: Path) -> list[Path]:
 # ============================================================== main
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Cetak bulk label SPESIAL dari folder sesi label-pengiriman terbaru")
+        description="Cetak bulk label dari folder sesi label-pengiriman terbaru "
+                    "(SPESIAL/URGENT/SATUAN/KOMBINASI)")
+    ap.add_argument("--jenis", required=True, choices=sorted(JENIS_LABEL),
+                    help="Jenis label yang dicetak bulk")
     ap.add_argument("--folder", type=Path,
                     help="Folder sesi label-pengiriman tertentu (default: paling baru)")
     ap.add_argument("--tanpa-konfirmasi", action="store_true",
@@ -400,15 +415,15 @@ def main() -> int:
         else:
             folder = args.folder or folder_sesi_terbaru()
             log.info("Folder sesi: %s", folder)
-            file_pdf = daftar_label_spesial(folder)
+            file_pdf = daftar_label(folder, args.jenis)
             if not file_pdf:
-                log.info("Tidak ada label SPESIAL di folder ini.")
+                log.info("Tidak ada label %s di folder ini.", args.jenis.upper())
                 return 0
-            log.info("Ditemukan %d label SPESIAL (urut cetak):", len(file_pdf))
+            log.info("Ditemukan %d label %s (urut cetak):", len(file_pdf), args.jenis.upper())
             for f in file_pdf:
                 log.info("  %s", f.name)
 
-            terlompat = cari_nomor_terlompat(file_pdf)
+            terlompat = cari_nomor_terlompat(file_pdf, args.jenis)
             if terlompat:
                 log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
                            len(terlompat), ", ".join(str(n) for n in terlompat))
