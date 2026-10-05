@@ -1579,13 +1579,13 @@ def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
     hasil = []
     for sku, resi in resi_per_sku.items():
         pakai, buang = saring(cari_pesanan(k, sku, kurir), set(resi), kurir)
-        kurir: dict[str, int] = {}
+        hitung_kurir: dict[str, int] = {}
         for o in pakai:
-            kurir[o["shipper"]] = kurir.get(o["shipper"], 0) + 1
+            hitung_kurir[o["shipper"]] = hitung_kurir.get(o["shipper"], 0) + 1
         status = "akan diproses" if len(pakai) >= MIN_RESI else f"dilewati (< {MIN_RESI} pesanan)"
         log.info("[UJI] Rak %-8s %-14s resi spesial %3d | siap diproses %3d | %s | %s",
                  rak_per_sku.get(sku, "-"), sku, len(resi), len(pakai), status,
-                 ", ".join(f"{n} {kur}" for kur, n in sorted(kurir.items())))
+                 ", ".join(f"{n} {kur}" for kur, n in sorted(hitung_kurir.items())))
         for no, alasan in buang:
             if alasan != "tidak termasuk resi spesial di Excel":
                 log.info("        - %s dibuang: %s", no, alasan)
