@@ -63,7 +63,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from proses_label import KURIR_LABEL_FILE, TAG_SPESIAL
+from proses_label import (KURIR_LABEL_FILE, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
+                           SUBFOLDER_URGENT, TAG_SPESIAL)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -81,6 +82,29 @@ POLA_SPESIAL = re.compile(
 # --kurir jnt/spx di folder `JNT_SPESIAL`/`SPX_SPESIAL` (lihat _tag_spesial()) - dicari
 # semuanya supaya label dari ketiga kemungkinan tetap ketemu dan tercetak.
 SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_FILE.values()]
+
+# Pola generik untuk jenis selain `spesial`: label urgent/satuan/kombinasi TIDAK
+# punya tag unik di nama file (variatif: Lazada, GTL-SiCepat-LANTAI1,
+# 1QTY-REGULER-2A, KOMBINASI-REGULER-LANTAI2, dst - lihat proses_label.py), jadi
+# keanggotaan "ikut dicetak jenis ini" ditentukan LOKASI SUBFOLDER saja (lihat
+# JENIS_LABEL & daftar_label() di bawah) - pola ini cuma dipakai mengekstrak nomor
+# PICK di awal nama file (selalu ada di semua label, lihat _nama_file() di
+# proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
+POLA_PICK = re.compile(r"^PICK-0*(\d+)_.*\.pdf$", re.IGNORECASE)
+
+# Jenis label yang didukung cetak bulk -> daftar subfolder yang dicari & digabung
+# di dalam folder sesi (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI
+# & TAG_SPESIAL di proses_label.py). "urgent" SENGAJA tanpa varian kurir -
+# proses_urgent() di proses_label.py memanggil subfolder=SUBFOLDER_URGENT polos,
+# tidak lewat _gabung_kurir(), jadi tidak ada JNT_URGENT/SPX_URGENT.
+JENIS_LABEL: dict[str, list[str]] = {
+    "spesial": SUBFOLDER_SPESIAL,
+    "urgent": [SUBFOLDER_URGENT],
+    "satuan": [SUBFOLDER_SATUAN] + [f"{v}_{SUBFOLDER_SATUAN}"
+                                     for v in KURIR_LABEL_FILE.values()],
+    "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
+                                           for v in KURIR_LABEL_FILE.values()],
+}
 
 LOKASI_SUMATRA_UMUM = [
     r"%LOCALAPPDATA%\SumatraPDF\SumatraPDF.exe",
@@ -140,35 +164,39 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
     return terbaik[1]
 
 
-def daftar_label_spesial(folder_sesi: Path) -> list[Path]:
-    """PDF label SPESIAL di subfolder `folder_sesi/SPESIAL` DAN/atau
-    `folder_sesi/JNT_SPESIAL`/`folder_sesi/SPX_SPESIAL` kalau --kurir dipakai saat proses
-    (lihat SUBFOLDER_SPESIAL, TAG_SPESIAL & _tag_spesial() di proses_label.py), digabung
-    lalu diurutkan dari nomor PICK terkecil (urutan dibuat), BUKAN diurutkan abjad nama
-    file apa adanya. Kosong (bukan error) kalau belum ada subfolder sama sekali - artinya
-    belum ada label SPESIAL di sesi ini."""
+def daftar_label(folder_sesi: Path, jenis: str) -> list[Path]:
+    """PDF label jenis `jenis` (salah satu key JENIS_LABEL) di subfolder-subfolder
+    terkait folder_sesi (lihat JENIS_LABEL), digabung lalu diurutkan dari nomor PICK
+    terkecil (urutan dibuat), BUKAN diurutkan abjad nama file apa adanya. Untuk jenis
+    `spesial`, nama file juga divalidasi mengandung tag SPESIAL (POLA_SPESIAL) - untuk
+    jenis lain, SEMUA *.pdf di subfolder ikut (POLA_PICK hanya mengekstrak nomor PICK,
+    lihat catatan di atas POLA_PICK). Kosong (bukan error) kalau belum ada subfolder
+    sama sekali."""
+    pola = POLA_SPESIAL if jenis == "spesial" else POLA_PICK
     berlabel = []
-    for nama_folder in SUBFOLDER_SPESIAL:
-        folder_spesial = folder_sesi / nama_folder
-        if not folder_spesial.is_dir():
+    for nama_folder in JENIS_LABEL[jenis]:
+        folder = folder_sesi / nama_folder
+        if not folder.is_dir():
             continue
-        for f in folder_spesial.iterdir():
+        for f in folder.iterdir():
             if f.is_file():
-                cocok = POLA_SPESIAL.match(f.name)
+                cocok = pola.match(f.name)
                 if cocok:
                     berlabel.append((int(cocok.group(1)), f))
     berlabel.sort(key=lambda x: x[0])
     return [f for _, f in berlabel]
 
 
-def cari_nomor_terlompat(file_pdf: list[Path]) -> list[int]:
+def cari_nomor_terlompat(file_pdf: list[Path], jenis: str) -> list[int]:
     """Cari nomor PICK yang terlompat (hilang) di antara nomor PICK terkecil dan
-    terbesar pada `file_pdf` (hasil daftar_label_spesial, sudah urut naik) - tanda
-    kemungkinan ada label yang tidak ikut tercetak/tersalin ke folder ini. Return
-    list nomor yang hilang, urut naik (kosong kalau berurut sempurna atau <2 file)."""
+    terbesar pada `file_pdf` (hasil daftar_label(), sudah urut naik) - tanda
+    kemungkinan ada label yang tidak ikut tercetak/tersalin ke folder ini. `jenis`
+    menentukan pola ekstraksi nomor PICK (sama seperti daftar_label()). Return list
+    nomor yang hilang, urut naik (kosong kalau berurut sempurna atau <2 file)."""
+    pola = POLA_SPESIAL if jenis == "spesial" else POLA_PICK
     nomor = []
     for f in file_pdf:
-        cocok = POLA_SPESIAL.match(f.name)
+        cocok = pola.match(f.name)
         if cocok:
             nomor.append(int(cocok.group(1)))
     if len(nomor) < 2:

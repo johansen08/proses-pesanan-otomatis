@@ -67,7 +67,7 @@ def uji_daftar_label_spesial_hanya_bertanda_spesial_urut_nomor_pick():
         _buat(folder,
              "PICK-000155999_1QTY-REGULER_2026-10-01_091500.pdf",   # bukan spesial, di folder sesi
              "PICK-000156000_KOMBINASI-REGULER_2026-10-01_091600.pdf")   # bukan spesial
-        hasil = ps.daftar_label_spesial(folder)
+        hasil = ps.daftar_label(folder, "spesial")
         assert [f.name for f in hasil] == [
             "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
             "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
@@ -88,7 +88,7 @@ def uji_daftar_label_spesial_gabung_folder_jnt_spx_dan_gabungan():
         subfolder_spx = folder / "SPX_SPESIAL"
         subfolder_spx.mkdir()
         _buat(subfolder_spx, "PICK-000155700_SPX_SPESIAL_TRC9_2026-10-01_090000.pdf")
-        hasil = ps.daftar_label_spesial(folder)
+        hasil = ps.daftar_label(folder, "spesial")
         assert [f.name for f in hasil] == [
             "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
             "PICK-000155622_JNT_SPESIAL_TRC4_2026-10-01_080320.pdf",
@@ -100,8 +100,77 @@ def uji_daftar_label_spesial_gabung_folder_jnt_spx_dan_gabungan():
 
 def uji_daftar_label_spesial_folder_kosong():
     with tempfile.TemporaryDirectory() as tmp:
-        assert ps.daftar_label_spesial(Path(tmp)) == []
+        assert ps.daftar_label(Path(tmp), "spesial") == []
         print("  daftar_label_spesial: list kosong kalau tidak ada label spesial")
+
+
+def uji_daftar_label_urgent_semua_pdf_di_subfolder_tanpa_filter_nama():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        subfolder = folder / "URGENT"
+        subfolder.mkdir()
+        _buat(subfolder,
+             "PICK-000155622_GTL-SICEPAT-LANTAI2_2026-10-01_080320.pdf",
+             "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+             "catatan.txt")
+        _buat(folder, "PICK-000155999_1QTY-REGULER-2A_2026-10-01_091500.pdf")
+        hasil = ps.daftar_label(folder, "urgent")
+        assert [f.name for f in hasil] == [
+            "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+            "PICK-000155622_GTL-SICEPAT-LANTAI2_2026-10-01_080320.pdf",
+        ], [f.name for f in hasil]
+        print("  daftar_label(urgent): semua PDF di subfolder URGENT ikut walau nama "
+             "bervariasi, urut nomor PICK naik, file di folder sesi (bukan subfolder) "
+             "diabaikan")
+
+
+def uji_daftar_label_urgent_tidak_ada_varian_kurir():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "JNT_URGENT").mkdir()
+        _buat(folder / "JNT_URGENT", "PICK-000155621_LAZADA_2026-10-01_080302.pdf")
+        assert ps.daftar_label(folder, "urgent") == []
+        print("  daftar_label(urgent): subfolder JNT_URGENT TIDAK dicari (urgent tidak "
+             "punya varian kurir)")
+
+
+def uji_daftar_label_satuan_gabung_variasi_kurir():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "SATUAN").mkdir()
+        _buat(folder / "SATUAN", "PICK-000155621_1QTY-REGULER-2A_2026-10-01_080302.pdf")
+        (folder / "JNT_SATUAN").mkdir()
+        _buat(folder / "JNT_SATUAN",
+             "PICK-000155622_JNT-1QTY-REGULER-3A_2026-10-01_080320.pdf")
+        (folder / "SPX_SATUAN").mkdir()
+        _buat(folder / "SPX_SATUAN",
+             "PICK-000155700_SPX-1QTY-REGULER-LAINNYA_2026-10-01_090000.pdf")
+        hasil = ps.daftar_label(folder, "satuan")
+        assert [f.name for f in hasil] == [
+            "PICK-000155621_1QTY-REGULER-2A_2026-10-01_080302.pdf",
+            "PICK-000155622_JNT-1QTY-REGULER-3A_2026-10-01_080320.pdf",
+            "PICK-000155700_SPX-1QTY-REGULER-LAINNYA_2026-10-01_090000.pdf",
+        ], [f.name for f in hasil]
+        print("  daftar_label(satuan): subfolder SATUAN + JNT_SATUAN + SPX_SATUAN "
+             "digabung, urut nomor PICK naik")
+
+
+def uji_daftar_label_kombinasi_gabung_variasi_kurir():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "KOMBINASI").mkdir()
+        _buat(folder / "KOMBINASI",
+             "PICK-000155621_KOMBINASI-REGULER-LANTAI1_2026-10-01_080302.pdf")
+        (folder / "SPX_KOMBINASI").mkdir()
+        _buat(folder / "SPX_KOMBINASI",
+             "PICK-000155622_SPX-KOMBINASI-REGULER-LANTAI2_2026-10-01_080320.pdf")
+        hasil = ps.daftar_label(folder, "kombinasi")
+        assert [f.name for f in hasil] == [
+            "PICK-000155621_KOMBINASI-REGULER-LANTAI1_2026-10-01_080302.pdf",
+            "PICK-000155622_SPX-KOMBINASI-REGULER-LANTAI2_2026-10-01_080320.pdf",
+        ], [f.name for f in hasil]
+        print("  daftar_label(kombinasi): subfolder KOMBINASI + SPX_KOMBINASI digabung, "
+             "urut nomor PICK naik")
 
 
 def uji_cari_nomor_terlompat_berurut_sempurna():
@@ -113,8 +182,8 @@ def uji_cari_nomor_terlompat_berurut_sempurna():
              "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
              "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
              "PICK-000155623_SPESIAL_TRC9_2026-10-01_090000.pdf")
-        file_pdf = ps.daftar_label_spesial(folder)
-        assert ps.cari_nomor_terlompat(file_pdf) == []
+        file_pdf = ps.daftar_label(folder, "spesial")
+        assert ps.cari_nomor_terlompat(file_pdf, "spesial") == []
         print("  cari_nomor_terlompat: list kosong kalau nomor PICK berurut sempurna")
 
 
@@ -127,8 +196,8 @@ def uji_cari_nomor_terlompat_ada_yang_hilang():
              "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf",
              "PICK-000155622_SPESIAL_TRC4_2026-10-01_080320.pdf",
              "PICK-000155625_SPESIAL_TRC9_2026-10-01_090000.pdf")
-        file_pdf = ps.daftar_label_spesial(folder)
-        assert ps.cari_nomor_terlompat(file_pdf) == [155623, 155624]
+        file_pdf = ps.daftar_label(folder, "spesial")
+        assert ps.cari_nomor_terlompat(file_pdf, "spesial") == [155623, 155624]
         print("  cari_nomor_terlompat: deteksi nomor PICK yang hilang di tengah")
 
 
@@ -138,10 +207,24 @@ def uji_cari_nomor_terlompat_kurang_dari_2_file():
         subfolder = folder / "SPESIAL"
         subfolder.mkdir()
         _buat(subfolder, "PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf")
-        file_pdf = ps.daftar_label_spesial(folder)
-        assert ps.cari_nomor_terlompat(file_pdf) == []
-        assert ps.cari_nomor_terlompat([]) == []
+        file_pdf = ps.daftar_label(folder, "spesial")
+        assert ps.cari_nomor_terlompat(file_pdf, "spesial") == []
+        assert ps.cari_nomor_terlompat([], "spesial") == []
         print("  cari_nomor_terlompat: list kosong kalau <2 file (tidak ada rentang untuk dicek)")
+
+
+def uji_cari_nomor_terlompat_jenis_urgent_pola_generik():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        subfolder = folder / "URGENT"
+        subfolder.mkdir()
+        _buat(subfolder,
+             "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+             "PICK-000155625_GTL-SICEPAT-LANTAI1_2026-10-01_090000.pdf")
+        file_pdf = ps.daftar_label(folder, "urgent")
+        assert ps.cari_nomor_terlompat(file_pdf, "urgent") == [155622, 155623, 155624]
+        print("  cari_nomor_terlompat: tetap mendeteksi gap untuk jenis urgent lewat "
+             "pola generik (bukan pola _SPESIAL_)")
 
 
 def uji_simpan_dan_baca_daftar_gagal_roundtrip():
