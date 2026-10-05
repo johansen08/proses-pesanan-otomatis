@@ -338,8 +338,9 @@ REGULER"/"SPX KOMBINASI" = perintah yang sama ditambah `--kurir jnt`/`--kurir sp
 untuk bagian 1 Qty Reguler kini per grup rak: `1QTY-REGULER-2A` / `1QTY-REGULER-3A` /
 `1QTY-REGULER-1B` / `1QTY-REGULER-2B` / `1QTY-REGULER-3B` / `1QTY-REGULER-LAINNYA` (digabung),
 atau diawali `J&T-`/`SPX-` kalau dipisah lewat `--kurir` (mis. `J&T-1QTY-REGULER-2A`). Bagian
-Kombinasi Reguler tidak berubah: `KOMBINASI-REGULER` (digabung) atau `J&T-KOMBINASI-REGULER` /
-`SPX-KOMBINASI-REGULER` (dipisah). Nama file PDF tidak boleh memuat simbol `&` (dibuang
+Kombinasi Reguler kini per lantai rak: `KOMBINASI-REGULER-LANTAI1` / `KOMBINASI-REGULER-LANTAI2`
+/ `KOMBINASI-REGULER-LANTAI3` / `KOMBINASI-REGULER-LAINNYA` (digabung), atau diawali `J&T-`/
+`SPX-` kalau dipisah lewat `--kurir` (mis. `J&T-KOMBINASI-REGULER-LANTAI1`). Nama file PDF tidak boleh memuat simbol `&` (dibuang
 otomatis), jadi khusus nama file J&T dituliskan `JNT` tanpa simbol, mis.
 `label-pengiriman/<tanggal>/<sesi>/SATUAN/PICK-000155300_1QTY-REGULER-2A_...pdf` atau
 `label-pengiriman/<tanggal>/<sesi>/SATUAN/PICK-000155301_JNT-1QTY-REGULER-2A_...pdf`.
