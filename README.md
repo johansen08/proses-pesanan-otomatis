@@ -81,14 +81,17 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
-| `src/print_spesial.py` | Cetak bulk label SPESIAL dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF |
+| `src/print_spesial.py` | Cetak bulk label (SPESIAL/URGENT/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
-| `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py` (klik 2x) — lihat bagian "Cetak bulk label SPESIAL" |
+| `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `cetak-label-urgent.bat` | Menjalankan `src/print_spesial.py --jenis urgent` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
-| `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label SPESIAL) |
+| `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label) |
 
 Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
 label per picklist di `label-pengiriman/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
@@ -167,7 +170,7 @@ pengganti" dipakai sebagai pengganti nama SKU asli (karena lintas SKU, sama pola
 
 - **Nama file PDF label**: `{No Picklist}_SAMPEL-TIKTOK_{tanggal YYYY-MM-DD}_{jam HHMMSS}.pdf`,
   mis. `label-pengiriman/PICK-000155229_SAMPEL-TIKTOK_2026-10-01_070512.pdf`. Tidak memakai
-  penanda `SPESIAL` (itu khusus Alur 1 - SKU spesial, lihat bagian "Cetak bulk label SPESIAL"
+  penanda `SPESIAL` (itu khusus Alur 1 - SKU spesial, lihat bagian "Cetak bulk label"
   di bawah).
 - **Kolom SKU di `riwayat_picklist.xlsx`**: berisi `SAMPEL-TIKTOK` juga.
 
@@ -280,7 +283,7 @@ TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kur
 --tanpa-reguler --jalankan` / `jalankan.bat --label --kurir spx --tanpa-reguler --jalankan`
 (satu konfirmasi Y/N per TIPE). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
-- Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label SPESIAL").
+- Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label").
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
   File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
 - SKU dilewati jika pesanan tersisa < 3, stok kurang, pesanan dari lokasi berbeda,
@@ -399,35 +402,39 @@ setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama
 SKU di riwayat: `JNT-SIANG-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
 `label-pengiriman/PICK-000155500_JNT-SIANG-LANTAI1_...pdf`.
 
-## Cetak bulk label SPESIAL (`cetak-label-spesial.bat`, `src/print_spesial.py`)
+## Cetak bulk label (`cetak-label-*.bat`, `src/print_spesial.py`)
 
-Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label-spesial.md](docs/cetak-bulk-label-spesial.md).
+Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md).
 
-Mencetak ulang semua label SKU spesial (yang namanya mengandung penanda `SPESIAL` dari
-alur di atas, mis. `PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf`) secara **bulk dan
-berurut** (nomor PICK terkecil/paling dulu dibuat, duluan dicetak), tanpa perlu buka
-file PDF satu-satu secara manual. Program ini **tidak** membuat picklist/label baru —
-cuma mencetak ulang PDF yang sudah ada.
+Mencetak ulang label pengiriman yang sudah ada secara **bulk dan berurut** (nomor
+PICK terkecil/paling dulu dibuat, duluan dicetak), tanpa perlu buka file PDF
+satu-satu secara manual. Program ini **tidak** membuat picklist/label baru — cuma
+mencetak ulang PDF yang sudah ada. Ada 4 jenis, masing-masing `.bat` sendiri:
 
 ```bash
-cetak-label-spesial.bat
+cetak-label-spesial.bat      # subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1)
+cetak-label-urgent.bat       # subfolder URGENT (Alur 2, Lazada & GTL-SiCepat)
+cetak-label-satuan.bat       # subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3, 1qty)
+cetak-label-kombinasi.bat    # subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3, kombinasi)
 ```
 
-Urutan kerja: cari folder sesi `label-pengiriman/YYYY-MM-DD/N` yang **terbaru** secara
-otomatis → cari file di subfolder `SPESIAL`/`JNT_SPESIAL`/`SPX_SPESIAL` folder sesi itu
-(ketiganya dicari & digabung, tergantung `--kurir` dipakai atau tidak saat proses) yang
-namanya mengandung `_SPESIAL_` → tampilkan daftar printer yang terhubung ke komputer →
-pilih nomor printer → konfirmasi (Y/N) → cetak satu per satu secara berurut.
+Urutan kerja (sama untuk keempat jenis): cari folder sesi `label-pengiriman/YYYY-MM-DD/N`
+yang **terbaru** secara otomatis → cari file PDF di subfolder jenis itu (untuk
+`spesial`, hanya yang namanya mengandung `_SPESIAL_`; untuk jenis lain, semua PDF di
+subfolder itu, karena nama filenya variatif dan subfoldernya sudah eksklusif per
+jenis) → tampilkan daftar printer yang terhubung ke komputer → pilih nomor printer →
+konfirmasi (Y/N) → cetak satu per satu secara berurut.
 
-Pilihan:
+Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-urgent.bat`):
 
-- `cetak-label-spesial.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder sesi
-  tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya).
-- `cetak-label-spesial.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
+- `cetak-label-urgent.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder
+  sesi tertentu, bukan yang terbaru.
+- `cetak-label-urgent.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
   (tetap tanya pilih printer).
-- `cetak-label-spesial.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
-  ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "Kertas habis" & "Kalau
-  ada yang gagal" di bawah), tanpa mencari ulang folder sesi.
+- `cetak-label-urgent.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
+  ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "Kertas habis" &
+  "Kalau ada yang gagal" di [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md)),
+  tanpa mencari ulang folder sesi.
 
 **Kertas habis / printer bermasalah di tengah cetak**: program memantau antrian cetak
 Windows (PrintManagement) setelah tiap file dikirim. Kalau job itu ditandai bermasalah
@@ -440,17 +447,7 @@ mendukungnya, program tetap jalan tanpa pemantauan otomatis (ada peringatan di l
 
 **Log jelas tiap file**: setiap file yang diproses (berhasil, gagal, atau dilewati)
 dicatat ke `logs/cetak_YYYY-MM.log` (format sama seperti `logs/run_YYYY-MM.log` di
-`main.py`) sekaligus ditampilkan di layar.
-
-**Kalau ada yang gagal**: setelah semua file selesai diproses, daftar nama file yang
-gagal/dilewati disimpan ke `logs/gagal_cetak_<waktu>.txt`, dan program langsung
-menawarkan untuk mencetak **ULANG hanya file yang gagal itu** (Y/N) — bisa langsung saat
-itu juga, atau belakangan lewat `--ulang` di atas.
-
-**Perlu [SumatraPDF](https://www.sumatrapdfreader.org/) terinstall** (gratis, dipakai
-untuk mencetak PDF langsung dari command line tanpa jendela PDF reader muncul satu-satu).
-Lokasinya dicari otomatis; kalau tidak ketemu, set environment variable
-`SUMATRA_PDF_PATH` ke lokasi `SumatraPDF.exe`.
+`main.py`, dibagi bersama keempat jenis) sekaligus ditampilkan di layar.
 
 ## Jadwal otomatis (Windows Task Scheduler)
 

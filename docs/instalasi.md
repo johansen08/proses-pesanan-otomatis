@@ -120,12 +120,12 @@ otomatis saat dibutuhkan.
 koneksi API berhasil, sebelum menjalankan sesi di `proses-harian.bat` yang membuat
 picklist sungguhan.
 
-## 7. (Opsional) Install SumatraPDF untuk fitur cetak bulk label SPESIAL
+## 7. (Opsional) Install SumatraPDF untuk fitur cetak bulk label
 
-Hanya diperlukan jika akan memakai `cetak-label-spesial.bat` (cetak ulang bulk
-semua label SKU spesial lewat printer, tanpa buka PDF satu-satu). **Tidak**
-diperlukan untuk alur `proses-harian.bat`/`jalankan.bat` biasa. Panduan download,
-install, dan setup lengkap: [cetak-bulk-label-spesial.md](cetak-bulk-label-spesial.md)
+Hanya diperlukan jika akan memakai salah satu `cetak-label-*.bat` (cetak ulang bulk
+label SPESIAL/URGENT/SATUAN/KOMBINASI lewat printer, tanpa buka PDF satu-satu).
+**Tidak** diperlukan untuk alur `proses-harian.bat`/`jalankan.bat` biasa. Panduan
+download, install, dan setup lengkap: [cetak-bulk-label.md](cetak-bulk-label.md)
 bagian 2.
 
 ## 8. (Opsional) Jadwal otomatis via Windows Task Scheduler

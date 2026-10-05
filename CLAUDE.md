@@ -67,8 +67,9 @@ project secara umum, root tidak boleh berisi file `.py`):
 - `src/proses_label.py` — modul terbesar (~1000 baris): semua alur picklist → picking → resi →
   label PDF, untuk SEMUA skenario (SKU spesial per-SKU, urgent per-channel/kurir, reguler,
   Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `riwayat_picklist.xlsx`.
-- `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF) label
-  SKU spesial yang sudah ada; tidak membuat picklist/label baru.
+- `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
+  parameter `--jenis`) label SPESIAL/URGENT/SATUAN/KOMBINASI yang sudah ada; tidak
+  membuat picklist/label baru.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga

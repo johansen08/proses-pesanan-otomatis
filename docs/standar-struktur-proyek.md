@@ -126,7 +126,7 @@ proses-pesanan-otomatis/
 │  ├─ panduan-sku-spesial.md
 │  ├─ referensi-implementasi-sku-spesial-awal.md
 │  ├─ analisa-alur-cetak-label.md
-│  ├─ cetak-bulk-label-spesial.md
+│  ├─ cetak-bulk-label.md
 │  └─ pep-8.md
 ├─ tests/                         # kasus uji
 ├─ sniff/                         # perekam alur Jubelio (tools dev)
