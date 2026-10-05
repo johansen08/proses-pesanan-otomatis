@@ -222,9 +222,14 @@ lalu `jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `proses-harian-uj
 mode uji (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),
-  bukan SKU — mis. `label-pengiriman/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
-  `label-pengiriman/PICK-000155231_GTL-SICEPAT-LANTAI1_2026-09-29_150612.pdf`. Tercatat juga
-  di `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` /
+  bukan SKU, DAN disimpan di subfolder `URGENT` folder sesi (Lazada maupun GTL/SiCepat
+  sama-sama di subfolder yang sama) — mis.
+  `label-pengiriman/<tanggal>/<sesi>/URGENT/PICK-000155230_LAZADA_2026-09-29_150512.pdf`,
+  `label-pengiriman/<tanggal>/<sesi>/URGENT/PICK-000155231_GTL-SICEPAT-LANTAI1_2026-09-29_150612.pdf`.
+  Beda dengan subfolder `SPESIAL` (bagian 2 di bawah): nama filenya TIDAK disisipi penanda
+  `URGENT`, cuma lokasi penyimpanannya yang pindah ke subfolder itu (lihat parameter
+  `subfolder` di `lanjutkan_picklist()`, `src/proses_label.py`). Tercatat juga di
+  `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` /
   `GTL-SICEPAT-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`.
 
 ## 2. Proses SKU spesial sampai label pengiriman (`--label`, `proses_label.py`)
@@ -336,8 +341,15 @@ atau diawali `J&T-`/`SPX-` kalau dipisah lewat `--kurir` (mis. `J&T-1QTY-REGULER
 Kombinasi Reguler tidak berubah: `KOMBINASI-REGULER` (digabung) atau `J&T-KOMBINASI-REGULER` /
 `SPX-KOMBINASI-REGULER` (dipisah). Nama file PDF tidak boleh memuat simbol `&` (dibuang
 otomatis), jadi khusus nama file J&T dituliskan `JNT` tanpa simbol, mis.
-`label-pengiriman/PICK-000155300_1QTY-REGULER-2A_...pdf` atau
-`label-pengiriman/PICK-000155301_JNT-1QTY-REGULER-2A_...pdf`.
+`label-pengiriman/<tanggal>/<sesi>/SATUAN/PICK-000155300_1QTY-REGULER-2A_...pdf` atau
+`label-pengiriman/<tanggal>/<sesi>/SATUAN/PICK-000155301_JNT-1QTY-REGULER-2A_...pdf`.
+
+Label PDF bagian "1 Qty Reguler" disimpan di subfolder `SATUAN` folder sesi, bagian
+"Kombinasi Reguler" di subfolder `KOMBINASI` — sama pola dengan subfolder `URGENT` di
+bagian 1 (nama file TIDAK disisipi penanda, cuma lokasinya yang pindah). Kalau `--kurir
+jnt`/`--kurir spx` dipakai, subfoldernya ikut disisipi awalan jadi `JNT_SATUAN`/`SPX_SATUAN`
+atau `JNT_KOMBINASI`/`SPX_KOMBINASI` (lihat `SUBFOLDER_SATUAN`/`SUBFOLDER_KOMBINASI` &
+`_gabung_kurir()` di `src/proses_label.py`), supaya label J&T dan SPX tidak bercampur.
 
 Tiap TIPE `proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara berurut dalam
 satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di

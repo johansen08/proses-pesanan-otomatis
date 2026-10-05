@@ -82,8 +82,12 @@ dibiarkan menumpuk.
 Nama file laporan/label yang di-generate `src/main.py`/`src/jubelio.py`/
 `src/proses_label.py` (mis. `laporan_siap_proses_2026-09-30_065510.xlsx`,
 `SKU_Spesial_2026-09-30_0654.pdf`, `PICK-000155300_1QTY-REGULER_...pdf`, folder sesi
-`label-pengiriman/2026-09-30/5/`) **TIDAK** mengikuti aturan kebab-case di atas dan
-**sengaja tidak diubah** oleh standarisasi ini, karena:
+`label-pengiriman/2026-09-30/5/`, DAN subfolder di dalamnya seperti `SPESIAL`/
+`JNT_SPESIAL`/`SPX_SPESIAL` (Alur 1), `URGENT` (Alur 2), `SATUAN`/`JNT_SATUAN`/`SPX_SATUAN`
+dan `KOMBINASI`/`JNT_KOMBINASI`/`SPX_KOMBINASI` (Alur 3) — lihat `SUBFOLDER_URGENT`/
+`SUBFOLDER_SATUAN`/`SUBFOLDER_KOMBINASI` & `_gabung_kurir()` di `src/proses_label.py`)
+**TIDAK** mengikuti aturan kebab-case di atas dan **sengaja tidak diubah** oleh
+standarisasi ini, karena:
 
 - Formatnya (garis bawah `_` sebagai pemisah tanggal/jam/kode pada nama file, dan
   struktur folder tanggal/nomor sesi pada `label-pengiriman/`) adalah bagian dari

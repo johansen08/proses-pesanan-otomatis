@@ -28,8 +28,11 @@ Nama file label PDF alur ini (dan hanya alur ini) disisipi penanda `SPESIAL`:
 `PICK-000xxxxxx_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, DAN disimpan di subfolder `SPESIAL`
 di dalam folder sesi (mis. `label-pengiriman/2026-10-02/1/SPESIAL/`, bukan langsung di
 `label-pengiriman/2026-10-02/1/`) - lihat TAG_SPESIAL, dipakai lewat parameter `tag` di
-lanjutkan_picklist() baik untuk penanda nama file maupun nama subfolder. Alur 2-5 TIDAK
-memakai penanda maupun subfolder ini.
+lanjutkan_picklist() baik untuk penanda nama file maupun nama subfolder. Alur 2 & 3 juga
+disimpan di subfolder masing-masing (`URGENT`, `SATUAN`, `KOMBINASI` - lihat parameter
+`subfolder`, berbeda dari `tag`: TIDAK ikut disisipkan ke nama file, lihat catatan di Alur
+2/3 di bawah); Alur 0, 4 & 5 (sampel, Shopee Pagi, J&T Resi Siang) TIDAK memakai penanda
+maupun subfolder apa pun, tetap langsung di folder sesi.
 
 Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 2 skenario -
 channel Lazada, dan kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia -
@@ -40,14 +43,19 @@ ditahan dulu, baru diproses otomatis setelah jam 16.00 (lihat JAM_CUTOFF_URGENT_
 JAM_CUTOFF_URGENT_GTL_SICEPAT, JAM_LANJUT_URGENT & _saring_jam_urgent()). **Alur berdiri
 sendiri** - dipanggil HANYA lewat main.py --urgent, TIDAK otomatis dipanggil oleh alur 1
 (--label --jalankan). Kalau perlu urgent diproses lebih dulu, itu harus dijalankan manual
-terpisah sebelum --label --jalankan (lihat README bagian "Picklist urgent").
+terpisah sebelum --label --jalankan (lihat README bagian "Picklist urgent"). Label KEDUA
+skenario (Lazada maupun GTL/SiCepat) disimpan di subfolder `URGENT` di dalam folder sesi
+(mis. `label-pengiriman/2026-10-02/1/URGENT/`) - lihat SUBFOLDER_URGENT, parameter
+`subfolder` di lanjutkan_picklist().
 
 Alur 3 - picklist sisa reguler (fungsi rencana_reguler()/proses_reguler()), dijalankan
 SETELAH alur 1: lintas SKU, channel TikTok Shop ("Shop | Tokopedia") & Shopee, kurir J&T/SPX
 (default, digabung) atau 1 kurir saja lewat parameter `kurir` (sama seperti alur 1), yang
 BUKAN bagian SKU spesial (dikecualikan lewat resi_spesial_semua) - dipecah 2 picklist: 1 SKU
 1 qty, dan kombinasi (qty > 1). Sama seperti alur 2: lintas SKU, maks MAKS_PESANAN_PICKLIST
-per picklist.
+per picklist. Label bagian "1 qty" disimpan di subfolder `SATUAN`, bagian "kombinasi" di
+subfolder `KOMBINASI` (lihat SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI) - dengan --kurir disisipi
+awalan JNT_/SPX_ sama seperti TAG_SPESIAL (mis. `JNT_SATUAN`/`SPX_KOMBINASI`).
 
 Alur 4 - picklist Shopee Pagi (fungsi rencana_shopee_pagi()/proses_shopee_pagi()), dijalankan
 MANUAL 1x sehari (mis. jam 13:00), BUKAN bagian alur otomatis main.py --label --jalankan:
@@ -96,12 +104,22 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
 # Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
 # (folder_label / tag), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
-# lanjutkan_picklist() dipanggil dari proses()). Alur 2-5 (urgent/reguler/Shopee Pagi/
-# J&T Resi Siang) tidak memakai tag ini, begitu juga lanjutkan() (resume generik lewat
-# --lanjut, tidak tahu picklist itu dari alur mana). Kalau --kurir jnt/spx dipakai di
-# alur 1, tag disisipi awalan KURIR_LABEL_FILE (mis. "JNT_SPESIAL"/"SPX_SPESIAL") supaya
-# nama file & subfolder J&T dan SPX tidak bercampur - lihat proses().
+# lanjutkan_picklist() dipanggil dari proses()). Begitu juga lanjutkan() (resume generik
+# lewat --lanjut, tidak tahu picklist itu dari alur mana) tidak memakai tag ini. Kalau
+# --kurir jnt/spx dipakai di alur 1, tag disisipi awalan KURIR_LABEL_FILE (mis.
+# "JNT_SPESIAL"/"SPX_SPESIAL") supaya nama file & subfolder J&T dan SPX tidak bercampur -
+# lihat proses().
 TAG_SPESIAL = "SPESIAL"
+
+# Subfolder tempat label disimpan di dalam folder sesi (folder_label), untuk Alur 2
+# (urgent) & Alur 3 (reguler) - BEDA dengan TAG_SPESIAL di atas: hanya memengaruhi lokasi
+# file, nama file PDF tidak ikut disisipi penanda ini (lihat parameter `subfolder` di
+# lanjutkan_picklist(), beda dari `tag`). Tujuannya supaya tim gudang bisa menyortir fisik
+# print-out Lazada/GTL-SiCepat (urgent), 1 qty reguler (satuan), dan kombinasi/multi-qty
+# reguler (kombinasi) tanpa harus baca nama file satu-satu.
+SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada & GTL-SiCepat (kedua skenario)
+SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
+SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
 
 
 def _filter_kurir(kurir: str | None, gabungan: list[str]) -> list[str]:
@@ -548,14 +566,17 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
 
 def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
                           file_riwayat: Path, folder_label: Path,
-                          label_file: str | None = None) -> list[dict]:
+                          label_file: str | None = None,
+                          subfolder: str | None = None) -> list[dict]:
     """Pecah `pesanan` jadi beberapa batch (maks MAKS_PESANAN_PICKLIST), buat 1 picklist per
     batch sampai label PDF (buat picklist -> selesaikan picking -> minta resi -> unduh label).
     `label` dipakai lanjutkan_picklist() cuma sebagai penanda (bukan SKU asli), jadi nama file
     label & kolom SKU di riwayat otomatis jadi mis. PICK-000xxxxxx_LAZADA_<tanggal>_<jam>.pdf.
     `label_file`: varian `label` yang aman dipakai di nama file (mis. tanpa "&"); default sama
-    dengan `label`. Dipakai proses_urgent() & proses_reguler(); kegagalan 1 batch tidak
-    menghentikan yang lain."""
+    dengan `label`. `subfolder`: lihat parameter `subfolder` di lanjutkan_picklist() (mis.
+    SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI) - TIDAK memengaruhi nama file,
+    hanya lokasi penyimpanan PDF-nya. Dipakai proses_urgent() & proses_reguler(); kegagalan
+    1 batch tidak menghentikan yang lain."""
     hasil = []
     log.info("=== %s", nama)
     batch = bagi_batch([o["salesorder_id"] for o in pesanan])
@@ -573,7 +594,7 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
         log.info("  [%d/%d] Picklist %s dibuat, %d pesanan", n, len(batch), pno, len(ids_pakai))
         try:
             baris = lanjutkan_picklist(k, pid, pno, len(ids_pakai), label, folder_label,
-                                       nama_file=label_file)
+                                       nama_file=label_file, subfolder=subfolder)
         except Exception as e:     # noqa: BLE001 - batch lain tetap lanjut
             log.exception("  TERHENTI di %s: %s", pno, e)
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
@@ -596,9 +617,10 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. Skenario
     `per_lantai` (GTL-SiCepat) dipecah jadi picklist per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
-    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. `sekarang`: dipakai tes, default
-    waktu sungguhan (WIB) saat dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan
-    yang lain."""
+    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. Kedua skenario (Lazada DAN
+    GTL-SiCepat) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
+    lihat lanjutkan_picklist(). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
+    dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan yang lain."""
     hasil = []
     for nama, channel_ids, couriers, jam_cutoff, per_lantai in skenario or SKENARIO_URGENT:
         label = nama.upper()
@@ -614,10 +636,12 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
                                                         couriers=couriers)
                 subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
                 hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat,
-                                             folder_label, kurir=None, prefix="Urgent")
+                                             folder_label, kurir=None, prefix="Urgent",
+                                             subfolder=SUBFOLDER_URGENT)
             else:
                 hasil += _proses_channel_batch(k, f"Urgent {nama}", label, pesanan,
-                                               file_riwayat, folder_label)
+                                               file_riwayat, folder_label,
+                                               subfolder=SUBFOLDER_URGENT)
         except Exception as e:      # noqa: BLE001 - channel lain & SKU spesial tetap lanjut
             log.exception("  GAGAL urgent %s: %s", nama, e)
             hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
@@ -953,8 +977,8 @@ def _kelompok_kombinasi_per_lantai(k: Klien, kombinasi: list[dict],
 
 
 _BAGIAN_REGULER = {
-    "1qty": ("1 Qty Reguler", LABEL_REGULER_1QTY, 0),
-    "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1),
+    "1qty": ("1 Qty Reguler", LABEL_REGULER_1QTY, 0, SUBFOLDER_SATUAN),
+    "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1, SUBFOLDER_KOMBINASI),
 }
 KURIR_LABEL = {"jnt": "J&T", "spx": "SPX"}   # awalan nama/label saat kurir dipisah (tampilan)
 # nama file tidak boleh mengandung "&" (dibuang _nama_file()), jadi nama picklist/PDF
@@ -974,11 +998,18 @@ def _label_kurir_file(label: str, kurir: str | None) -> str:
     return f"{KURIR_LABEL_FILE[kurir]}-{label}" if kurir else label
 
 
+def _gabung_kurir(dasar: str, kurir: str | None) -> str:
+    """Sisipkan awalan kurir (JNT_/SPX_) ke `dasar` (tag nama file atau subfolder) kalau
+    --kurir dipakai, supaya J&T dan SPX tidak bercampur - dipakai _tag_spesial() (Alur 1)
+    dan subfolder SATUAN/KOMBINASI (Alur 3, lihat proses_reguler())."""
+    return f"{KURIR_LABEL_FILE[kurir]}_{dasar}" if kurir else dasar
+
+
 def _tag_spesial(kurir: str | None) -> str:
     """Tag dipakai lanjutkan_picklist() di proses() (Alur 1). Tanpa --kurir tetap
     TAG_SPESIAL polos; dengan --kurir disisipi awalan KURIR_LABEL_FILE supaya nama file
     & subfolder J&T dan SPX tidak bercampur (mis. "JNT_SPESIAL"/"SPX_SPESIAL")."""
-    return f"{KURIR_LABEL_FILE[kurir]}_{TAG_SPESIAL}" if kurir else TAG_SPESIAL
+    return _gabung_kurir(TAG_SPESIAL, kurir)
 
 
 def _label_lantai(lantai: str) -> str:
@@ -989,14 +1020,16 @@ def _label_lantai(lantai: str) -> str:
 
 def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, list[dict]],
                         file_riwayat: Path, folder_label: Path, kurir: str | None,
-                        prefix: str = "Reguler") -> list[dict]:
+                        prefix: str = "Reguler", subfolder: str | None = None) -> list[dict]:
     """Proses tiap sub-kelompok (grup rak utk 1qty, lantai utk kombinasi/urgent GTL-SiCepat -
     key subkelompok dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat
     _label_lantai()) lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak
     menghentikan yang lain. `prefix`: "Reguler" (default, dipakai proses_reguler()) atau
     "Urgent" (proses_urgent(), skenario per_lantai - lihat SKENARIO_URGENT); string kosong
     (proses_shopee_pagi()/proses_jnt_siang()) melewatkan prefix sama sekali (nama skenarionya
-    sendiri sudah jelas tanpa awalan)."""
+    sendiri sudah jelas tanpa awalan). `subfolder`: diteruskan apa adanya ke
+    _proses_channel_batch() (lihat lanjutkan_picklist()) - sama untuk semua sub-kelompok di
+    sini (grup rak/lantai TIDAK ikut memecah subfolder, hanya nama file/label)."""
     hasil = []
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
@@ -1005,7 +1038,8 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
             hasil += _proses_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
                                            _label_kurir(label_x, kurir), pesanan,
                                            file_riwayat, folder_label,
-                                           label_file=_label_kurir_file(label_x, kurir))
+                                           label_file=_label_kurir_file(label_x, kurir),
+                                           subfolder=subfolder)
         except Exception as e:      # noqa: BLE001 - sub-kelompok lain tetap lanjut
             log.exception("  GAGAL %s %s: %s", prefix.lower(), nama_x, e)
             hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
@@ -1023,7 +1057,7 @@ def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None =
     "kombinasi" dipecah per lantai (lihat _kelompok_kombinasi_per_lantai()/LANTAI_RAK,
     `lantai_dari_excel`: fallback SKU bundling)."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
-    for kunci, (nama, _, idx) in _BAGIAN_REGULER.items():
+    for kunci, (nama, _, idx, _subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
@@ -1051,10 +1085,13 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
     _proses_subkelompok()). Dipanggil SETELAH proses SKU spesial selesai (perlu
     resi_spesial_semua supaya tidak dobel proses). Sebanyak mungkin per picklist (maks
     MAKS_PESANAN_PICKLIST, dipecah kalau lebih). `grup_dari_excel`/`lantai_dari_excel`: lihat
-    pisah_satu_qty_per_rak()/pisah_kombinasi_per_lantai() (fallback khusus SKU bundling)."""
+    pisah_satu_qty_per_rak()/pisah_kombinasi_per_lantai() (fallback khusus SKU bundling).
+    Bagian "1qty" disimpan di subfolder SUBFOLDER_SATUAN ("SATUAN"), bagian "kombinasi" di
+    SUBFOLDER_KOMBINASI ("KOMBINASI") - kalau --kurir dipakai, subfolder disisipi awalan
+    JNT_/SPX_ (lihat _gabung_kurir())."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
     hasil = []
-    for kunci, (nama, label, idx) in _BAGIAN_REGULER.items():
+    for kunci, (nama, label, idx, subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
         if kunci == "1qty":
@@ -1063,7 +1100,7 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
             per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
             subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
         hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat, folder_label,
-                                     kurir)
+                                     kurir, subfolder=_gabung_kurir(subfolder, kurir))
     return hasil
 
 
@@ -1523,14 +1560,18 @@ def _nama_file(teks: str) -> str:
 
 def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int,
                        sku: str, folder_label: Path, nama_file: str | None = None,
-                       tag: str | None = None) -> dict:
+                       tag: str | None = None, subfolder: str | None = None) -> dict:
     """Langkah 3-6. Aman dipanggil ulang untuk picklist yang prosesnya terhenti.
     `nama_file`: varian `sku` yang dipakai untuk nama file PDF (mis. tanpa "&"); default
     sama dengan `sku`. `tag`: penanda opsional disisipkan setelah No Picklist di nama file
     (mis. TAG_SPESIAL untuk Alur 1 - SKU spesial); default tanpa penanda. Kalau `tag` diisi,
     file PDF-nya juga disimpan di subfolder `folder_label/<tag>` (bukan langsung di
     `folder_label`), supaya folder sesi tidak penuh puluhan file SPESIAL bercampur label
-    lain - lihat TAG_SPESIAL."""
+    lain - lihat TAG_SPESIAL. `subfolder`: subfolder tujuan yang TIDAK ikut disisipkan ke
+    nama file (beda dari `tag`) - dipakai Alur 2/3 (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/
+    SUBFOLDER_KOMBINASI di proses_urgent()/proses_reguler()) supaya nama file tetap seperti
+    semula, cuma lokasi penyimpanannya yang pindah. Default (keduanya None) tanpa subfolder;
+    kalau keduanya diisi (tidak terjadi di kode saat ini), `subfolder` menang."""
     log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, picklist_id)
 
@@ -1561,7 +1602,8 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     if ada_resi:
         log.info("  [6] Unduh label PDF (%d pesanan)", len(ada_resi))
         awalan = f"{picklist_no}_{tag}_" if tag else f"{picklist_no}_"
-        folder_tujuan = (folder_label / tag) if tag else folder_label
+        sub = subfolder if subfolder is not None else tag
+        folder_tujuan = (folder_label / sub) if sub else folder_label
         tujuan = folder_tujuan / (f"{awalan}{_nama_file(nama_file or sku)}_"
                                   f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
         file_label = str(unduh_label(k, ada_resi, tujuan))

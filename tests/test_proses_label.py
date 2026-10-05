@@ -525,7 +525,7 @@ def uji_proses_sampel_buat_1_picklist_dan_dilewati_kalau_kosong():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
         panggilan.append((pid, pno, jumlah, sku))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
@@ -573,8 +573,8 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
-        panggilan.append((pid, pno, jumlah, sku, folder_label))
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((pid, pno, jumlah, sku, folder_label, subfolder))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
     pl.lanjutkan_picklist = stub
@@ -589,7 +589,9 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
 
     label_gtl_sicepat = {"GTL-SICEPAT-LANTAI1", "GTL-SICEPAT-LANTAI2", "GTL-SICEPAT-LANTAI3",
                         "GTL-SICEPAT-LAINNYA"}
-    assert all(sku in ({"LAZADA"} | label_gtl_sicepat) for _, _, _, sku, _ in panggilan), panggilan
+    assert all(sku in ({"LAZADA"} | label_gtl_sicepat) for _, _, _, sku, _, _ in panggilan), panggilan
+    assert all(subfolder == pl.SUBFOLDER_URGENT for *_, subfolder in panggilan), panggilan
+    print("  Lazada DAN GTL/SiCepat (semua lantai) sama-sama disimpan di subfolder URGENT")
     per_channel = {}
     for h in hasil:
         per_channel.setdefault(h["SKU"], []).append(h)
@@ -657,7 +659,7 @@ def uji_urgent_jam_tunda_ditahan_lalu_lanjut_setelah_jam_16():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
         panggilan.append((pid, pno, jumlah, sku, folder_label))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
@@ -1095,8 +1097,8 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
-        panggilan.append((pid, pno, jumlah, sku, folder_label))
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((pid, pno, jumlah, sku, folder_label, subfolder))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
     pl.lanjutkan_picklist = stub
@@ -1108,6 +1110,13 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
             baris = list(load_workbook(riwayat).active.values)
     finally:
         pl.lanjutkan_picklist = asli
+
+    subfolder_per_sku = {sku: subfolder for *_, sku, _, subfolder in panggilan}
+    assert all(subfolder_per_sku[sku] == pl.SUBFOLDER_SATUAN
+              for sku in subfolder_per_sku if sku.startswith("1QTY-REGULER")), panggilan
+    assert all(subfolder_per_sku[sku] == pl.SUBFOLDER_KOMBINASI
+              for sku in subfolder_per_sku if sku.startswith("KOMBINASI-REGULER")), panggilan
+    print("  bagian 1qty disimpan di subfolder SATUAN, bagian kombinasi di subfolder KOMBINASI")
 
     per_label = {h["SKU"]: h for h in hasil}
     assert per_label["1QTY-REGULER-2A"]["Total Pesanan"] == 1, per_label
@@ -1272,7 +1281,7 @@ def uji_shopee_pagi_filter_channel_dan_jam_cutoff():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
         panggilan.append((pid, pno, jumlah, sku, folder_label))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
@@ -1382,7 +1391,7 @@ def uji_jnt_siang_filter_channel_kurir_dan_jam_cutoff():
     panggilan = []
     asli = pl.lanjutkan_picklist
 
-    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None):
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
         panggilan.append((pid, pno, jumlah, sku, folder_label))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
@@ -1446,6 +1455,14 @@ def uji_tag_spesial_dibedakan_per_kurir():
     assert pl._tag_spesial("jnt") == f"JNT_{pl.TAG_SPESIAL}"
     assert pl._tag_spesial("spx") == f"SPX_{pl.TAG_SPESIAL}"
     print("  tag SPESIAL disisipi awalan kurir (JNT_SPESIAL/SPX_SPESIAL) kalau --kurir dipakai")
+
+
+def uji_subfolder_satuan_kombinasi_dibedakan_per_kurir():
+    assert pl._gabung_kurir(pl.SUBFOLDER_SATUAN, None) == pl.SUBFOLDER_SATUAN
+    assert pl._gabung_kurir(pl.SUBFOLDER_SATUAN, "jnt") == f"JNT_{pl.SUBFOLDER_SATUAN}"
+    assert pl._gabung_kurir(pl.SUBFOLDER_KOMBINASI, "spx") == f"SPX_{pl.SUBFOLDER_KOMBINASI}"
+    print("  subfolder SATUAN/KOMBINASI (Alur 3) disisipi awalan kurir sama pola dgn "
+          "TAG_SPESIAL kalau --kurir dipakai")
 
 
 JEDA_RESI = pl.JEDA_RESI_S
