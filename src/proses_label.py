@@ -279,6 +279,13 @@ class Klien:
         self.cookie = {"JB_OMNI_ACCESS_TOKEN": token}
         # Load balancer report-prod memilih node dari token di Referer; client Telerik
         # hanya ada di memori node itu, jadi Referer harus URL halaman label (seperti web).
+        # HANYA dipakai sebagai default awal (1 Klien dipakai bersama banyak worker paralel -
+        # lihat proses()): unduh_label() TIDAK BOLEH menimpa atribut ini lagi (race condition
+        # antar-thread - 1 SKU bisa memakai Referer SKU lain yang sedang jalan bersamaan,
+        # menyasar node report-prod yang salah -> _tunggu_dokumen() timeout 180 detik, insiden
+        # 2026-10-06), tapi harus meneruskan `referer` secara eksplisit ke tiap report_get()/
+        # report_post() di sepanjang alurnya sendiri (lihat _buat_instance_report(),
+        # _tunggu_dokumen(), unduh_label()).
         self.halaman_report = "https://report-prod.jubelio.com/"
 
     @staticmethod
@@ -334,11 +341,11 @@ class Klien:
                            headers={"User-Agent": jubelio.USER_AGENT,
                                     "Referer": referer or self.halaman_report})
 
-    def report_post(self, path: str, body):
+    def report_post(self, path: str, body, referer: str | None = None):
         r = self._kirim(self.sesi.post, f"{REPORT_API}/{path}", json=body, cookies=self.cookie,
                         timeout=120,
                         headers={"User-Agent": jubelio.USER_AGENT,
-                                 "Referer": self.halaman_report,
+                                 "Referer": referer or self.halaman_report,
                                  "Origin": "https://report-prod.jubelio.com",
                                  "X-Requested-With": "XMLHttpRequest"})
         return self._json(r, f"report {path.rsplit('/', 1)[-1]}")
@@ -1503,11 +1510,11 @@ def _report_source(html: str) -> dict:
     return cfg["reportSource"]
 
 
-def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str) -> None:
+def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str, referer: str) -> None:
     batas = time.monotonic() + TUNGGU_PDF_S
     backoff = _mulai_backoff(0.3, 2)
     while True:
-        r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info")
+        r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info", referer=referer)
         if r.status_code == 200:
             return
         if r.status_code != 202:
@@ -1521,7 +1528,7 @@ def _expired(e: ProsesError) -> bool:
     return "410" in str(e) and "Expired" in str(e)
 
 
-def _buat_instance_report(k: Klien, rs: dict) -> str:
+def _buat_instance_report(k: Klien, rs: dict, referer: str) -> str:
     """clients -> parameters -> instances. Jika node report-prod tetap tidak menemukan
     client (HTTP 410 "Client ... not found. Expired."), ulangi dari awal dengan clientId baru."""
     batas = time.monotonic() + TUNGGU_CLIENT_REPORT_S
@@ -1529,12 +1536,15 @@ def _buat_instance_report(k: Klien, rs: dict) -> str:
     while True:
         coba += 1
         try:
-            c = k.report_post("clients", {"timeStamp": int(time.time() * 1000)})["clientId"]
+            c = k.report_post("clients", {"timeStamp": int(time.time() * 1000)},
+                              referer=referer)["clientId"]
             params = k.report_post(f"clients/{c}/parameters",
-                                   {"report": rs["report"], "parameterValues": rs["parameters"]})
+                                   {"report": rs["report"], "parameterValues": rs["parameters"]},
+                                   referer=referer)
             nilai = {p["id"]: p["value"] for p in params}
             inst = k.report_post(f"clients/{c}/instances",
-                                 {"report": rs["report"], "parameterValues": nilai})
+                                 {"report": rs["report"], "parameterValues": nilai},
+                                 referer=referer)
             return f"clients/{c}/instances/{inst['instanceId']}"
         except ProsesError as e:
             if not _expired(e) or time.monotonic() + JEDA_COBA_CLIENT_REPORT_S > batas:
@@ -1550,35 +1560,39 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
     if halaman.status_code != 200:
         raise ProsesError(f"Halaman label gagal dibuka (HTTP {halaman.status_code})")
     rs = _report_source(halaman.text)
-    k.halaman_report = j["url"]
+    # referer LOKAL (bukan k.halaman_report - k dibagi banyak worker paralel sekaligus, lihat
+    # proses(); menimpa atribut bersama itu race condition, lihat catatan di Klien.__init__).
+    referer = j["url"]
 
-    dasar = _buat_instance_report(k, rs)
+    dasar = _buat_instance_report(k, rs, referer)
 
     pdf = {"format": "PDF", "deviceInfo": {"ImmediatePrint": True, "BasePath": "/api/reports"},
            "useCache": True}
     try:
-        doc = k.report_post(f"{dasar}/documents", pdf)["documentId"]
-        _tunggu_dokumen(k, dasar, doc)
+        doc = k.report_post(f"{dasar}/documents", pdf, referer=referer)["documentId"]
+        _tunggu_dokumen(k, dasar, doc, referer)
     except ProsesError as e:
         # cara web: buat tampilan HTML5 dulu, lalu PDF berdasarkan dokumen itu
         log.info("  PDF langsung gagal (%s), mencoba lewat HTML5", e)
         html5 = k.report_post(f"{dasar}/documents", {
             "format": "HTML5", "useCache": True, "deviceInfo": {
-                "enableSearch": True, "ContentOnly": True, "UseSVG": True, "BasePath": "/api/reports"}})
-        _tunggu_dokumen(k, dasar, html5["documentId"])
+                "enableSearch": True, "ContentOnly": True, "UseSVG": True, "BasePath": "/api/reports"}},
+            referer=referer)
+        _tunggu_dokumen(k, dasar, html5["documentId"], referer)
         doc = k.report_post(f"{dasar}/documents",
-                            {**pdf, "baseDocumentID": html5["documentId"]})["documentId"]
-        _tunggu_dokumen(k, dasar, doc)
+                            {**pdf, "baseDocumentID": html5["documentId"]},
+                            referer=referer)["documentId"]
+        _tunggu_dokumen(k, dasar, doc, referer)
 
     url_dok = f"{REPORT_API}/{dasar}/documents/{doc}"
     r = k.report_get(url_dok, params={"response-content-disposition": "attachment"},
-                     timeout=TUNGGU_UNDUH_PDF_S)
+                     referer=referer, timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         url_alt = url_dok.replace("report-prod.jubelio.com", "report.jubelio.com")
         log.info("  Unduh PDF label dari %s gagal (HTTP %s), coba %s",
                  url_dok, r.status_code, url_alt)
         r = k.report_get(url_alt, params={"response-content-disposition": "attachment"},
-                         timeout=TUNGGU_UNDUH_PDF_S)
+                         referer=referer, timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, "
                           f"{r.headers.get('content-type')})")

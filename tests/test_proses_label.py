@@ -7,6 +7,7 @@ import json
 import re
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -1522,6 +1523,103 @@ def uji_subfolder_satuan_kombinasi_dibedakan_per_kurir():
     assert pl._gabung_kurir(pl.SUBFOLDER_KOMBINASI, "spx") == f"SPX_{pl.SUBFOLDER_KOMBINASI}"
     print("  subfolder SATUAN/KOMBINASI (Alur 3) disisipi awalan kurir sama pola dgn "
           "TAG_SPESIAL kalau --kurir dipakai")
+
+
+class _SesiRefererParalel:
+    """Sesi tiruan utk uji regresi insiden 2026-10-06: 2 unduh_label() dijalankan BERSAMAAN
+    lewat 1 Klien (k)/1 sesi yang dibagi (seperti proses() lewat ThreadPoolExecutor) - Referer
+    report-prod (penentu node load balancer, lihat Klien.__init__) harus TETAP konsisten milik
+    masing-masing panggilan sepanjang alur clients->parameters->instances->documents->info->
+    download-nya sendiri, walau 2 thread tumpang-tindih PERSIS di titik paling rawan (barrier
+    di bawah, meniru detik saat k.halaman_report DULU ditimpa SKU lain yang jalan bersamaan)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.catatan: list[tuple[str, str | None]] = []   # (path, Referer) tiap panggilan report-prod
+        self._client_berikutnya = 0
+        self._dok_berikutnya = 0
+        self._barrier = threading.Barrier(2, timeout=5)
+
+    def _catat(self, path, headers):
+        with self._lock:
+            self.catatan.append((path, (headers or {}).get("Referer")))
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        path = urlsplit(url).path
+        if path.endswith("shipping-label/"):
+            ids = params["ids[0]"]
+            self._barrier.wait()      # paksa 2 thread overlap persis di titik paling rawan
+            return Resp(data={"status": "ok",
+                              "url": f"https://report-prod.jubelio.com/?&token=T{ids}",
+                              "title": "Label Pengiriman"})
+        self._catat(path, headers)
+        if path == "/":
+            html = ('<script>jQuery("#reportViewer").telerik_ReportViewer({"serviceUrl":'
+                    '"/api/reports/","reportSource":{"report":"Label-x","parameters":'
+                    '{"ids":["1"]}},"viewMode":"PRINT_PREVIEW"});</script>')
+            return Resp(content=html.encode(), headers={"content-type": "text/html"})
+        if path.endswith("/info"):
+            return Resp(200, {})
+        if "/documents/" in path:
+            return Resp(content=b"%PDF-1.4 x", headers={"content-type": "application/pdf"})
+        raise AssertionError(f"GET tak dikenal {url}")
+
+    def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+        path = urlsplit(url).path
+        self._catat(path, headers)
+        if path.endswith("/clients"):
+            with self._lock:
+                self._client_berikutnya += 1
+                cid = f"c{self._client_berikutnya}"
+            return Resp(data={"clientId": cid})
+        if path.endswith("/parameters"):
+            return Resp(data=[{"id": k, "value": v} for k, v in json["parameterValues"].items()])
+        if path.endswith("/instances"):
+            return Resp(201, {"instanceId": "i1"})
+        if path.endswith("/documents"):
+            with self._lock:
+                self._dok_berikutnya += 1
+                did = f"d{self._dok_berikutnya}"
+            return Resp(202, {"documentId": did})
+        raise AssertionError(f"POST tak dikenal {url}")
+
+
+def uji_unduh_label_referer_tidak_bocor_antar_thread_paralel():
+    sesi = _SesiRefererParalel()
+    k = pl.Klien("TKN", sesi=sesi, tidur=lambda s: None)
+    hasil, galat = {}, []
+
+    def _jalankan(ids, tujuan):
+        try:
+            hasil[ids[0]] = pl.unduh_label(k, ids, tujuan)
+        except Exception as e:     # noqa: BLE001
+            galat.append(e)
+
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        t1 = threading.Thread(target=_jalankan, args=([100], d / "a.pdf"))
+        t2 = threading.Thread(target=_jalankan, args=([200], d / "b.pdf"))
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+    assert not galat, galat
+    assert len(hasil) == 2
+
+    per_client: dict[str, set] = {}
+    for path, referer in sesi.catatan:
+        m = re.search(r"/clients/(c\d+)", path)
+        if m:
+            per_client.setdefault(m.group(1), set()).add(referer)
+    assert len(per_client) == 2, per_client
+    for cid, referer_set in per_client.items():
+        assert len(referer_set) == 1, \
+            f"client {cid}: Referer ketukar antar panggilan dalam 1 alur -> {referer_set}"
+    nilai = [next(iter(s)) for s in per_client.values()]
+    assert nilai[0] != nilai[1], "2 SKU seharusnya tetap memakai Referer (url label) masing-masing"
+    print("  unduh_label: Referer report-prod TIDAK ketukar antar SKU walau 2 thread paralel "
+          "tumpang tindih persis di titik paling rawan (regresi insiden 2026-10-06)")
 
 
 JEDA_RESI = pl.JEDA_RESI_S
