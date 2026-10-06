@@ -82,6 +82,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 from proses_label import durasi
@@ -133,8 +134,11 @@ def cetak_bermasalah(hasil: list[dict],
     """Cetak blok peringatan mencolok untuk baris hasil proses yang Catatan-nya diawali
     GAGAL/TERHENTI (mis. error koneksi saat unduh label, lihat proses_label.lanjutkan_picklist())
     - supaya tidak tenggelam di log yang panjang, sejajar dengan
-    peringatan_picklist.cetak()/peringatan_resi.cetak(). Mengembalikan baris yang bermasalah
-    (dipakai caller untuk exit code)."""
+    peringatan_picklist.cetak()/peringatan_resi.cetak(). Juga dicatat lewat peringatan_gagal
+    (lintas proses python, dibaca ulang di rekap_waktu.py) supaya tidak hilang dari rekap akhir
+    TIPE proses-harian.bat kalau langkah ini bukan langkah terakhir (lihat insiden 2026-10-06:
+    picklist urgent bermasalah tidak muncul di rekap karena ketenggelam langkah berikutnya).
+    Mengembalikan baris yang bermasalah (dipakai caller untuk exit code)."""
     bermasalah = [h for h in hasil if str(h.get("Catatan", "")).startswith(("GAGAL", "TERHENTI"))]
     if not bermasalah:
         return bermasalah
@@ -143,7 +147,9 @@ def cetak_bermasalah(hasil: list[dict],
     print(f"  {judul}")
     print("!" * 60)
     for h in bermasalah:
-        print(f"  - {h.get('No Picklist') or h.get('SKU', '-')}: {h.get('Catatan', '')}")
+        pesan = f"{h.get('No Picklist') or h.get('SKU', '-')}: {h.get('Catatan', '')}"
+        print(f"  - {pesan}")
+        peringatan_gagal.catat(pesan)
     print("!" * 60)
     return bermasalah
 
@@ -224,6 +230,7 @@ def main() -> int:
     PALING AKHIR supaya tidak tenggelam di log yang panjang."""
     peringatan_picklist.atur_folder(FOLDER_LOG)
     peringatan_resi.atur_folder(FOLDER_LOG)
+    peringatan_gagal.atur_folder(FOLDER_LOG)
     try:
         return _main()
     finally:

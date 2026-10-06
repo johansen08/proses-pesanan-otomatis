@@ -11,6 +11,7 @@ Pemakaian:
 import sys
 from pathlib import Path
 
+import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 
@@ -47,14 +48,18 @@ def main():
     print(f"  {'TOTAL'.ljust(lebar_nama)} : {format_durasi(total)}")
     print("=" * 60)
 
-    # peringatan picklist terlompat/batal & pesanan tanpa resi selama TIPE ini
-    # (dicatat main.py di logs/)
+    # peringatan picklist terlompat/batal, pesanan tanpa resi, & picklist terhenti/gagal
+    # selama TIPE ini (dicatat main.py di logs/) - picklist bermasalah sudah tercetak
+    # langsung saat terjadi (main.cetak_bermasalah()), tapi dicetak ULANG di sini supaya
+    # tidak luput kalau itu bukan langkah terakhir TIPE ini (insiden 2026-10-06).
     if awal is not None:
         folder_log = Path(__file__).resolve().parent.parent / "logs"
         peringatan_picklist.atur_folder(folder_log)
         peringatan_picklist.cetak(peringatan_picklist.baca_sejak(awal))
         peringatan_resi.atur_folder(folder_log)
         peringatan_resi.cetak(peringatan_resi.baca_sejak(awal))
+        peringatan_gagal.atur_folder(folder_log)
+        peringatan_gagal.cetak(peringatan_gagal.baca_sejak(awal))
 
 
 if __name__ == "__main__":

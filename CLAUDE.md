@@ -81,6 +81,13 @@ project secara umum, root tidak boleh berisi file `.py`):
   resi perlu tahu nomor pesanannya untuk diinformasikan ke tim admin/CS. Peringatan di
   `logs/pesanan_tanpa_resi.jsonl`; dicetak di tempat yang sama (akhir `main.py` & rekap
   waktu tiap TIPE).
+- `src/peringatan_gagal.py` — persistensi lintas-proses (pola sama, `logs/picklist_bermasalah.
+  jsonl`) untuk picklist/proses yang TERHENTI/GAGAL (lihat `main.cetak_bermasalah()`, dipicu
+  mis. timeout unduh label PDF di `proses_label.py`). `main.cetak_bermasalah()` sendiri sudah
+  mencetak peringatan ini LANGSUNG saat terjadi; modul ini cuma menyimpannya ke file supaya
+  `src/rekap_waktu.py` bisa mencetaknya ULANG di rekap akhir tiap TIPE — kalau langkah yang
+  bermasalah bukan langkah terakhir TIPE itu, peringatannya tenggelam di tengah log dan luput
+  dibaca kalau cuma scroll ke rekap paling bawah (insiden 2026-10-06).
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder
