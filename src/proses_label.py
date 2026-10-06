@@ -218,6 +218,7 @@ TUNGGU_FINISH_PICK_S = 90               # batas tunggu pesanan muncul di Picking
 TUNGGU_RESI_S = 180                     # batas tunggu semua nomor resi keluar
 JEDA_RESI_S = 3.5                       # jeda polling resi (sama dengan web)
 TUNGGU_PDF_S = 180
+TUNGGU_UNDUH_PDF_S = 30                 # batas tunggu request unduh dokumen PDF itu sendiri
 TUNGGU_CLIENT_REPORT_S = 300            # batas total coba ulang report-prod "410 Expired"
 JEDA_COBA_CLIENT_REPORT_S = 5
 # Koneksi putus di tengah request (mis. RemoteDisconnected) - ulangi request YANG SAMA
@@ -320,8 +321,8 @@ class Klien:
         return self._json(self.post_mentah(path, body), f"POST {path}")
 
     # report-prod (Telerik) memakai cookie, bukan header authorization
-    def report_get(self, url: str, params=None, referer: str | None = None):
-        return self._kirim(self.sesi.get, url, params=params, cookies=self.cookie, timeout=180,
+    def report_get(self, url: str, params=None, referer: str | None = None, timeout=180):
+        return self._kirim(self.sesi.get, url, params=params, cookies=self.cookie, timeout=timeout,
                            headers={"User-Agent": jubelio.USER_AGENT,
                                     "Referer": referer or self.halaman_report})
 
@@ -1532,12 +1533,14 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
         _tunggu_dokumen(k, dasar, doc)
 
     url_dok = f"{REPORT_API}/{dasar}/documents/{doc}"
-    r = k.report_get(url_dok, params={"response-content-disposition": "attachment"})
+    r = k.report_get(url_dok, params={"response-content-disposition": "attachment"},
+                     timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         url_alt = url_dok.replace("report-prod.jubelio.com", "report.jubelio.com")
         log.info("  Unduh PDF label dari %s gagal (HTTP %s), coba %s",
                  url_dok, r.status_code, url_alt)
-        r = k.report_get(url_alt, params={"response-content-disposition": "attachment"})
+        r = k.report_get(url_alt, params={"response-content-disposition": "attachment"},
+                         timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, "
                           f"{r.headers.get('content-type')})")
