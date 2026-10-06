@@ -86,7 +86,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
 | `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
 | `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `proses-harian.bat` |
-| `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) |
+| `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) — lewat antrean, ditulis sekaligus 1x per TIPE (`--tulis-excel`, lihat bagian "Rekap PICKLIST.xlsx") |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label-urgent.bat` | Menjalankan `src/print_spesial.py --jenis urgent` (klik 2x) — lihat bagian "Cetak bulk label" |
@@ -380,6 +380,23 @@ atau `JNT_KOMBINASI`/`SPX_KOMBINASI` (lihat `SUBFOLDER_SATUAN`/`SUBFOLDER_KOMBIN
 Tiap TIPE `proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara berurut dalam
 satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 [docs/jadwal-proses.md](docs/jadwal-proses.md).
+
+### Rekap PICKLIST.xlsx (`--tulis-excel`)
+
+Selama langkah-langkah TIPE berjalan, tiap picklist cuma masuk **antrean**
+(`logs/antrian_picklist_excel.jsonl`) — `PICKLIST.xlsx` baru dibuka & disimpan **sekali** di
+langkah terakhir tiap TIPE ("TULIS PICKLIST.XLSX"), karena membuka+menyimpan file sebesar itu
+makan ±2 menit (dulu terulang di tiap langkah, insiden 2026-10-06). Picklist dari `--lanjut`
+juga masuk antrean dan ikut tertulis di akhir TIPE berikutnya — atau tulis sekarang juga:
+
+```bash
+jalankan.bat --tulis-excel              # mode uji: hanya tampilkan jumlah antrean
+jalankan.bat --tulis-excel --jalankan   # tulis semua antrean ke PICKLIST.xlsx
+```
+
+Kalau `PICKLIST.xlsx` sedang dibuka di Excel (atau rusak), antrean **tidak dibuang** — muncul
+peringatan di rekap akhir TIPE, dan otomatis dicoba lagi di TIPE berikutnya. File lama tidak
+pernah setengah tertulis: penyimpanan lewat file sementara `PICKLIST.xlsx.menulis` dulu.
 
 ## 4. Picklist SPX Resi Pagi (`--shopee-pagi`)
 

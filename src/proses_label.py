@@ -1632,8 +1632,10 @@ def _unduh_label_sekali(k: Klien, ids: list[int]) -> bytes:
 # ============================================================== riwayat
 # Workbook riwayat_picklist.xlsx & detail-resi-*.xlsx dibuka SEKALI per file (cache di sini,
 # key = path resolve()) dan disimpan SEKALI di akhir proses lewat tutup_riwayat() (dipanggil
-# main.py lewat finally) - sama seperti pola rekap_master_excel.py, menghindari load_workbook()+
-# wb.save() ULANG seluruh file tiap picklist/batch (O(n^2) kalau dibuka-simpan tiap baris).
+# main.py lewat finally), menghindari load_workbook()+wb.save() ULANG seluruh file tiap
+# picklist/batch (O(n^2) kalau dibuka-simpan tiap baris). File ini kecil, jadi cukup 1x per
+# proses - beda dengan PICKLIST.xlsx (puluhan MB) yang diantrekan & ditulis 1x per TIPE (lihat
+# rekap_master_excel.py).
 # catat_detail_spesial() bisa dipanggil dari beberapa thread worker sekaligus (lihat
 # MAKS_WORKER_PARALEL di proses()), jadi semua akses _wb_cache/worksheet dikunci _lock_wb.
 _wb_cache: dict[Path, "Workbook"] = {}
@@ -1726,10 +1728,9 @@ def catat_detail_spesial(folder_label: Path, nama_file: str, baris_list: list[di
 
 def tutup_riwayat() -> None:
     """Simpan semua workbook riwayat/detail-spesial yang dibuka selama proses ke disk SEKALI -
-    WAJIB dipanggil di akhir proses (main.py, lewat finally), sama seperti
-    rekap_master_excel.tutup(). Kalau sedang dibuka di Excel (PermissionError), dicoba ulang
-    singkat lalu disimpan ke file cadangan supaya baris yang sudah ditulis di memori proses
-    ini tidak hilang."""
+    WAJIB dipanggil di akhir proses (main.py, lewat finally). Kalau sedang dibuka di Excel
+    (PermissionError), dicoba ulang singkat lalu disimpan ke file cadangan supaya baris yang
+    sudah ditulis di memori proses ini tidak hilang."""
     import peringatan_gagal
 
     for key, wb in list(_wb_cache.items()):

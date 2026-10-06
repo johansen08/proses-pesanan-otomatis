@@ -75,6 +75,13 @@ normal. Dijalankan PALING PERTAMA di tiap TIPE proses-harian.bat (sebelum pickli
 supaya pesanan yang pulih ikut terhitung di langkah-langkah berikutnya:
     python src/main.py --recheck-stok                    # MODE UJI: hanya tampilkan daftar
     python src/main.py --recheck-stok --jalankan
+
+Rekap PICKLIST.xlsx (rekap_master_excel.py): tiap picklist cuma masuk ANTREAN selama proses
+(membuka PICKLIST.xlsx makan ~2 menit), lalu ditulis sekaligus SEKALI di langkah terakhir tiap
+TIPE proses-harian.bat ("TULIS PICKLIST.XLSX"). Jalankan manual kalau perlu lebih cepat (mis.
+setelah beberapa --lanjut):
+    python src/main.py --tulis-excel                     # MODE UJI: hanya tampilkan jumlah antrean
+    python src/main.py --tulis-excel --jalankan
 """
 import argparse
 import logging
@@ -253,7 +260,7 @@ def main() -> int:
         import proses_label
 
         proses_label.tutup_riwayat()
-        rekap_master_excel.tutup()
+        rekap_master_excel.cetak_sesi()
         peringatan_picklist.cetak_sesi()
         peringatan_resi.cetak_sesi()
 
@@ -305,6 +312,11 @@ def _main() -> int:
                         "(tombol 'Recheck Stok' di web) - pesanan yang stoknya sudah "
                         "tersedia lagi otomatis kembali diproses normal (dijalankan paling "
                         "pertama di tiap TIPE proses-harian.bat; tanpa --jalankan = mode uji)")
+    ap.add_argument("--tulis-excel", action="store_true",
+                    help="tulis semua picklist yang antre ke PICKLIST.xlsx sekaligus (1x buka & "
+                        "simpan) - dijalankan otomatis di langkah terakhir tiap TIPE "
+                        "proses-harian.bat; tanpa --jalankan = mode uji, hanya tampilkan "
+                        "jumlah antrean")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -327,6 +339,9 @@ def _main() -> int:
 
     muat_env(ROOT / ".env")
     log = siapkan_log()
+    if args.tulis_excel:
+        # bukan proses picklist - jangan buat folder sesi label baru yang kosong
+        return tulis_picklist_excel(log, args)
     global FOLDER_LABEL_SESI
     FOLDER_LABEL_SESI = FOLDER_LABEL / args.sesi if args.sesi else folder_label_sesi()
     FOLDER_LABEL_SESI.mkdir(parents=True, exist_ok=True)
@@ -655,6 +670,25 @@ def lanjut_picklist(log: logging.Logger, args) -> int:
                                    nama=args.nama, tag=args.tag, subfolder=args.subfolder)
     log.info("SELESAI: %s", baris)
     return 0
+
+
+def tulis_picklist_excel(log: logging.Logger, args) -> int:
+    """Langkah TULIS PICKLIST.XLSX (akhir tiap TIPE proses-harian.bat): tulis semua antrean
+    rekap_master_excel ke PICKLIST.xlsx sekaligus. Exit 1 kalau masih ada yang tertunda."""
+    antre = rekap_master_excel.jumlah_antrian()
+    if not args.jalankan:
+        log.info("MODE UJI - %d picklist antre untuk %s (tidak ditulis). Tambahkan --jalankan "
+                 "untuk menulis.", antre, rekap_master_excel.NAMA_SALINAN)
+        return 0
+    if not antre:
+        log.info("Tidak ada picklist yang antre untuk %s", rekap_master_excel.NAMA_SALINAN)
+        return 0
+    log.info("Menulis %d picklist yang antre ke %s", antre, rekap_master_excel.NAMA_SALINAN)
+    try:
+        rekap_master_excel.terapkan()
+    except Exception as e:   # noqa: BLE001 - catat semua kegagalan ke log
+        log.exception("GAGAL tulis %s: %s", rekap_master_excel.NAMA_SALINAN, e)
+    return 1 if rekap_master_excel.jumlah_antrian() else 0
 
 
 if __name__ == "__main__":

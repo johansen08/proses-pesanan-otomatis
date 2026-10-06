@@ -14,8 +14,9 @@ Supaya root tidak berantakan, hanya boleh berisi:
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
 - `riwayat_picklist.xlsx` (+ `.csv` fallback-nya) — riwayat picklist
-- `PICKLIST.xlsx` (+ `PICKLIST_tertunda_*.xlsx` fallback-nya) — salinan kerja rekap_master_excel.py
-  dari file master "PICK LIST - EXCEL ... .xlsx" (tidak dikomit, lihat .gitignore)
+- `PICKLIST.xlsx` (+ `PICKLIST.xlsx.menulis` sementara saat disimpan) — salinan kerja
+  rekap_master_excel.py dari file master "PICK LIST - EXCEL ... .xlsx" (tidak dikomit, lihat
+  .gitignore)
 
 Kode Python (`.py`) **tidak** ikut di root — semua dikumpulkan dalam folder **`src/`**
 (lihat bagian 2). File scratch/hasil uji manual yang menumpuk di root (mis. transkrip

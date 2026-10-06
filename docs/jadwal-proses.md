@@ -73,6 +73,7 @@ bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 5. SPX - J&T SPESIAL
 6. SPX - J&T 1 QTY REGULER
 7. SPX - J&T KOMBINASI
+8. TULIS PICKLIST.XLSX *(lihat "Rekap PICKLIST.xlsx" di bawah)*
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore/malam/dini hari **16.00 sampai 07.00 keesokan harinya** — begitu TIPE 4
@@ -94,6 +95,7 @@ didokumentasikan terpisah pakai TIPE 3 (dipisah) — sekarang malam hari
 9. SPX - SPESIAL
 10. SPX - 1 QTY REGULER
 11. SPX - KOMBINASI
+12. TULIS PICKLIST.XLSX
 
 Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 5,
 channel Shopee, jam pesan WIB maksimal 12.00 siang hari itu, cukup
@@ -113,6 +115,7 @@ jadwal.
 8. SPX - SPESIAL
 9. SPX - 1 QTY REGULER
 10. SPX - KOMBINASI
+11. TULIS PICKLIST.XLSX
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
@@ -129,6 +132,7 @@ di atas).
 6. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
 7. SPX - J&T 1 QTY REGULER *(digabung)*
 8. SPX - J&T KOMBINASI *(digabung)*
+9. TULIS PICKLIST.XLSX
 
 Dipicu **tepat jam 15.00**, menghabiskan wajib keluar TikTok Shop (langkah
 4, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
@@ -137,6 +141,23 @@ kurir **tidak** dipisah lagi — langsung memakai pola gabungan TIPE 1, karena
 setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
 atas) sampai jam 07.00 besok.
+
+### Rekap PICKLIST.xlsx (langkah terakhir tiap TIPE)
+
+**Revisi 2026-10-06**: langkah **TULIS PICKLIST.XLSX** (`--tulis-excel --jalankan`) jadi
+langkah PALING TERAKHIR di tiap TIPE 1-4. Selama langkah-langkah sebelumnya, tiap picklist
+cuma masuk antrean (`logs/antrian_picklist_excel.jsonl`); baru di langkah ini `PICKLIST.xlsx`
+dibuka & disimpan **sekali** (±2 menit, file ~51 ribu baris). Dulu dibuka & disimpan di TIAP
+langkah, sehingga TIPE 2/3 kehilangan ±15-20 menit cuma untuk Excel (insiden 2026-10-06).
+
+- Picklist dari `--lanjut` manual juga masuk antrean → ikut tertulis di akhir TIPE
+  berikutnya, atau langsung lewat `jalankan.bat --tulis-excel --jalankan`.
+- Kalau `PICKLIST.xlsx` sedang dibuka di Excel/rusak: antrean TIDAK dibuang, muncul di blok
+  PERHATIAN rekap akhir TIPE, dicoba lagi otomatis di TIPE berikutnya. **Tutup Excel sebelum
+  TIPE selesai** supaya rekap langsung tertulis.
+
+Implementasi kode: `catat()`/`terapkan()` di `src/rekap_master_excel.py`,
+`tulis_picklist_excel()` di `src/main.py`.
 
 ### Jam tunda Urgent Lazada & GTL/SiCepat
 

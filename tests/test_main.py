@@ -190,6 +190,39 @@ def uji_peringatan_resi_tanpa_resi():
     print("  peringatan_resi: pesanan tanpa resi (bukan batal) dicatat untuk diinformasikan ke CS")
 
 
+def uji_tulis_picklist_excel_mode_uji_tidak_menulis():
+    import logging
+    from types import SimpleNamespace
+
+    import rekap_master_excel as rme
+    log = logging.getLogger("uji-main")
+    with mock.patch.object(rme, "jumlah_antrian", return_value=3), \
+            mock.patch.object(rme, "terapkan") as terapkan:
+        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=False)) == 0
+        terapkan.assert_not_called()
+    with mock.patch.object(rme, "jumlah_antrian", return_value=0), \
+            mock.patch.object(rme, "terapkan") as terapkan:
+        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 0
+        terapkan.assert_not_called()
+    print("  --tulis-excel: mode uji / antrean kosong tidak membuka PICKLIST.xlsx")
+
+
+def uji_tulis_picklist_excel_exit_1_kalau_masih_tertunda():
+    import logging
+    from types import SimpleNamespace
+
+    import rekap_master_excel as rme
+    log = logging.getLogger("uji-main")
+    with mock.patch.object(rme, "jumlah_antrian", side_effect=[2, 0]), \
+            mock.patch.object(rme, "terapkan", return_value=2) as terapkan:
+        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 0
+        terapkan.assert_called_once()
+    with mock.patch.object(rme, "jumlah_antrian", side_effect=[2, 2]), \
+            mock.patch.object(rme, "terapkan", return_value=0):
+        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 1
+    print("  --tulis-excel --jalankan: terapkan() sekali; exit 1 kalau antrean masih tertunda")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

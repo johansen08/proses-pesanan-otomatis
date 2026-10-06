@@ -95,9 +95,13 @@ project secara umum, root tidak boleh berisi file `.py`):
   menulis ke file master langsung, tim verifikasi `PICKLIST.xlsx` dulu baru copy manual kalau
   sudah sesuai (dibuat otomatis dari master kalau belum ada/sudah dihapus tim). Picklist
   terlompat (dari `peringatan_picklist.ambil_nomor_hilang()`) jadi baris kuning "PICKLIST
-  CANCEL" tersendiri, meniru pola manual yang sudah ada di file master. Workbook dibuka
-  sekali & disimpan sekali per proses lewat `tutup()` (dipanggil `main.py`) karena ukuran
-  filenya besar (puluhan MB).
+  CANCEL" tersendiri, meniru pola manual yang sudah ada di file master. Karena file itu besar
+  (~51 ribu baris: buka ~48 detik + simpan ~67 detik), `catat()` cuma menambah antrean
+  `logs/antrian_picklist_excel.jsonl`; workbook baru dibuka & disimpan SEKALI per TIPE oleh
+  `terapkan()` lewat `main.py --tulis-excel --jalankan` (langkah terakhir tiap TIPE
+  `proses-harian.bat`), disimpan atomik (file sementara lalu `os.replace`). Dulu dibuka &
+  disimpan di TIAP proses — ±15-20 menit per TIPE habis untuk Excel, dan file pernah rusak
+  (insiden 2026-10-06). Kalau gagal (file dibuka di Excel/rusak), antrean tidak dibuang.
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder
