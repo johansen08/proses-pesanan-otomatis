@@ -6,7 +6,8 @@
   4. Ambil pesanan picklist di Picking > Selesai
   5. Siap dikirim, tunggu semua nomor resi keluar
   6. Unduh label PDF (Telerik report-prod, tanpa browser)
-Setiap picklist dicatat di riwayat_picklist.xlsx.
+Setiap picklist dicatat di riwayat_picklist.xlsx. Picklist SKU spesial (Alur 1) juga dicatat
+per-resi di detail-resi-spesial.xlsx/detail-resi-bukan-spesial.xlsx - lihat catat_detail_spesial().
 
 Alur 0 - picklist sampel (fungsi rencana_sampel()/proses_sampel()): lintas SKU, pesanan channel
 TikTok Shop ("Shop | Tokopedia") yang nilainya 0/kosong (lihat CHANNEL_ID_TIKTOK_SHOP &
@@ -28,7 +29,9 @@ Nama file label PDF alur ini (dan hanya alur ini) disisipi penanda `SPESIAL`:
 `PICK-000xxxxxx_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, DAN disimpan di subfolder `SPESIAL`
 di dalam folder sesi (mis. `label-pengiriman/2026-10-02/1/SPESIAL/`, bukan langsung di
 `label-pengiriman/2026-10-02/1/`) - lihat TAG_SPESIAL, dipakai lewat parameter `tag` di
-lanjutkan_picklist() baik untuk penanda nama file maupun nama subfolder. Alur 2 & 3 juga
+lanjutkan_picklist() baik untuk penanda nama file maupun nama subfolder. Alur ini juga satu-
+satunya yang mengisi detail-resi-spesial.xlsx/detail-resi-bukan-spesial.xlsx (langsung di
+folder sesi, BUKAN di subfolder SPESIAL) - lihat catat_detail_spesial(). Alur 2 & 3 juga
 disimpan di subfolder masing-masing (`URGENT`, `SATUAN`, `KOMBINASI` - lihat parameter
 `subfolder`, berbeda dari `tag`: TIDAK ikut disisipkan ke nama file, lihat catatan di Alur
 2/3 di bawah); Alur 0, 4 & 5 (sampel, Shopee Pagi, J&T Resi Siang) TIDAK memakai penanda
@@ -232,6 +235,19 @@ JEDA_COBA_429_S = jubelio.JEDA_COBA_429_S
 
 KOLOM_RIWAYAT = ["Waktu", "SKU", "No Picklist", "Total Pesanan", "Resi Keluar",
                  "File Label", "Catatan", "Durasi"]
+
+# Detail resi SKU spesial (1 file per sesi, di folder_label - lihat catat_detail_spesial()):
+# dipakai HANYA utk picklist ber-tag TAG_SPESIAL (Alur 1), 1 baris per pesanan yang resinya
+# BENAR-BENAR keluar & labelnya berhasil diunduh (bukan yang batal/belum dapat resi - itu
+# sudah ditangani peringatan_resi.py). Kalau dari 1 picklist SKU spesial jumlah baris itu
+# masih >= MIN_RESI, SKU-nya tetap sah spesial -> NAMA_DETAIL_SPESIAL. Kalau < MIN_RESI
+# (mis. sebagian resi di picklist itu ternyata batal/request-cancel saat proses, jadi yang
+# benar-benar tercetak cuma 1-2) -> SKU itu gugur jadi tidak spesial lagi, tapi baris yang
+# sudah tercetak labelnya tetap dicatat, ke file BEDA (NAMA_DETAIL_BUKAN_SPESIAL) supaya bisa
+# dipisah saat memilah resi fisik.
+NAMA_DETAIL_SPESIAL = "detail-resi-spesial.xlsx"
+NAMA_DETAIL_BUKAN_SPESIAL = "detail-resi-bukan-spesial.xlsx"
+KOLOM_DETAIL_SPESIAL = ["No Picklist", "SKU", "No Pesanan", "No Resi"]
 
 log = logging.getLogger("sku-spesial")
 
@@ -1553,6 +1569,40 @@ def catat_riwayat(file: Path, baris: dict) -> None:
             w.writerow({kol: baris.get(kol, "") for kol in KOLOM_RIWAYAT})
 
 
+def catat_detail_spesial(folder_label: Path, nama_file: str, baris_list: list[dict]) -> None:
+    """Tulis/tambah `baris_list` (kolom KOLOM_DETAIL_SPESIAL) ke `folder_label/nama_file` -
+    1 file per sesi, dipanggil dari lanjutkan_picklist() - lihat NAMA_DETAIL_SPESIAL/
+    NAMA_DETAIL_BUKAN_SPESIAL untuk kapan masing-masing nama file dipakai."""
+    from openpyxl import Workbook, load_workbook
+
+    file = folder_label / nama_file
+    try:
+        if file.exists():
+            wb = load_workbook(file)
+            ws = wb.active
+        else:
+            folder_label.mkdir(parents=True, exist_ok=True)
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Detail"
+            ws.append(KOLOM_DETAIL_SPESIAL)
+            for kol, lebar in zip("ABCD", (18, 16, 22, 18)):
+                ws.column_dimensions[kol].width = lebar
+        for baris in baris_list:
+            ws.append([baris.get(kol, "") for kol in KOLOM_DETAIL_SPESIAL])
+        wb.save(file)
+    except PermissionError:
+        cadangan = file.with_suffix(".csv")
+        log.warning("  %s sedang dibuka di Excel; detail ditulis ke %s", file.name, cadangan.name)
+        baru = not cadangan.exists()
+        with open(cadangan, "a", newline="", encoding="utf-8-sig") as f:
+            w = csv.DictWriter(f, fieldnames=KOLOM_DETAIL_SPESIAL)
+            if baru:
+                w.writeheader()
+            for baris in baris_list:
+                w.writerow({kol: baris.get(kol, "") for kol in KOLOM_DETAIL_SPESIAL})
+
+
 # ============================================================== alur
 def _nama_file(teks: str) -> str:
     return re.sub(r"[^\w.-]+", "_", teks)
@@ -1571,7 +1621,11 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     nama file (beda dari `tag`) - dipakai Alur 2/3 (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/
     SUBFOLDER_KOMBINASI di proses_urgent()/proses_reguler()) supaya nama file tetap seperti
     semula, cuma lokasi penyimpanannya yang pindah. Default (keduanya None) tanpa subfolder;
-    kalau keduanya diisi (tidak terjadi di kode saat ini), `subfolder` menang."""
+    kalau keduanya diisi (tidak terjadi di kode saat ini), `subfolder` menang.
+    Kalau `tag` menandakan SKU spesial (lihat TAG_SPESIAL/_tag_spesial()), tiap pesanan yang
+    resinya benar-benar keluar dicatat juga ke catat_detail_spesial() - NAMA_DETAIL_SPESIAL
+    kalau jumlahnya masih >= MIN_RESI, NAMA_DETAIL_BUKAN_SPESIAL kalau kurang (sebagian resi
+    di picklist ini batal/tidak keluar saat proses, jadi SKU-nya gugur jadi tidak spesial)."""
     log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, picklist_id)
 
@@ -1587,7 +1641,8 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     log.info("  [5] Siap dikirim: minta resi untuk %d pesanan", len(ids))
     info_slot_pickup(k, pesanan)
     rows = minta_resi(k, ids)
-    ada_resi = [r["salesorder_id"] for r in rows if _ada_resi(r)]
+    baris_ada_resi = [r for r in rows if _ada_resi(r)]
+    ada_resi = [r["salesorder_id"] for r in baris_ada_resi]
     batal = [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and _batal(r)]
     tanpa_resi = [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and not _batal(r)]
     if batal:
@@ -1608,6 +1663,14 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
                                   f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
         file_label = str(unduh_label(k, ada_resi, tujuan))
         log.info("  Label: %s", file_label)
+
+    if tag and tag.endswith(TAG_SPESIAL) and baris_ada_resi:
+        nama_detail = (NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
+                       else NAMA_DETAIL_BUKAN_SPESIAL)
+        catat_detail_spesial(folder_label, nama_detail, [
+            {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
+             "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
+
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
             "No Picklist": picklist_no, "Total Pesanan": jumlah, "Resi Keluar": len(ada_resi),
             "File Label": file_label, "Catatan": catatan}

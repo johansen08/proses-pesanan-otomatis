@@ -286,6 +286,14 @@ TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kur
 - Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label").
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
   File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
+- Detail resi (1 file per sesi, langsung di folder sesi `label-pengiriman/<tanggal>/<sesi>/`,
+  BUKAN di subfolder SPESIAL): 1 baris per pesanan yang resinya benar-benar keluar & labelnya
+  berhasil diunduh (kolom No Picklist, SKU, No Pesanan, No Resi). Kalau dari 1 picklist jumlah
+  baris itu masih >= 3 (MIN_RESI), SKU-nya tetap sah spesial → masuk `detail-resi-spesial.xlsx`.
+  Kalau sebagian resinya ternyata batal/request-cancel saat proses sehingga yang benar-benar
+  tercetak jadi < 3 → SKU-nya gugur jadi tidak spesial lagi, tapi baris yang sudah tercetak
+  tetap dicatat, ke `detail-resi-bukan-spesial.xlsx` (file berbeda) supaya bisa dipisah saat
+  memilah resi fisik.
 - SKU dilewati jika pesanan tersisa < 3, stok kurang, pesanan dari lokasi berbeda,
   atau ada item selain SKU itu.
 - Uji tanpa internet: `.venv\Scripts\python tests\test_proses_label.py`

@@ -254,7 +254,19 @@ def uji_proses_lengkap():
         assert baris[0][:4] == ("Waktu", "SKU", "No Picklist", "Total Pesanan")
         assert baris[0][-1] == "Durasi" and baris[1][-1] == hasil[0]["Durasi"], baris
         assert baris[1][1:5] == (SKU, "PICK-000154839", 4, 4), baris[1]
-    print("  proses lengkap: 500 -> coba ulang, tunggu FINISH_PICK, 3x minta resi, PDF & riwayat tersimpan")
+
+        ws = load_workbook(d / "label" / pl.NAMA_DETAIL_SPESIAL).active
+        detail = list(ws.values)
+        assert detail[0] == tuple(pl.KOLOM_DETAIL_SPESIAL)
+        assert len(detail) == 1 + 4, detail
+        assert all(b[0] == "PICK-000154839" and b[1] == SKU for b in detail[1:]), detail
+        assert sorted(b[2] for b in detail[1:]) == [f"SO{i}" for i in
+                                                     sorted([9067835, 9068161, 9068180, 9068214])]
+        assert sorted(b[3] for b in detail[1:]) == [f"JY{i}" for i in
+                                                     sorted([9067835, 9068161, 9068180, 9068214])]
+        assert not (d / "label" / pl.NAMA_DETAIL_BUKAN_SPESIAL).exists()
+    print("  proses lengkap: 500 -> coba ulang, tunggu FINISH_PICK, 3x minta resi, PDF, riwayat & "
+          "detail-resi-spesial tersimpan")
 
 
 def uji_lanjutkan_picklist_terhenti():
@@ -343,6 +355,48 @@ def uji_lewati_jika_kurang_dari_3():
     assert "No Picklist" not in hasil[0] and hasil[0]["Durasi"]
     assert not any(m == "POST" for m, _, _ in j.log)
     print("  < 3 pesanan: SKU dilewati tanpa membuat picklist")
+
+
+def uji_detail_resi_spesial_tercatat():
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    ids = [9068214, 9068180, 9068161, 9067835]
+    _picklist_selesai(j, ids)
+    with tempfile.TemporaryDirectory() as d:
+        folder = Path(d) / "label"
+        pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, folder, tag=pl.TAG_SPESIAL)
+        from openpyxl import load_workbook
+        ws = load_workbook(folder / pl.NAMA_DETAIL_SPESIAL).active
+        baris = list(ws.values)
+        assert baris[0] == tuple(pl.KOLOM_DETAIL_SPESIAL)
+        assert len(baris) == 1 + len(ids), baris
+        assert all(b[0] == "PICK-000154839" and b[1] == SKU for b in baris[1:]), baris
+        assert sorted(b[2] for b in baris[1:]) == sorted(f"SO{i}" for i in ids)
+        assert sorted(b[3] for b in baris[1:]) == sorted(f"JY{i}" for i in ids)
+        assert not (folder / pl.NAMA_DETAIL_BUKAN_SPESIAL).exists()
+    print("  detail-resi-spesial.xlsx: No Picklist/SKU/No Pesanan/No Resi tercatat saat resi keluar >= MIN_RESI")
+
+
+def uji_detail_resi_bukan_spesial_saat_kurang_dari_min_resi():
+    """4 resi awalnya diperkirakan spesial, tapi 2 di antaranya batal/request-cancel saat proses
+    -> tinggal 2 yang benar-benar tercetak labelnya (< MIN_RESI) -> SKU gugur jadi tidak spesial,
+    tapi baris yang tercetak tetap dicatat, ke file BEDA supaya bisa dipisah saat memilah resi fisik."""
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    ids = [9068214, 9068180, 9068161, 9067835]
+    _picklist_selesai(j, ids)
+    j.batal_ids = {9068180, 9068161}
+    with tempfile.TemporaryDirectory() as d:
+        folder = Path(d) / "label"
+        pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, folder, tag=pl.TAG_SPESIAL)
+        from openpyxl import load_workbook
+        ws = load_workbook(folder / pl.NAMA_DETAIL_BUKAN_SPESIAL).active
+        baris = list(ws.values)
+        assert len(baris) == 1 + 2, baris
+        assert sorted(b[2] for b in baris[1:]) == ["SO9067835", "SO9068214"]
+        assert sorted(b[3] for b in baris[1:]) == ["JY9067835", "JY9068214"]
+        assert not (folder / pl.NAMA_DETAIL_SPESIAL).exists()
+    print("  detail-resi-bukan-spesial.xlsx: baris yang tercetak tetap dicatat walau SKU gugur (< MIN_RESI)")
 
 
 class JubelioPalsuUrgent:

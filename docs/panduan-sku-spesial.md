@@ -156,6 +156,45 @@ Tanpa judul, nama file sumber, keterangan syarat, atau ringkasan penyaringan
 
 Nama file: `laporan-sku-spesial/SKU_Spesial_YYYY-MM-DD_HHMM.pdf`.
 
+### Detail resi per sesi (Excel, dibuat saat `--label --jalankan`)
+
+Implementasi: `proses_label.py::catat_detail_spesial()`, dipanggil dari `lanjutkan_picklist()`
+HANYA untuk picklist ber-tag `TAG_SPESIAL` (Alur 1). Berbeda dari PDF ringkasan di atas (yang
+berbasis SKU), file ini berbasis **resi** - 1 baris per pesanan yang resinya BENAR-BENAR keluar
+& labelnya berhasil diunduh (bukan yang batal/belum dapat resi - sudah ditangani
+`peringatan_resi.py`). Tujuannya supaya tim resi tidak perlu buka PDF label satu-satu untuk
+tahu SKU & nomor picklist asal tiap resi.
+
+1 file per sesi, langsung di folder sesi (`label-pengiriman/<tanggal>/<sesi>/`, BUKAN di
+subfolder `SPESIAL`):
+
+| Kolom | Isi |
+|---|---|
+| `No Picklist` | `picklist_no` picklist SKU spesial yang bersangkutan |
+| `SKU` | SKU picklist itu |
+| `No Pesanan` | `salesorder_no` (nomor pesanan asli, sama dengan kolom `No pesanan` di Excel sumber) |
+| `No Resi` | `tracking_no` |
+
+Baris ditulis sekaligus per picklist (tidak diselang picklist lain), dan picklist diproses
+berurutan per SKU (urutan rak) - jadi isinya otomatis terkelompok per `No Picklist`+`SKU` tanpa
+perlu sorting tambahan.
+
+**Nama file berbeda tergantung jumlah resi yang benar-benar keluar** (dibandingkan ke `MIN_RESI`,
+bukan nilai baru):
+
+- **`detail-resi-spesial.xlsx`** - jumlah baris (resi keluar) di picklist itu masih **>= MIN_RESI**:
+  SKU tetap sah spesial.
+- **`detail-resi-bukan-spesial.xlsx`** - jumlah baris **< MIN_RESI** (mis. dari 4 pesanan yang
+  awalnya diperkirakan spesial, 2 batal + 1 request-cancel saat proses, tinggal 1 yang benar-benar
+  tercetak): SKU itu gugur jadi tidak spesial lagi, tapi baris yang sudah tercetak labelnya tetap
+  dicatat di sini (bukan dibuang), supaya kelihatan saat memilah resi fisik hasil cetak.
+
+Mode uji (tanpa `--jalankan`) tidak pernah menulis file ini - tidak ada resi/label sungguhan
+yang bisa dicatat. Picklist yang diselesaikan lewat `--lanjut` (resume generik via
+`lanjutkan()`, bukan `proses()`) juga tidak mengisi file ini, karena `lanjutkan()` tidak tahu
+picklist itu dari alur mana (tidak memakai `tag` - batasan yang sama berlaku untuk penanda
+nama file & subfolder `SPESIAL`, lihat bagian 1 README).
+
 > **Sumber angka di tabel** (implementasi di `main.py`, bukan `sku_spesial.py`): dasarnya
 > **kandidat** hasil algoritma bagian 4 (langkah 1-8 dokumen ini) untuk `main.py` biasa dan
 > mode uji `--label`. Tapi untuk `--label --jalankan` (proses picklist sungguhan), PDF baru
