@@ -1531,8 +1531,13 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
                             {**pdf, "baseDocumentID": html5["documentId"]})["documentId"]
         _tunggu_dokumen(k, dasar, doc)
 
-    r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc}",
-                     params={"response-content-disposition": "attachment"})
+    url_dok = f"{REPORT_API}/{dasar}/documents/{doc}"
+    r = k.report_get(url_dok, params={"response-content-disposition": "attachment"})
+    if r.status_code != 200 or not r.content.startswith(b"%PDF"):
+        url_alt = url_dok.replace("report-prod.jubelio.com", "report.jubelio.com")
+        log.info("  Unduh PDF label dari %s gagal (HTTP %s), coba %s",
+                 url_dok, r.status_code, url_alt)
+        r = k.report_get(url_alt, params={"response-content-disposition": "attachment"})
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, "
                           f"{r.headers.get('content-type')})")
