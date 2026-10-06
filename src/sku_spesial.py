@@ -26,6 +26,11 @@ KOLOM_WAJIB = ["No pesanan", "SKU", "qty", "Kurir"]
 KURIR_DIIZINKAN = ("J&T", "SPX")   # dicocokkan dengan awalan teks kolom Kurir
 MIN_RESI = 3                       # minimal resi per SKU (J&T + SPX digabung)
 
+# SKU yang SENGAJA tidak pernah dihitung spesial walau jumlah resinya >= MIN_RESI - resinya
+# tetap mengalir ke jalur "satuan" (1qty reguler) lewat pisah_reguler() di proses_label.py,
+# karena tidak termasuk resi_spesial_semua (kondisi khusus tim, 06-10-2026).
+SKU_DIKECUALIKAN_SPESIAL = {"C225-UB"}
+
 
 # ---------------------------------------------------------------- 1. baca data
 def _cari_baris_header(path: Path) -> int:
@@ -226,6 +231,8 @@ def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None 
         f4 = f3[nilai.notna() & (nilai != 0)]
         resi_nilai_0 = int((nilai == 0).sum())
         resi_tanpa_nilai = int(nilai.isna().sum())
+
+    f4 = f4[~f4["SKU"].isin(SKU_DIKECUALIKAN_SPESIAL)]   # lihat SKU_DIKECUALIKAN_SPESIAL
 
     per_sku = f4.groupby("SKU").size().rename("Jumlah Resi").reset_index()
     rak_per_sku = f4.groupby("SKU")["Rak"].agg(_rak_dominan).rename("No Rak").reset_index()

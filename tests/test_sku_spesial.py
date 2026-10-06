@@ -221,6 +221,17 @@ def uji_lantai_per_pesanan_abaikan_tl_dan_fallback_sku_dasar():
           "di granularitas lantai")
 
 
+def uji_sku_dikecualikan_tidak_pernah_spesial():
+    # C225-UB: kondisi khusus - tidak pernah dihitung spesial walau resinya banyak
+    df = _df([(f"R{i}", "C225-UB", 1, "SPX Hemat") for i in range(5)] +
+             [(f"S{i}", "X", 1, "SPX Hemat") for i in range(3)])
+    tabel, ringkasan = ss.hitung_sku_spesial(df)
+    assert list(tabel["SKU"]) == ["X"], tabel
+    assert "C225-UB" not in ringkasan["resi_per_sku"]
+    print("  SKU_DIKECUALIKAN_SPESIAL: C225-UB tidak pernah masuk tabel spesial walau 5 resi "
+          "(SKU lain tetap dihitung normal)")
+
+
 def uji_min_resi_tepat_batas():
     df2 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(2)])
     df3 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(3)])
