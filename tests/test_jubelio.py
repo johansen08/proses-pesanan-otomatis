@@ -24,19 +24,41 @@ class Resp:
         return self._data
 
 
-def _tempel(monkeypatch_dict, nama, fungsi):
-    """Ganti atribut modul `requests` sementara; dikembalikan oleh pemanggil lewat try/finally."""
-    import requests
-    lama = getattr(requests, nama)
-    setattr(requests, nama, fungsi)
-    monkeypatch_dict[nama] = lama
-    return lama
+# jubelio.py memakai 1 requests.Session dibagi (dicache di jubelio._sesi_bersama - lihat
+# jubelio._sesi()) supaya koneksi dipakai ulang antar panggilan - jadi di sini ditiru dengan
+# mengganti requests.Session (bukan requests.get/post module-level, yang tidak lagi dipanggil
+# langsung), dan _sesi_bersama DIRESET sebelum & sesudah tiap uji supaya tidak ada sesi tiruan
+# uji sebelumnya yang "nyangkut" di cache lintas fungsi uji.
+class _SesiPalsu:
+    """Sesi requests tiruan generik: `get`/`post` dilempar ke fungsi yang diberikan."""
+
+    def __init__(self, get=None, post=None):
+        self._get, self._post = get, post
+
+    def get(self, *a, **k):
+        return self._get(*a, **k)
+
+    def post(self, *a, **k):
+        return self._post(*a, **k)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
 
 
-def _pulihkan(lama_dict):
+def _pasang_sesi(lama_dict, sesi):
     import requests
-    for nama, fungsi in lama_dict.items():
-        setattr(requests, nama, fungsi)
+    lama_dict["Session"] = requests.Session
+    requests.Session = lambda: sesi
+    jb._sesi_bersama = None
+
+
+def _lepas_sesi(lama_dict):
+    import requests
+    requests.Session = lama_dict["Session"]
+    jb._sesi_bersama = None
 
 
 # -------------------------------------------------- url_excel (fungsi murni)
@@ -55,11 +77,11 @@ def uji_login_sukses_kembalikan_token():
         dipanggil["url"], dipanggil["json"], dipanggil["headers"] = url, json, headers
         return Resp(200, {"token": "TKN-ABC"})
 
-    _tempel(lama, "post", post_palsu)
+    _pasang_sesi(lama, _SesiPalsu(post=post_palsu))
     try:
         token = jb.login("a@b.com", "rahasia")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     assert token == "TKN-ABC"
     assert dipanggil["url"] == jb.URL_LOGIN
     assert dipanggil["json"]["email"] == "a@b.com" and dipanggil["json"]["password"] == "rahasia"
@@ -69,7 +91,7 @@ def uji_login_sukses_kembalikan_token():
 
 def uji_login_gagal_http_bukan_200():
     lama = {}
-    _tempel(lama, "post", lambda *a, **k: Resp(401, {"message": "Email/password salah"}))
+    _pasang_sesi(lama, _SesiPalsu(post=lambda *a, **k: Resp(401, {"message": "Email/password salah"})))
     try:
         try:
             jb.login("a@b.com", "salah")
@@ -78,13 +100,13 @@ def uji_login_gagal_http_bukan_200():
         else:
             raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  login: HTTP 401 -> JubelioError dengan pesan dari respons")
 
 
 def uji_login_sukses_tapi_token_kosong():
     lama = {}
-    _tempel(lama, "post", lambda *a, **k: Resp(200, {}))
+    _pasang_sesi(lama, _SesiPalsu(post=lambda *a, **k: Resp(200, {})))
     try:
         try:
             jb.login("a@b.com", "x")
@@ -93,25 +115,27 @@ def uji_login_sukses_tapi_token_kosong():
         else:
             raise AssertionError("seharusnya JubelioError kalau token tidak ada di respons")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  login: HTTP 200 tapi tanpa token -> JubelioError")
 
 
 # -------------------------------------------------- ambil_url_laporan()
 def uji_ambil_url_laporan_sukses():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(200, {"status": "ok", "url": "https://x/?token=1"}))
+    _pasang_sesi(lama, _SesiPalsu(
+        get=lambda *a, **k: Resp(200, {"status": "ok", "url": "https://x/?token=1"})))
     try:
         url = jb.ambil_url_laporan("TKN")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     assert url == "https://x/?token=1"
     print("  ambil_url_laporan: status ok -> url dikembalikan")
 
 
 def uji_ambil_url_laporan_status_bukan_ok():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(200, {"status": "error", "url": None}))
+    _pasang_sesi(lama, _SesiPalsu(
+        get=lambda *a, **k: Resp(200, {"status": "error", "url": None})))
     try:
         try:
             jb.ambil_url_laporan("TKN")
@@ -120,7 +144,7 @@ def uji_ambil_url_laporan_status_bukan_ok():
         else:
             raise AssertionError("seharusnya JubelioError kalau status bukan ok / url kosong")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  ambil_url_laporan: status bukan 'ok' atau url kosong -> JubelioError")
 
 
@@ -134,14 +158,14 @@ def uji_unduh_excel_sukses_simpan_file():
         dipanggil["url"], dipanggil["cookies"] = url, cookies
         return Resp(200, content=isi, headers={"content-type": "application/vnd.ms-excel"})
 
-    _tempel(lama, "get", get_palsu)
+    _pasang_sesi(lama, _SesiPalsu(get=get_palsu))
     try:
         with tempfile.TemporaryDirectory() as tmp:
             tujuan = jb.unduh_excel("TKN", "https://report-prod.jubelio.com/?&token=X", Path(tmp))
             assert tujuan.exists() and tujuan.read_bytes() == isi
             assert tujuan.parent == Path(tmp)
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     assert dipanggil["url"] == "https://report-prod.jubelio.com/xlsx/?&token=X"
     assert dipanggil["cookies"] == {"JB_OMNI_ACCESS_TOKEN": "TKN"}
     print("  unduh_excel: file disimpan ke folder tujuan, memakai url /xlsx/ & cookie token")
@@ -149,8 +173,8 @@ def uji_unduh_excel_sukses_simpan_file():
 
 def uji_unduh_excel_bukan_file_excel():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(200, content=b"<html>bukan excel</html>",
-                                              headers={"content-type": "text/html"}))
+    _pasang_sesi(lama, _SesiPalsu(get=lambda *a, **k: Resp(
+        200, content=b"<html>bukan excel</html>", headers={"content-type": "text/html"})))
     try:
         with tempfile.TemporaryDirectory() as tmp:
             try:
@@ -160,13 +184,13 @@ def uji_unduh_excel_bukan_file_excel():
             else:
                 raise AssertionError("seharusnya JubelioError kalau respons bukan file xlsx (bukan 'PK')")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  unduh_excel: konten tidak diawali 'PK' (bukan zip/xlsx) -> JubelioError")
 
 
 def uji_unduh_excel_http_gagal():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(500, text="server error"))
+    _pasang_sesi(lama, _SesiPalsu(get=lambda *a, **k: Resp(500, text="server error")))
     try:
         with tempfile.TemporaryDirectory() as tmp:
             try:
@@ -176,7 +200,7 @@ def uji_unduh_excel_http_gagal():
             else:
                 raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  unduh_excel: HTTP bukan 200 -> JubelioError")
 
 
@@ -215,13 +239,11 @@ def uji_ambil_nilai_pesanan_gabung_semua_halaman():
     halaman2 = [{"salesorder_no": "C", "grand_total": "5000.0000"}]
     sesi = SesiPalsu([halaman1, halaman2], hasil_q={})
     lama = {}
-    import requests
-    lama["Session"] = requests.Session
-    requests.Session = lambda: sesi
+    _pasang_sesi(lama, sesi)
     try:
         nilai = jb.ambil_nilai_pesanan("TKN", {"X0", "C"})
     finally:
-        requests.Session = lama["Session"]
+        _lepas_sesi(lama)
     assert nilai["X0"] == 1000.0 and nilai["C"] == 5000.0 and len(nilai) == 201, nilai
     halaman_diminta = sorted({p["page"] for p in sesi.log if not p.get("q")})
     assert halaman_diminta == [1, 2], halaman_diminta
@@ -233,13 +255,11 @@ def uji_ambil_nilai_pesanan_cari_satu_per_satu_yang_belum_ketemu():
     halaman = [[{"salesorder_no": "A", "grand_total": "10000.0000"}]]
     sesi = SesiPalsu(halaman, hasil_q={"B": {"salesorder_no": "B", "grand_total": "2500.0000"}})
     lama = {}
-    import requests
-    lama["Session"] = requests.Session
-    requests.Session = lambda: sesi
+    _pasang_sesi(lama, sesi)
     try:
         nilai = jb.ambil_nilai_pesanan("TKN", {"A", "B", "TIDAK-ADA"})
     finally:
-        requests.Session = lama["Session"]
+        _lepas_sesi(lama)
     assert nilai == {"A": 10000.0, "B": 2500.0}, nilai
     # "TIDAK-ADA" dicari (q) tapi tidak ketemu -> tidak masuk dict, tidak error
     dicari_individual = [p["q"] for p in sesi.log if p.get("q")]
@@ -254,13 +274,11 @@ def uji_ambil_stok_kosong_gabung_semua_halaman():
     halaman2 = [{"salesorder_no": "C", "wms_status": "EMPTY_STOCK"}]
     sesi = SesiPalsu([halaman1, halaman2], hasil_q={})
     lama = {}
-    import requests
-    lama["Session"] = requests.Session
-    requests.Session = lambda: sesi
+    _pasang_sesi(lama, sesi)
     try:
         hasil = jb.ambil_stok_kosong("TKN")
     finally:
-        requests.Session = lama["Session"]
+        _lepas_sesi(lama)
     assert len(hasil) == 201, len(hasil)
     assert {o["salesorder_no"] for o in hasil} == {f"X{i}" for i in range(200)} | {"C"}
     print("  ambil_stok_kosong: halaman ke-2 ikut diambil & digabung selama totalCount > "
@@ -269,8 +287,7 @@ def uji_ambil_stok_kosong_gabung_semua_halaman():
 
 class SesiGagalPalsu:
     """Sesi palsu yang selalu membalas HTTP 500 - meniru requests.Session() dipakai
-    ambil_stok_kosong() (beda dari ambil_nilai_pesanan(): patch requests.get TIDAK memengaruhi
-    sesi.get() di dalam `with requests.Session() as sesi`, jadi harus patch requests.Session)."""
+    ambil_stok_kosong()."""
 
     def get(self, url, headers=None, timeout=None, params=None):
         return Resp(500, text="server error")
@@ -284,9 +301,7 @@ class SesiGagalPalsu:
 
 def uji_ambil_stok_kosong_http_gagal():
     lama = {}
-    import requests
-    lama["Session"] = requests.Session
-    requests.Session = SesiGagalPalsu
+    _pasang_sesi(lama, SesiGagalPalsu())
     try:
         try:
             jb.ambil_stok_kosong("TKN")
@@ -295,7 +310,7 @@ def uji_ambil_stok_kosong_http_gagal():
         else:
             raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
     finally:
-        requests.Session = lama["Session"]
+        _lepas_sesi(lama)
     print("  ambil_stok_kosong: HTTP bukan 200 -> JubelioError")
 
 
@@ -307,11 +322,11 @@ def uji_recheck_stok_sukses():
         dipanggil["url"], dipanggil["headers"] = url, headers
         return Resp(200, {"status": "ok"})
 
-    _tempel(lama, "get", get_palsu)
+    _pasang_sesi(lama, _SesiPalsu(get=get_palsu))
     try:
         jb.recheck_stok("TKN")   # tidak error = sukses
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     assert dipanggil["url"] == jb.URL_RECHECK_STOK
     assert dipanggil["headers"]["authorization"] == "TKN"
     print("  recheck_stok: GET tanpa body/parameter ke URL_RECHECK_STOK, authorization terisi")
@@ -319,7 +334,7 @@ def uji_recheck_stok_sukses():
 
 def uji_recheck_stok_status_bukan_ok():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(200, {"status": "gagal"}))
+    _pasang_sesi(lama, _SesiPalsu(get=lambda *a, **k: Resp(200, {"status": "gagal"})))
     try:
         try:
             jb.recheck_stok("TKN")
@@ -328,13 +343,13 @@ def uji_recheck_stok_status_bukan_ok():
         else:
             raise AssertionError("seharusnya JubelioError kalau status respons bukan 'ok'")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  recheck_stok: respons status bukan 'ok' -> JubelioError")
 
 
 def uji_recheck_stok_http_gagal():
     lama = {}
-    _tempel(lama, "get", lambda *a, **k: Resp(500, text="server error"))
+    _pasang_sesi(lama, _SesiPalsu(get=lambda *a, **k: Resp(500, text="server error")))
     try:
         try:
             jb.recheck_stok("TKN")
@@ -343,7 +358,7 @@ def uji_recheck_stok_http_gagal():
         else:
             raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
     finally:
-        _pulihkan(lama)
+        _lepas_sesi(lama)
     print("  recheck_stok: HTTP bukan 200 -> JubelioError")
 
 

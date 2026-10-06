@@ -87,7 +87,9 @@ import csv
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -213,6 +215,12 @@ JAM_CUTOFF_JNT_SIANG = 15
 LABEL_JNT_SIANG = "JNT-SIANG"
 
 MAKS_COBA_PICKLIST = 3
+# Langkah 3-6 (tunggu picking selesai, minta resi, unduh PDF - lihat lanjutkan_picklist())
+# paling banyak menghabiskan waktu TUNGGU (bukan HTTP), jadi proses() menjalankannya BERSAMAAN
+# antar SKU lewat ThreadPoolExecutor - picklist (langkah 1-2) TETAP dibuat berurutan dulu
+# (lihat proses()) karena deteksi picklist terlompat (peringatan_picklist.ambil_nomor_hilang())
+# butuh urutan pasti nomor picklist yang baru dibuat.
+MAKS_WORKER_PARALEL = 5
 TUNGGU_PICKING_S = 90                   # batas tunggu status FINISH_PICK
 TUNGGU_FINISH_PICK_S = 90               # batas tunggu pesanan muncul di Picking > Selesai
 TUNGGU_RESI_S = 180                     # batas tunggu semua nomor resi keluar
@@ -763,11 +771,13 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
     salesorder_id yang kombinasi raknya cocok lewat ready-to-process?combination[]=... (bisa
     diulang), dibatasi channel_ids/couriers yang sama seperti ambil_pesanan_reguler(). Daftar
     kombinasi dipecah per MAKS_KOMBINASI_PER_PANGGILAN nilai supaya query string tidak
-    kepanjangan. Dipakai _kelompok_1qty_per_rak()."""
+    kepanjangan. Dipakai _kelompok_1qty_per_rak(). Antar grup saling independen, jadi
+    dijalankan BERSAMAAN lewat ThreadPoolExecutor."""
     pakai_filter_tipe = ((channel_ids and CHANNEL_ID_SHOPEE in channel_ids)
                          or any(c.lower() == "spx" for c in couriers or []))
-    hasil = {}
-    for grup, daftar in kombinasi_per_grup.items():
+
+    def _ambil_grup(item: tuple[str, list[str]]) -> tuple[str, set[int]]:
+        grup, daftar = item
         ids = set()
         for potongan in _potong(daftar, MAKS_KOMBINASI_PER_PANGGILAN):
             page, ambil = 1, 0
@@ -790,8 +800,12 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
                 if not data or ambil >= int(j.get("totalCount") or 0):
                     break
                 page += 1
-        hasil[grup] = ids
-    return hasil
+        return grup, ids
+
+    if not kombinasi_per_grup:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(kombinasi_per_grup))) as ex:
+        return dict(ex.map(_ambil_grup, kombinasi_per_grup.items()))
 
 
 # ===================================================== fallback SKU bundling (live, master data)
@@ -1344,6 +1358,18 @@ def _pisahkan_stok_kosong(k: Klien, items: list[dict]) -> tuple[list[dict], list
     return sisa, pesan
 
 
+def _mulai_backoff(awal: float, maks: float, faktor: float = 1.5):
+    """Generator jeda polling adaptif (dipakai selesaikan_picking()/pesanan_selesai_pick()/
+    _tunggu_dokumen() - BUKAN minta_resi(), yang jedanya sengaja tetap meniru web, lihat
+    JEDA_RESI_S): makin lama status yang ditunggu belum siap, makin jarang dicek - responsif
+    di awal (kebanyakan kasus selesai cepat), tidak membebani Jubelio dengan request status
+    beruntun kalau ternyata lambat."""
+    jeda = awal
+    while True:
+        yield jeda
+        jeda = min(jeda * faktor, maks)
+
+
 # ============================================================== 3. selesaikan picking
 def _picking_selesai(p: dict) -> bool:
     return bool(p.get("is_completed")) and all(
@@ -1374,6 +1400,7 @@ def selesaikan_picking(k: Klien, picklist_id: int) -> None:
 
     # penanda selesai (di UI: tulisan merah -> hitam)
     batas = time.monotonic() + TUNGGU_PICKING_S
+    backoff = _mulai_backoff(0.5, 3)
     while True:
         p = k.get(f"sales/picklists/{picklist_id}")
         if _picking_selesai(p):
@@ -1381,12 +1408,13 @@ def selesaikan_picking(k: Klien, picklist_id: int) -> None:
         if time.monotonic() > batas:
             status = sorted({str(i.get("wms_status")) for i in p.get("items") or []})
             raise ProsesError(f"Picking belum selesai setelah {TUNGGU_PICKING_S} detik (status {status})")
-        k.tidur(1)
+        k.tidur(next(backoff))
 
 
 # ============================================================== 4. Picking > Selesai
 def pesanan_selesai_pick(k: Klien, picklist_no: str, jumlah: int) -> list[dict]:
     batas = time.monotonic() + TUNGGU_FINISH_PICK_S
+    backoff = _mulai_backoff(1, 5)
     while True:
         hasil, ambil, page = [], 0, 1
         while True:
@@ -1401,7 +1429,7 @@ def pesanan_selesai_pick(k: Klien, picklist_no: str, jumlah: int) -> list[dict]:
             page += 1
         if len(hasil) >= jumlah or time.monotonic() > batas:
             return hasil
-        k.tidur(2)
+        k.tidur(next(backoff))
 
 
 # ============================================================== 5. siap dikirim
@@ -1427,14 +1455,23 @@ def _batal(r: dict) -> bool:
 
 
 def _cek_batal_detail(k: Klien, rows: list[dict]) -> None:
-    """Status di respons resi bisa tertinggal; pastikan lewat detail pesanan."""
-    for r in rows:
+    """Status di respons resi bisa tertinggal; pastikan lewat detail pesanan. Tiap pesanan
+    independen (GET sales/orders/<id>), jadi dicek BERSAMAAN lewat ThreadPoolExecutor - bisa
+    sampai MAKS_PESANAN_PICKLIST (200) pesanan sekaligus kalau resi timeout di picklist besar."""
+    if not rows:
+        return
+
+    def _ambil(r: dict) -> tuple[dict, dict | None]:
         try:
-            o = k.get(f"sales/orders/{r['salesorder_id']}")
+            return r, k.get(f"sales/orders/{r['salesorder_id']}")
         except ProsesError as e:
             log.warning("  Status pesanan %s gagal dicek: %s", r.get("salesorder_no"), e)
-            continue
-        r.update({x: o.get(x) for x in ("internal_status", "wms_status", "channel_status")})
+            return r, None
+
+    with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(rows))) as ex:
+        for r, o in ex.map(_ambil, rows):
+            if o is not None:
+                r.update({x: o.get(x) for x in ("internal_status", "wms_status", "channel_status")})
 
 
 def minta_resi(k: Klien, ids: list[int]) -> list[dict]:
@@ -1468,6 +1505,7 @@ def _report_source(html: str) -> dict:
 
 def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str) -> None:
     batas = time.monotonic() + TUNGGU_PDF_S
+    backoff = _mulai_backoff(0.3, 2)
     while True:
         r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info")
         if r.status_code == 200:
@@ -1476,7 +1514,7 @@ def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str) -> None:
             raise ProsesError(f"Pembuatan dokumen gagal (HTTP {r.status_code}): {r.text[:200]}")
         if time.monotonic() > batas:
             raise ProsesError(f"Dokumen belum selesai dibuat setelah {TUNGGU_PDF_S} detik")
-        k.tidur(0.5)
+        k.tidur(next(backoff))
 
 
 def _expired(e: ProsesError) -> bool:
@@ -1550,25 +1588,45 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
 
 
 # ============================================================== riwayat
-def catat_riwayat(file: Path, baris: dict) -> None:
+# Workbook riwayat_picklist.xlsx & detail-resi-*.xlsx dibuka SEKALI per file (cache di sini,
+# key = path resolve()) dan disimpan SEKALI di akhir proses lewat tutup_riwayat() (dipanggil
+# main.py lewat finally) - sama seperti pola rekap_master_excel.py, menghindari load_workbook()+
+# wb.save() ULANG seluruh file tiap picklist/batch (O(n^2) kalau dibuka-simpan tiap baris).
+# catat_detail_spesial() bisa dipanggil dari beberapa thread worker sekaligus (lihat
+# MAKS_WORKER_PARALEL di proses()), jadi semua akses _wb_cache/worksheet dikunci _lock_wb.
+_wb_cache: dict[Path, "Workbook"] = {}
+_lock_wb = threading.Lock()
+
+
+def _wb_riwayat(file: Path) -> tuple["Workbook", "Worksheet"]:
     from openpyxl import Workbook, load_workbook
 
+    key = file.resolve()
+    if key in _wb_cache:
+        wb = _wb_cache[key]
+        return wb, wb.active
+    if file.exists():
+        wb = load_workbook(file)
+        ws = wb.active
+        if ws.cell(1, len(KOLOM_RIWAYAT)).value is None:    # file lama belum punya kolom Durasi
+            ws.cell(1, len(KOLOM_RIWAYAT), KOLOM_RIWAYAT[-1])
+            ws.column_dimensions["H"].width = 18
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Riwayat"
+        ws.append(KOLOM_RIWAYAT)
+        for kol, lebar in zip("ABCDEFGH", (18, 16, 18, 14, 12, 60, 60, 18)):
+            ws.column_dimensions[kol].width = lebar
+    _wb_cache[key] = wb
+    return wb, ws
+
+
+def catat_riwayat(file: Path, baris: dict) -> None:
     try:
-        if file.exists():
-            wb = load_workbook(file)
-            ws = wb.active
-            if ws.cell(1, len(KOLOM_RIWAYAT)).value is None:    # file lama belum punya kolom Durasi
-                ws.cell(1, len(KOLOM_RIWAYAT), KOLOM_RIWAYAT[-1])
-                ws.column_dimensions["H"].width = 18
-        else:
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Riwayat"
-            ws.append(KOLOM_RIWAYAT)
-            for kol, lebar in zip("ABCDEFGH", (18, 16, 18, 14, 12, 60, 60, 18)):
-                ws.column_dimensions[kol].width = lebar
-        ws.append([baris.get(kol, "") for kol in KOLOM_RIWAYAT])
-        wb.save(file)
+        with _lock_wb:
+            wb, ws = _wb_riwayat(file)
+            ws.append([baris.get(kol, "") for kol in KOLOM_RIWAYAT])
     except PermissionError:
         cadangan = file.with_suffix(".csv")
         log.warning("  %s sedang dibuka di Excel; riwayat ditulis ke %s", file.name, cadangan.name)
@@ -1580,28 +1638,38 @@ def catat_riwayat(file: Path, baris: dict) -> None:
             w.writerow({kol: baris.get(kol, "") for kol in KOLOM_RIWAYAT})
 
 
+def _wb_detail_spesial(file: Path) -> tuple["Workbook", "Worksheet"]:
+    from openpyxl import Workbook, load_workbook
+
+    key = file.resolve()
+    if key in _wb_cache:
+        wb = _wb_cache[key]
+        return wb, wb.active
+    if file.exists():
+        wb = load_workbook(file)
+        ws = wb.active
+    else:
+        file.parent.mkdir(parents=True, exist_ok=True)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Detail"
+        ws.append(KOLOM_DETAIL_SPESIAL)
+        for kol, lebar in zip("ABCD", (18, 16, 22, 18)):
+            ws.column_dimensions[kol].width = lebar
+    _wb_cache[key] = wb
+    return wb, ws
+
+
 def catat_detail_spesial(folder_label: Path, nama_file: str, baris_list: list[dict]) -> None:
     """Tulis/tambah `baris_list` (kolom KOLOM_DETAIL_SPESIAL) ke `folder_label/nama_file` -
     1 file per sesi, dipanggil dari lanjutkan_picklist() - lihat NAMA_DETAIL_SPESIAL/
     NAMA_DETAIL_BUKAN_SPESIAL untuk kapan masing-masing nama file dipakai."""
-    from openpyxl import Workbook, load_workbook
-
     file = folder_label / nama_file
     try:
-        if file.exists():
-            wb = load_workbook(file)
-            ws = wb.active
-        else:
-            folder_label.mkdir(parents=True, exist_ok=True)
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Detail"
-            ws.append(KOLOM_DETAIL_SPESIAL)
-            for kol, lebar in zip("ABCD", (18, 16, 22, 18)):
-                ws.column_dimensions[kol].width = lebar
-        for baris in baris_list:
-            ws.append([baris.get(kol, "") for kol in KOLOM_DETAIL_SPESIAL])
-        wb.save(file)
+        with _lock_wb:
+            wb, ws = _wb_detail_spesial(file)
+            for baris in baris_list:
+                ws.append([baris.get(kol, "") for kol in KOLOM_DETAIL_SPESIAL])
     except PermissionError:
         cadangan = file.with_suffix(".csv")
         log.warning("  %s sedang dibuka di Excel; detail ditulis ke %s", file.name, cadangan.name)
@@ -1612,6 +1680,34 @@ def catat_detail_spesial(folder_label: Path, nama_file: str, baris_list: list[di
                 w.writeheader()
             for baris in baris_list:
                 w.writerow({kol: baris.get(kol, "") for kol in KOLOM_DETAIL_SPESIAL})
+
+
+def tutup_riwayat() -> None:
+    """Simpan semua workbook riwayat/detail-spesial yang dibuka selama proses ke disk SEKALI -
+    WAJIB dipanggil di akhir proses (main.py, lewat finally), sama seperti
+    rekap_master_excel.tutup(). Kalau sedang dibuka di Excel (PermissionError), dicoba ulang
+    singkat lalu disimpan ke file cadangan supaya baris yang sudah ditulis di memori proses
+    ini tidak hilang."""
+    import peringatan_gagal
+
+    for key, wb in list(_wb_cache.items()):
+        try:
+            for coba in range(3):
+                try:
+                    wb.save(key)
+                    break
+                except PermissionError:
+                    if coba < 2:
+                        time.sleep(2)
+            else:
+                cadangan = key.with_name(f"{key.stem}_tertunda_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+                wb.save(cadangan)
+                peringatan_gagal.catat(
+                    f"{key.name} sedang dibuka (tutup dulu di Excel) - baris baru disimpan "
+                    f"sementara ke {cadangan.name}, gabungkan manual ke {key.name}")
+        except Exception as e:     # noqa: BLE001 - jangan sampai proses picklist utama gagal
+            peringatan_gagal.catat(f"Gagal simpan {key.name} maupun cadangannya: {e}")
+    _wb_cache.clear()
 
 
 # ============================================================== alur
@@ -1716,42 +1812,65 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
            file_riwayat: Path, rak_per_sku: dict[str, str] | None = None,
            kurir: str | None = None) -> list[dict]:
     """Proses SKU sesuai urutan resi_per_sku (urut rak). Tiap hasil berisi Rak, Durasi & detik.
-    `kurir`: lihat cari_pesanan()."""
+    `kurir`: lihat cari_pesanan(). Picklist (langkah 1-2) dibuat berurutan untuk tiap SKU
+    (perlu urutan pasti demi peringatan_picklist.ambil_nomor_hilang()), tapi langkah 3-6
+    (tunggu picking, minta resi, unduh PDF - lihat lanjutkan_picklist()) untuk SKU yang
+    picklist-nya berhasil dibuat dijalankan BERSAMAAN lewat ThreadPoolExecutor
+    (lihat MAKS_WORKER_PARALEL) karena di situlah waktu TUNGGU paling banyak terpakai."""
     rak_per_sku = rak_per_sku or {}
-    hasil = []
+    hasil: list[dict] = []
+    tugas = []     # (indeks di hasil, mulai, pid, pno, jumlah, sku, nomor_terlompat)
+
     for n, (sku, resi) in enumerate(resi_per_sku.items(), 1):
         mulai = time.monotonic()
         rak = rak_per_sku.get(sku, "-")
         log.info("=== [%d/%d] Rak %s | SKU %s (%d resi spesial)",
                  n, len(resi_per_sku), rak, sku, len(resi))
+        hasil.append({"Rak": rak, "mulai": mulai})    # placeholder, diisi penuh di bawah
+        idx = len(hasil) - 1
         try:
             log.info("  [1-2] Filter pesanan & buat picklist")
             pid, pno, ids, _ = buat_picklist(k, sku, set(resi), kurir)
         except Lewati as e:
             log.info("  Dilewati: %s", e)
-            baris = {"SKU": sku, "Catatan": f"Dilewati: {e}"}
+            detik = time.monotonic() - mulai
+            hasil[idx] = {"SKU": sku, "Catatan": f"Dilewati: {e}", "Rak": rak,
+                         "detik": detik, "Durasi": durasi(detik)}
         except Exception as e:     # noqa: BLE001 - satu SKU gagal, SKU lain tetap jalan
             log.exception("  GAGAL %s: %s", sku, e)
-            baris = {"SKU": sku, "Catatan": f"GAGAL sebelum picklist dibuat: {e}"}
+            detik = time.monotonic() - mulai
+            hasil[idx] = {"SKU": sku, "Catatan": f"GAGAL sebelum picklist dibuat: {e}", "Rak": rak,
+                         "detik": detik, "Durasi": durasi(detik)}
         else:
             nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
-            log.info("  Picklist %s dibuat, %d pesanan", pno, len(ids))
-            baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
-                     "No Picklist": pno, "Total Pesanan": len(ids)}
-            try:
-                baris = lanjutkan_picklist(k, pid, pno, len(ids), sku, folder_label,
-                                          tag=_tag_spesial(kurir))
-            except Exception as e:     # noqa: BLE001
-                log.exception("  TERHENTI di %s: %s", pno, e)
-                baris["Catatan"] = f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"
+            log.info("  Picklist %s dibuat, %d pesanan - lanjut diproses paralel", pno, len(ids))
+            tugas.append((idx, mulai, pid, pno, len(ids), sku, nomor_terlompat))
 
-        detik = time.monotonic() - mulai
-        baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
-        if "No Picklist" in baris:
-            catat_riwayat(file_riwayat, baris)
-            rekap_master_excel.catat(baris, nomor_terlompat)
-        log.info("  Selesai SKU %s dalam %s", sku, baris["Durasi"])
-        hasil.append(baris)
+    def _lanjutkan(t: tuple) -> tuple:
+        idx, mulai, pid, pno, jumlah, sku, nomor_terlompat = t
+        baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
+                 "No Picklist": pno, "Total Pesanan": jumlah}
+        try:
+            baris = lanjutkan_picklist(k, pid, pno, jumlah, sku, folder_label,
+                                       tag=_tag_spesial(kurir))
+        except Exception as e:     # noqa: BLE001 - satu SKU gagal, SKU lain tetap jalan
+            log.exception("  TERHENTI di %s: %s", pno, e)
+            baris["Catatan"] = f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"
+        return idx, mulai, nomor_terlompat, baris
+
+    if tugas:
+        with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(tugas))) as ex:
+            for idx, mulai, nomor_terlompat, baris in ex.map(_lanjutkan, tugas):
+                rak = hasil[idx]["Rak"]
+                detik = time.monotonic() - mulai
+                baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
+                catat_riwayat(file_riwayat, baris)
+                rekap_master_excel.catat(baris, nomor_terlompat)
+                log.info("  Selesai SKU %s dalam %s", baris["SKU"], baris["Durasi"])
+                hasil[idx] = baris
+
+    for h in hasil:
+        h.pop("mulai", None)
     return hasil
 
 

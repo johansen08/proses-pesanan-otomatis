@@ -208,6 +208,7 @@ def uji_proses_lengkap():
         d = Path(d)
         resi = sorted({"TT-A", "TT-B", "TT-C", "SP-D", "SP-KREATOR", "TT-SUDAH-DIPAKAI"})
         hasil = pl.proses(k, {SKU: resi}, d / "label", d / "riwayat.xlsx", {SKU: "1B-B2-2"})
+        pl.tutup_riwayat()
 
         assert len(hasil) == 1 and hasil[0]["No Picklist"] == "PICK-000154839", hasil
         assert hasil[0]["Rak"] == "1B-B2-2" and hasil[0]["Durasi"].endswith("detik"), hasil
@@ -365,6 +366,7 @@ def uji_detail_resi_spesial_tercatat():
     with tempfile.TemporaryDirectory() as d:
         folder = Path(d) / "label"
         pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, folder, tag=pl.TAG_SPESIAL)
+        pl.tutup_riwayat()
         from openpyxl import load_workbook
         ws = load_workbook(folder / pl.NAMA_DETAIL_SPESIAL).active
         baris = list(ws.values)
@@ -389,6 +391,7 @@ def uji_detail_resi_bukan_spesial_saat_kurang_dari_min_resi():
     with tempfile.TemporaryDirectory() as d:
         folder = Path(d) / "label"
         pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, folder, tag=pl.TAG_SPESIAL)
+        pl.tutup_riwayat()
         from openpyxl import load_workbook
         ws = load_workbook(folder / pl.NAMA_DETAIL_BUKAN_SPESIAL).active
         baris = list(ws.values)
@@ -636,6 +639,7 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
         with tempfile.TemporaryDirectory() as d:
             riwayat = Path(d) / "riwayat.xlsx"
             hasil = pl.proses_urgent(k, riwayat, Path(d) / "label")
+            pl.tutup_riwayat()
             from openpyxl import load_workbook
             baris = list(load_workbook(riwayat).active.values)
     finally:
@@ -1160,6 +1164,7 @@ def uji_reguler_keluarkan_spesial_dan_pisah_1qty_kombinasi():
         with tempfile.TemporaryDirectory() as d:
             riwayat = Path(d) / "riwayat.xlsx"
             hasil = pl.proses_reguler(k, resi_spesial_semua, riwayat, Path(d) / "label")
+            pl.tutup_riwayat()
             from openpyxl import load_workbook
             baris = list(load_workbook(riwayat).active.values)
     finally:

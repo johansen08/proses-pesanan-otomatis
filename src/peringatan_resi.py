@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,9 @@ log = logging.getLogger("sku-spesial")
 
 _file_peringatan: Path | None = None
 _sesi: list[str] = []      # peringatan yang muncul di proses python ini
+# catat() bisa dipanggil dari beberapa thread worker sekaligus (lihat MAKS_WORKER_PARALEL di
+# proses_label.proses()), jadi _sesi & penulisan file dikunci supaya tidak ada baris tertimpa.
+_lock = threading.Lock()
 
 
 def atur_folder(folder_log: Path) -> None:
@@ -31,12 +35,13 @@ def atur_folder(folder_log: Path) -> None:
 
 def catat(pesan: str) -> None:
     log.warning("  %s", pesan)
-    _sesi.append(pesan)
-    if _file_peringatan:
-        baris = {"epoch": datetime.now().timestamp(),
-                 "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "pesan": pesan}
-        with open(_file_peringatan, "a", encoding="utf-8") as f:
-            f.write(json.dumps(baris, ensure_ascii=False) + "\n")
+    with _lock:
+        _sesi.append(pesan)
+        if _file_peringatan:
+            baris = {"epoch": datetime.now().timestamp(),
+                     "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "pesan": pesan}
+            with open(_file_peringatan, "a", encoding="utf-8") as f:
+                f.write(json.dumps(baris, ensure_ascii=False) + "\n")
 
 
 def catat_tanpa_resi(picklist_no: str, sku: str, nomor_pesanan: list[str]) -> None:

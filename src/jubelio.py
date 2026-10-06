@@ -19,8 +19,10 @@ recheck_stok() & main.py --recheck-stok):
                                                                           pesanan di atas)
 """
 import os
+import random
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -35,6 +37,9 @@ URL_STOK_KOSONG = f"{API}/wms/sales/v2/orders/empty-stock/"
 URL_RECHECK_STOK = f"{API}/wms/sales/orders/recheck-stock/"
 UKURAN_HALAMAN_PESANAN = 200  # maksimum yang didukung API Jubelio - kurangi jumlah request
 MAKS_HALAMAN = 50          # pengaman: 50 x 200 = 10.000 pesanan
+# Jumlah No pesanan yang dicari satu-satu (lewat q=...) bersamaan di ambil_nilai_pesanan() -
+# sama pola dengan proses_label.MAKS_WORKER_PARALEL.
+MAKS_WORKER_PARALEL = 5
 
 # Jubelio membalas HTTP 429 (Too Many Requests) kalau request terlalu rapat - kejadian
 # 03-10-2026: setelah ~26 picklist SKU spesial berturut-turut, 2 SKU terakhir gagal 429, lalu
@@ -66,13 +71,31 @@ class JubelioError(RuntimeError):
     pass
 
 
+_sesi_bersama: requests.Session | None = None
+
+
+def _sesi() -> requests.Session:
+    """Session requests dibagi semua fungsi di modul ini supaya koneksi TCP/TLS ke
+    open.jubelio.com/report-prod.jubelio.com dipakai ulang antar panggilan berurutan dalam
+    1 proses (mis. login() -> ambil_url_laporan() -> unduh_excel(), atau ambil_stok_kosong()
+    -> recheck_stok() -> ambil_stok_kosong() lagi) - bukan buka koneksi baru tiap panggilan
+    requests.get/post module-level."""
+    global _sesi_bersama
+    if _sesi_bersama is None:
+        _sesi_bersama = requests.Session()
+    return _sesi_bersama
+
+
 def _jeda_retry_after(r: requests.Response, bawaan: float) -> float:
     """Header Retry-After Jubelio berupa detik (bukan HTTP-date) - pakai itu kalau valid,
-    kalau tidak pakai jeda bawaan."""
+    kalau tidak pakai jeda bawaan. Ditambah jitter (+0-20%) supaya beberapa worker paralel
+    (lihat MAKS_WORKER_PARALEL di proses_label.py) yang kena 429 bersamaan tidak retry
+    serempak di detik yang sama persis (thundering herd)."""
     try:
-        return max(float(r.headers.get("Retry-After", "")), 0)
+        jeda = max(float(r.headers.get("Retry-After", "")), 0)
     except ValueError:
-        return bawaan
+        jeda = bawaan
+    return jeda + random.uniform(0, jeda * 0.2)
 
 
 def _kirim_dengan_retry429(fn, *a, tidur=time.sleep, **kw) -> requests.Response:
@@ -97,7 +120,7 @@ def _header(token: str | None = None) -> dict:
 def login(email: str, password: str, timeout: int = 60) -> str:
     body = {"email": email, "password": password,
             "fid": os.environ.get("JUBELIO_FID", FID_DEFAULT)}
-    r = _kirim_dengan_retry429(requests.post, URL_LOGIN, json=body, timeout=timeout,
+    r = _kirim_dengan_retry429(_sesi().post, URL_LOGIN, json=body, timeout=timeout,
                                headers={**_header(), **HEADER_LOGIN_TAMBAHAN})
     if r.status_code != 200:
         raise JubelioError(f"Login gagal (HTTP {r.status_code}): {_pesan(r)}")
@@ -108,7 +131,7 @@ def login(email: str, password: str, timeout: int = 60) -> str:
 
 
 def ambil_url_laporan(token: str, timeout: int = 60) -> str:
-    r = _kirim_dengan_retry429(requests.get, URL_LAPORAN, params={"tz": "Asia/Jakarta"},
+    r = _kirim_dengan_retry429(_sesi().get, URL_LAPORAN, params={"tz": "Asia/Jakarta"},
                                headers=_header(token), timeout=timeout)
     if r.status_code != 200:
         raise JubelioError(f"Gagal minta laporan (HTTP {r.status_code}): {_pesan(r)}")
@@ -144,22 +167,30 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
     yang mengeluarkannya lewat nilai.notna().
     """
     nilai: dict[str, float] = {}
-    with requests.Session() as sesi:
-        page, total = 1, None
-        while page <= MAKS_HALAMAN:
-            j = _halaman_pesanan(sesi, token, page)
-            data = j.get("data") or []
-            total = j.get("totalCount", total)
-            for o in data:
-                nilai[o["salesorder_no"]] = _angka(o.get("grand_total"))
-            if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
-                break
-            page += 1
+    sesi = _sesi()
+    page, total = 1, None
+    while page <= MAKS_HALAMAN:
+        j = _halaman_pesanan(sesi, token, page)
+        data = j.get("data") or []
+        total = j.get("totalCount", total)
+        for o in data:
+            nilai[o["salesorder_no"]] = _angka(o.get("grand_total"))
+        if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
+            break
+        page += 1
 
-        for no in sorted(dicari - nilai.keys()):
+    belum = sorted(dicari - nilai.keys())
+    if belum:
+        def _cari_satu(no: str) -> tuple[str, float | None]:
             for o in _halaman_pesanan(sesi, token, 1, q=no).get("data") or []:
                 if o.get("salesorder_no") == no:
-                    nilai[no] = _angka(o.get("grand_total"))
+                    return no, _angka(o.get("grand_total"))
+            return no, None
+
+        with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(belum))) as ex:
+            for no, v in ex.map(_cari_satu, belum):
+                if v is not None:
+                    nilai[no] = v
     return nilai
 
 
@@ -168,22 +199,22 @@ def ambil_stok_kosong(token: str, timeout: int = 60) -> list[dict]:
     sebelumnya - tombol "Stok Kosong" di web, lihat rekaman sniff 05-10-2026 15:17). Bentuk
     tiap pesanan sama dengan _halaman_pesanan()/ambil_nilai_pesanan() (salesorder_no, dst)."""
     hasil: list[dict] = []
-    with requests.Session() as sesi:
-        page, total = 1, None
-        while page <= MAKS_HALAMAN:
-            r = _kirim_dengan_retry429(
-                sesi.get, URL_STOK_KOSONG, headers=_header(token), timeout=timeout,
-                params={"page": page, "q": "", "sort_by": "transaction_date",
-                        "page_size": UKURAN_HALAMAN_PESANAN, "sort_direction": "DESC"})
-            if r.status_code != 200:
-                raise JubelioError(f"Gagal ambil daftar stok kosong (HTTP {r.status_code}): {_pesan(r)}")
-            j = r.json()
-            data = j.get("data") or []
-            hasil.extend(data)
-            total = j.get("totalCount", total)
-            if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
-                break
-            page += 1
+    sesi = _sesi()
+    page, total = 1, None
+    while page <= MAKS_HALAMAN:
+        r = _kirim_dengan_retry429(
+            sesi.get, URL_STOK_KOSONG, headers=_header(token), timeout=timeout,
+            params={"page": page, "q": "", "sort_by": "transaction_date",
+                    "page_size": UKURAN_HALAMAN_PESANAN, "sort_direction": "DESC"})
+        if r.status_code != 200:
+            raise JubelioError(f"Gagal ambil daftar stok kosong (HTTP {r.status_code}): {_pesan(r)}")
+        j = r.json()
+        data = j.get("data") or []
+        hasil.extend(data)
+        total = j.get("totalCount", total)
+        if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
+            break
+        page += 1
     return hasil
 
 
@@ -192,7 +223,7 @@ def recheck_stok(token: str, timeout: int = 60) -> None:
     (tombol "Recheck Stok" di web) - GET tanpa body/parameter, bukan per-pesanan (lihat
     rekaman sniff 05-10-2026 15:17: dipanggil sekali, langsung mengosongkan daftar
     stok kosong yang sebelumnya berisi 15 pesanan)."""
-    r = _kirim_dengan_retry429(requests.get, URL_RECHECK_STOK, headers=_header(token),
+    r = _kirim_dengan_retry429(_sesi().get, URL_RECHECK_STOK, headers=_header(token),
                                timeout=timeout)
     if r.status_code != 200:
         raise JubelioError(f"Gagal recheck stok (HTTP {r.status_code}): {_pesan(r)}")
@@ -220,7 +251,7 @@ def url_excel(url_laporan: str) -> str:
 
 def unduh_excel(token: str, url_laporan: str, folder: Path, timeout: int = 180) -> Path:
     r = _kirim_dengan_retry429(
-        requests.get, url_excel(url_laporan), timeout=timeout,
+        _sesi().get, url_excel(url_laporan), timeout=timeout,
         cookies={"JB_OMNI_ACCESS_TOKEN": token},
         headers={"User-Agent": USER_AGENT, "Referer": "https://v2.jubelio.com/"})
     if r.status_code != 200:

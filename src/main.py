@@ -88,7 +88,8 @@ import peringatan_resi
 import rekap_master_excel
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
-                         lantai_per_pesanan, resi_kandidat, sku_bundle_per_pesanan)
+                         lantai_per_pesanan, rak_dominan_per_sku, resi_kandidat,
+                         sku_bundle_per_pesanan)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
@@ -236,6 +237,9 @@ def main() -> int:
     try:
         return _main()
     finally:
+        import proses_label
+
+        proses_label.tutup_riwayat()
         rekap_master_excel.tutup()
         peringatan_picklist.cetak_sesi()
         peringatan_resi.cetak_sesi()
@@ -401,8 +405,9 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     # Fallback khusus SKU bundling utk picklist 1qty reguler (lihat proses_reguler()):
     # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
     # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
-    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
-    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
+    rak_dominan_sku = rak_dominan_per_sku(df)
+    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK, rak_dominan_sku)
+    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK, rak_dominan_sku)
     grup_dari_excel, lantai_dari_excel = _lengkapi_fallback_bundle(
         k, df, grup_dari_excel, lantai_dari_excel)
     if not args.jalankan:
@@ -557,8 +562,9 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     # Fallback khusus SKU bundling utk picklist 1qty reguler (lihat proses_reguler()):
     # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
     # Rak di Excel ini tetap berisi rak fisik asli komponennya (ditemukan 03-10-2026).
-    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK)
-    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK)
+    rak_dominan_sku = rak_dominan_per_sku(df)
+    grup_dari_excel = grup_rak_per_pesanan(df, proses_label.GRUP_RAK, rak_dominan_sku)
+    lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK, rak_dominan_sku)
 
     k = proses_label.Klien(token)
     grup_dari_excel, lantai_dari_excel = _lengkapi_fallback_bundle(
