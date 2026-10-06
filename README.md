@@ -82,6 +82,11 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
 | `src/print_spesial.py` | Cetak bulk label (SPESIAL/URGENT/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
+| `src/peringatan_picklist.py` | Deteksi nomor picklist yang terlompat (picklist batal/gagal dibuat karena Jubelio error) |
+| `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
+| `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
+| `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `proses-harian.bat` |
+| `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label-urgent.bat` | Menjalankan `src/print_spesial.py --jenis urgent` (klik 2x) — lihat bagian "Cetak bulk label" |
@@ -95,8 +100,9 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 
 Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
 label per picklist di `label-pengiriman/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
-reguler) di `riwayat_picklist.xlsx`. Lihat [docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md)
-untuk aturan penamaan folder/file.
+reguler) di `riwayat_picklist.xlsx`, salinan kerja rekap picklist di `PICKLIST.xlsx` (kalau file
+master-nya ada — lihat [docs/instalasi.md](docs/instalasi.md)). Lihat
+[docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md) untuk aturan penamaan folder/file.
 
 ## Instalasi (sekali saja)
 

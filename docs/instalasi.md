@@ -29,6 +29,12 @@ harus disiapkan/disalin manual sendiri di PC baru:
 - `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat (salin dari PC
   lama via USB/cloud kalau mau melanjutkan riwayat lama; kalau tidak, program akan
   membuat riwayat baru dari nol)
+- `PICK LIST - EXCEL 2022 - 2024 - MASTER - TERBARU NEW.xlsx` — file master kerja tim
+  (dijalankan manual, bukan oleh program) yang jadi sumber salinan `PICKLIST.xlsx` tempat
+  program mencatat tiap picklist (lihat `src/rekap_master_excel.py`). **Opsional**: kalau
+  file ini tidak disalin ke PC baru, program tetap jalan normal — fitur rekap ke
+  `PICKLIST.xlsx` cuma dilewati dengan warning di log, tidak menggagalkan proses picklist
+  utama. Salin manual via USB/cloud dari PC lama kalau tim mau fitur ini aktif.
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang
 di PC baru (langkah 3). Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`,
