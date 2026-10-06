@@ -34,6 +34,7 @@ jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_sku_spesial.py
 .venv\Scripts\python tests\test_jubelio.py
 .venv\Scripts\python tests\test_main.py
+.venv\Scripts\python tests\test_rekap_master_excel.py
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
 
@@ -88,6 +89,15 @@ project secara umum, root tidak boleh berisi file `.py`):
   `src/rekap_waktu.py` bisa mencetaknya ULANG di rekap akhir tiap TIPE — kalau langkah yang
   bermasalah bukan langkah terakhir TIPE itu, peringatannya tenggelam di tengah log dan luput
   dibaca kalau cuma scroll ke rekap paling bawah (insiden 2026-10-06).
+- `src/rekap_master_excel.py` — catat tiap picklist ke `PICKLIST.xlsx` (sheet `HARI INI`,
+  kolom F/G/H/L/M/N/T/U), SALINAN kerja dari file master "PICK LIST - EXCEL 2022 - 2024 -
+  MASTER - TERBARU NEW.xlsx" yang tetap dijalankan MANUAL oleh tim — program TIDAK PERNAH
+  menulis ke file master langsung, tim verifikasi `PICKLIST.xlsx` dulu baru copy manual kalau
+  sudah sesuai (dibuat otomatis dari master kalau belum ada/sudah dihapus tim). Picklist
+  terlompat (dari `peringatan_picklist.ambil_nomor_hilang()`) jadi baris kuning "PICKLIST
+  CANCEL" tersendiri, meniru pola manual yang sudah ada di file master. Workbook dibuka
+  sekali & disimpan sekali per proses lewat `tutup()` (dipanggil `main.py`) karena ukuran
+  filenya besar (puluhan MB).
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder

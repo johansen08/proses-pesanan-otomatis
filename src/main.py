@@ -85,6 +85,7 @@ import pandas as pd
 import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
+import rekap_master_excel
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
                          lantai_per_pesanan, resi_kandidat, sku_bundle_per_pesanan)
@@ -231,9 +232,11 @@ def main() -> int:
     peringatan_picklist.atur_folder(FOLDER_LOG)
     peringatan_resi.atur_folder(FOLDER_LOG)
     peringatan_gagal.atur_folder(FOLDER_LOG)
+    rekap_master_excel.atur_root(ROOT)
     try:
         return _main()
     finally:
+        rekap_master_excel.tutup()
         peringatan_picklist.cetak_sesi()
         peringatan_resi.cetak_sesi()
 

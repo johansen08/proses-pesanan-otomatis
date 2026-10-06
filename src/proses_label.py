@@ -97,6 +97,7 @@ import requests
 import jubelio
 import peringatan_picklist
 import peringatan_resi
+import rekap_master_excel
 from sku_spesial import AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
 
 REPORT_API = "https://report-prod.jubelio.com/api/reports"
@@ -607,6 +608,7 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
         except Lewati as e:
             log.info("  [%d/%d] Dilewati: %s", n, len(batch), e)
             continue
+        nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
         log.info("  [%d/%d] Picklist %s dibuat, %d pesanan", n, len(batch), pno, len(ids_pakai))
         try:
             baris = lanjutkan_picklist(k, pid, pno, len(ids_pakai), label, folder_label,
@@ -618,6 +620,7 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
                      "Catatan": f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"}
         baris["Durasi"] = durasi(time.monotonic() - mulai)
         catat_riwayat(file_riwayat, baris)
+        rekap_master_excel.catat(baris, nomor_terlompat)
         hasil.append(baris)
     return hasil
 
@@ -1673,7 +1676,7 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
 
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
             "No Picklist": picklist_no, "Total Pesanan": jumlah, "Resi Keluar": len(ada_resi),
-            "File Label": file_label, "Catatan": catatan}
+            "File Label": file_label, "Catatan": catatan, "Tanpa Resi": tanpa_resi}
 
 
 def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
@@ -1723,6 +1726,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             log.exception("  GAGAL %s: %s", sku, e)
             baris = {"SKU": sku, "Catatan": f"GAGAL sebelum picklist dibuat: {e}"}
         else:
+            nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
             log.info("  Picklist %s dibuat, %d pesanan", pno, len(ids))
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
                      "No Picklist": pno, "Total Pesanan": len(ids)}
@@ -1737,6 +1741,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
         baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
         if "No Picklist" in baris:
             catat_riwayat(file_riwayat, baris)
+            rekap_master_excel.catat(baris, nomor_terlompat)
         log.info("  Selesai SKU %s dalam %s", sku, baris["Durasi"])
         hasil.append(baris)
     return hasil
@@ -1756,11 +1761,14 @@ def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path
     try:
         baris = lanjutkan_picklist(k, p["picklist_id"], p["picklist_no"], jumlah, sku, folder_label)
     except Exception as e:
-        catat_riwayat(file_riwayat, {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
-                                     "No Picklist": p["picklist_no"], "Total Pesanan": jumlah,
-                                     "Catatan": f"TERHENTI lagi: {e}",
-                                     "Durasi": durasi(time.monotonic() - mulai)})
+        baris_gagal = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
+                       "No Picklist": p["picklist_no"], "Total Pesanan": jumlah,
+                       "Catatan": f"TERHENTI lagi: {e}",
+                       "Durasi": durasi(time.monotonic() - mulai)}
+        catat_riwayat(file_riwayat, baris_gagal)
+        rekap_master_excel.catat(baris_gagal)
         raise
     baris["Durasi"] = durasi(time.monotonic() - mulai)
     catat_riwayat(file_riwayat, baris)
+    rekap_master_excel.catat(baris)
     return baris

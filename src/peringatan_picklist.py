@@ -28,6 +28,7 @@ log = logging.getLogger("sku-spesial")
 _file_terakhir: Path | None = None
 _file_peringatan: Path | None = None
 _sesi: list[str] = []      # peringatan yang muncul di proses python ini
+_hilang_terakhir: list[int] = []   # nomor terlompat dari periksa_nomor() PALING TERAKHIR
 
 
 def atur_folder(folder_log: Path) -> None:
@@ -60,14 +61,18 @@ def catat(pesan: str) -> None:
 
 def periksa_nomor(picklist_no: str) -> str | None:
     """Panggil tiap kali picklist baru berhasil dibuat. Mengembalikan pesan peringatan
-    kalau ada nomor yang terlompat sejak picklist terakhir yang dicatat, selain itu None."""
+    kalau ada nomor yang terlompat sejak picklist terakhir yang dicatat, selain itu None.
+    Nomor yang terlompat (kalau ada) juga disimpan utk ambil_nomor_hilang()."""
+    global _hilang_terakhir
     n = _angka(picklist_no)
     if n is None:
         return None
     terakhir = _baca_terakhir()
     pesan = None
+    _hilang_terakhir = []
     if terakhir is not None and n > terakhir + 1:
-        hilang = [f"PICK-{i:09d}" for i in range(terakhir + 1, n)]
+        _hilang_terakhir = list(range(terakhir + 1, n))
+        hilang = [f"PICK-{i:09d}" for i in _hilang_terakhir]
         daftar = ", ".join(hilang[:MAKS_NOMOR_DITAMPILKAN])
         if len(hilang) > MAKS_NOMOR_DITAMPILKAN:
             daftar += f", ... (+{len(hilang) - MAKS_NOMOR_DITAMPILKAN} lagi)"
@@ -82,6 +87,15 @@ def periksa_nomor(picklist_no: str) -> str | None:
         except OSError:
             pass
     return pesan
+
+
+def ambil_nomor_hilang() -> list[int]:
+    """Nomor picklist yang terlompat dari periksa_nomor() PALING TERAKHIR (kosong kalau tidak
+    ada gap) - dipakai rekap_master_excel.catat() utk menandai baris kuning "PICKLIST CANCEL"
+    di PICKLIST.xlsx, meniru pola manual yang sudah ada di file master (row 29, 05-10-2026).
+    Panggil SEGERA setelah periksa_nomor() dipanggil utk picklist yang baru dibuat - sebelum
+    periksa_nomor() dipanggil lagi untuk picklist berikutnya (nilainya ditimpa tiap panggilan)."""
+    return _hilang_terakhir
 
 
 def baca_sejak(epoch: float) -> list[str]:

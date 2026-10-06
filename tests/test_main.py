@@ -147,10 +147,14 @@ def uji_peringatan_picklist_terlompat():
         pp.atur_folder(Path(tmp))
         pp._sesi.clear()
         assert pp.periksa_nomor("PICK-000155661") is None      # pertama kali: belum ada pembanding
+        assert pp.ambil_nomor_hilang() == []
         assert pp.periksa_nomor("PICK-000155662") is None      # berurutan: aman
+        assert pp.ambil_nomor_hilang() == []
         pesan = pp.periksa_nomor("PICK-000155665")
         assert pesan and "PICK-000155663" in pesan and "PICK-000155664" in pesan, pesan
+        assert pp.ambil_nomor_hilang() == [155663, 155664]
         assert pp.periksa_nomor("PICK-000155666") is None
+        assert pp.ambil_nomor_hilang() == []       # ditimpa kosong lagi setelah berurutan
         assert len(pp._sesi) == 1
         assert len(pp.baca_sejak(0)) == 1 and pp.baca_sejak(9e12) == []
     pp._file_terakhir = pp._file_peringatan = None
