@@ -222,14 +222,22 @@ def uji_lantai_per_pesanan_abaikan_tl_dan_fallback_sku_dasar():
 
 
 def uji_sku_dikecualikan_tidak_pernah_spesial():
-    # C225-UB: kondisi khusus - tidak pernah dihitung spesial walau resinya banyak
-    df = _df([(f"R{i}", "C225-UB", 1, "SPX Hemat") for i in range(5)] +
-             [(f"S{i}", "X", 1, "SPX Hemat") for i in range(3)])
-    tabel, ringkasan = ss.hitung_sku_spesial(df)
+    # C225-UB & semua variannya (C225-UB11-1, dst): kondisi khusus - tidak pernah dihitung
+    # spesial walau resinya banyak
+    df = (
+        [(f"R{i}", "C225-UB", 1, "SPX Hemat") for i in range(5)]
+        + [(f"T{i}", "C225-UB11-1", 1, "SPX Hemat") for i in range(5)]
+        + [(f"U{i}", "C225-UB11-2", 1, "SPX Hemat") for i in range(5)]
+        + [(f"V{i}", "C225-UB10-1", 1, "SPX Hemat") for i in range(5)]
+        + [(f"S{i}", "X", 1, "SPX Hemat") for i in range(3)]
+    )
+    tabel, ringkasan = ss.hitung_sku_spesial(_df(df))
     assert list(tabel["SKU"]) == ["X"], tabel
-    assert "C225-UB" not in ringkasan["resi_per_sku"]
-    print("  SKU_DIKECUALIKAN_SPESIAL: C225-UB tidak pernah masuk tabel spesial walau 5 resi "
-          "(SKU lain tetap dihitung normal)")
+    for sku in ("C225-UB", "C225-UB11-1", "C225-UB11-2", "C225-UB10-1"):
+        assert sku not in ringkasan["resi_per_sku"], sku
+    print("  AWALAN_SKU_DIKECUALIKAN_SPESIAL: C225-UB dan semua variannya "
+          "(C225-UB11-1/C225-UB11-2/C225-UB10-1) tidak pernah masuk tabel spesial walau 5 resi "
+          "masing-masing (SKU lain tetap dihitung normal)")
 
 
 def uji_min_resi_tepat_batas():

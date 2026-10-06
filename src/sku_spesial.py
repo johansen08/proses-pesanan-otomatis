@@ -26,10 +26,12 @@ KOLOM_WAJIB = ["No pesanan", "SKU", "qty", "Kurir"]
 KURIR_DIIZINKAN = ("J&T", "SPX")   # dicocokkan dengan awalan teks kolom Kurir
 MIN_RESI = 3                       # minimal resi per SKU (J&T + SPX digabung)
 
-# SKU yang SENGAJA tidak pernah dihitung spesial walau jumlah resinya >= MIN_RESI - resinya
-# tetap mengalir ke jalur "satuan" (1qty reguler) lewat pisah_reguler() di proses_label.py,
-# karena tidak termasuk resi_spesial_semua (kondisi khusus tim, 06-10-2026).
-SKU_DIKECUALIKAN_SPESIAL = {"C225-UB"}
+# Awalan SKU yang SENGAJA tidak pernah dihitung spesial walau jumlah resinya >= MIN_RESI -
+# dicocokkan dengan awalan teks SKU (bukan exact match), jadi semua varian seperti
+# "C225-UB11-1"/"C225-UB11-2"/"C225-UB10-1" ikut dikecualikan. Resinya tetap mengalir ke jalur
+# "satuan" (1qty reguler) lewat pisah_reguler() di proses_label.py, karena tidak termasuk
+# resi_spesial_semua (kondisi khusus tim, 06-10-2026).
+AWALAN_SKU_DIKECUALIKAN_SPESIAL = ("C225-UB",)
 
 
 # ---------------------------------------------------------------- 1. baca data
@@ -232,7 +234,9 @@ def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None 
         resi_nilai_0 = int((nilai == 0).sum())
         resi_tanpa_nilai = int(nilai.isna().sum())
 
-    f4 = f4[~f4["SKU"].isin(SKU_DIKECUALIKAN_SPESIAL)]   # lihat SKU_DIKECUALIKAN_SPESIAL
+    # lihat AWALAN_SKU_DIKECUALIKAN_SPESIAL
+    f4 = f4[~f4["SKU"].astype(str).str.upper().str.startswith(
+        tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL))]
 
     per_sku = f4.groupby("SKU").size().rename("Jumlah Resi").reset_index()
     rak_per_sku = f4.groupby("SKU")["Rak"].agg(_rak_dominan).rename("No Rak").reset_index()

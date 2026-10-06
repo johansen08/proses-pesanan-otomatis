@@ -94,12 +94,13 @@ Lalu:
 3. **R4 digabung**, bukan per kurir. (Jika per kurir: SKU spesial bila J&T ≥ 3 **atau** SPX ≥ 3 —
    pada data contoh hasilnya menjadi 18 SKU karena `BM-LCB009` = 2 J&T + 2 SPX.)
 4. Filter kurir dilakukan **per resi setelah** R1, jadi resi multi-baris dengan kurir apa pun tetap gugur.
-5. **SKU `C225-UB` SENGAJA dikecualikan** dari status spesial walau resinya memenuhi R4 (kondisi
-   khusus tim, 06-10-2026) — lihat `SKU_DIKECUALIKAN_SPESIAL` di `sku_spesial.py`, difilter dari
-   `f4` sebelum `per_sku` dihitung. Resinya tidak masuk `resi_per_sku`/`resi_spesial_semua`,
-   sehingga otomatis mengalir ke jalur "sisa reguler" (`proses_label.pisah_reguler()`) dan —
-   karena masing-masing tetap 1 SKU qty 1 — berakhir sebagai picklist **SATUAN** (subfolder
-   `SATUAN`), bukan SPESIAL.
+5. **SKU berawalan `C225-UB` SENGAJA dikecualikan** dari status spesial walau resinya memenuhi
+   R4 (kondisi khusus tim, 06-10-2026) — dicocokkan dengan **awalan**, bukan nama SKU persis,
+   jadi semua varian seperti `C225-UB11-1`, `C225-UB11-2`, `C225-UB10-1` ikut dikecualikan.
+   Lihat `AWALAN_SKU_DIKECUALIKAN_SPESIAL` di `sku_spesial.py`, difilter dari `f4` sebelum
+   `per_sku` dihitung. Resinya tidak masuk `resi_per_sku`/`resi_spesial_semua`, sehingga otomatis
+   mengalir ke jalur "sisa reguler" (`proses_label.pisah_reguler()`) dan — karena masing-masing
+   tetap 1 SKU qty 1 — berakhir sebagai picklist **SATUAN** (subfolder `SATUAN`), bukan SPESIAL.
 
 ---
 
@@ -279,7 +280,7 @@ Hasil: **X = 3 resi → spesial**, Z = 2 resi → tidak spesial. Total SKU spesi
 | Parameter | Default | Lokasi |
 |---|---|---|
 | Minimal resi per SKU | `3` | `MIN_RESI` |
-| SKU yang dikecualikan dari spesial | `{"C225-UB"}` | `SKU_DIKECUALIKAN_SPESIAL` |
+| Awalan SKU yang dikecualikan dari spesial | `("C225-UB",)` | `AWALAN_SKU_DIKECUALIKAN_SPESIAL` |
 | Kurir yang dihitung | `("J&T", "SPX")` | `KURIR_DIIZINKAN` |
 | Mode hitung kurir | gabungan | ubah logika R4 jika ingin per kurir |
 | Kolom wajib | `No pesanan, SKU, qty, Kurir` | `KOLOM_WAJIB` |
