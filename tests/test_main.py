@@ -141,6 +141,19 @@ def uji_folder_label_sesi_pakai_env_jika_ada():
     print("  folder_label_sesi: pakai LABEL_SESI_DIR dari environment kalau ada, bukan bikin sesi baru")
 
 
+def uji_sesi_valid_untuk_opsi_lanjut():
+    import argparse
+    assert m._sesi_valid("2026-10-06/12") == "2026-10-06/12"
+    assert m._sesi_valid("2026-10-06\\12\\") == "2026-10-06/12"     # disalin dari Explorer
+    for salah in ("12", "2026-10-06", "../2026-10-06/12", "2026-10-06/12/SPESIAL", "x/1"):
+        try:
+            m._sesi_valid(salah)
+        except argparse.ArgumentTypeError:
+            continue
+        raise AssertionError(f"--sesi {salah!r} seharusnya ditolak")
+    print("  --sesi: hanya menerima pola folder sesi YYYY-MM-DD/N")
+
+
 def uji_peringatan_picklist_terlompat():
     import peringatan_picklist as pp
     with tempfile.TemporaryDirectory() as tmp:

@@ -110,8 +110,8 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
 # Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
 # (folder_label / tag), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
-# lanjutkan_picklist() dipanggil dari proses()). Begitu juga lanjutkan() (resume generik
-# lewat --lanjut, tidak tahu picklist itu dari alur mana) tidak memakai tag ini. Kalau
+# lanjutkan_picklist() dipanggil dari proses()); lanjutkan() (--lanjut) hanya memakainya kalau
+# diberi --tag, yang sudah tercantum di Catatan TERHENTI (lihat perintah_lanjut()). Kalau
 # --kurir jnt/spx dipakai di alur 1, tag disisipi awalan KURIR_LABEL_FILE (mis.
 # "JNT_SPESIAL"/"SPX_SPESIAL") supaya nama file & subfolder J&T dan SPX tidak bercampur -
 # lihat proses().
@@ -236,6 +236,12 @@ JEDA_COBA_CLIENT_REPORT_S = 5
 # request yang gagal, bukan mengulang dari awal langkah 3-6.
 MAKS_COBA_KONEKSI = 3
 JEDA_COBA_KONEKSI_S = 5
+# HTTP 502/503/504 dari report-prod (mis. "Halaman label gagal dibuka (HTTP 504)" saat server
+# report Jubelio kelebihan beban, insiden 2026-10-06) - diulang dengan jatah MAKS_COBA_KONEKSI
+# yang sama. HANYA untuk report_get()/report_post(): request report-prod cuma membuat objek
+# render sementara (client/instance/dokumen) jadi aman diulang, BEDA dengan POST ke API utama
+# (mis. buat picklist) yang bisa saja sudah diproses walau gateway membalas 504 -> picklist ganda.
+KODE_GATEWAY_SEMENTARA = (502, 503, 504)
 # HTTP 429 (Too Many Requests) dari Jubelio - lihat jubelio.MAKS_COBA_429/_kirim_dengan_retry429
 # untuk latar belakang (kejadian 03-10-2026: 26+ picklist SKU spesial berturut-turut bikin
 # Jubelio membatasi laju). Dipasang di sini juga karena Klien dipakai untuk picklist/resi/label,
@@ -294,10 +300,11 @@ class Klien:
             raise ProsesError(f"{apa} gagal (HTTP {r.status_code}): {jubelio._pesan(r)}")
         return r.json()
 
-    def _kirim(self, fn, *a, **kw):
+    def _kirim(self, fn, *a, ulang_gateway: bool = False, **kw):
         """Panggil `fn` (sesi.get/sesi.post), ulangi kalau koneksi putus di tengah jalan
         (mis. ConnectionError/RemoteDisconnected, Timeout) - lihat MAKS_COBA_KONEKSI - atau
-        kalau Jubelio membalas HTTP 429 (Too Many Requests) - lihat MAKS_COBA_429."""
+        kalau Jubelio membalas HTTP 429 (Too Many Requests) - lihat MAKS_COBA_429.
+        `ulang_gateway`: ulangi juga HTTP 502/503/504 - lihat KODE_GATEWAY_SEMENTARA."""
         for coba in range(1, MAKS_COBA_KONEKSI + 1):
             try:
                 r = fn(*a, **kw)
@@ -310,6 +317,11 @@ class Klien:
                 continue
             if r.status_code == 429:
                 return self._kirim_ulang_429(fn, a, kw, r)
+            if ulang_gateway and r.status_code in KODE_GATEWAY_SEMENTARA and coba < MAKS_COBA_KONEKSI:
+                log.warning("  Server report membalas HTTP %d (percobaan %d/%d) -> ulangi %d detik "
+                            "lagi", r.status_code, coba, MAKS_COBA_KONEKSI, JEDA_COBA_KONEKSI_S)
+                self.tidur(JEDA_COBA_KONEKSI_S)
+                continue
             return r
 
     def _kirim_ulang_429(self, fn, a, kw, r):
@@ -338,12 +350,13 @@ class Klien:
     # report-prod (Telerik) memakai cookie, bukan header authorization
     def report_get(self, url: str, params=None, referer: str | None = None, timeout=180):
         return self._kirim(self.sesi.get, url, params=params, cookies=self.cookie, timeout=timeout,
+                           ulang_gateway=True,
                            headers={"User-Agent": jubelio.USER_AGENT,
                                     "Referer": referer or self.halaman_report})
 
     def report_post(self, path: str, body, referer: str | None = None):
         r = self._kirim(self.sesi.post, f"{REPORT_API}/{path}", json=body, cookies=self.cookie,
-                        timeout=120,
+                        timeout=120, ulang_gateway=True,
                         headers={"User-Agent": jubelio.USER_AGENT,
                                  "Referer": referer or self.halaman_report,
                                  "Origin": "https://report-prod.jubelio.com",
@@ -631,9 +644,10 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
                                        nama_file=label_file, subfolder=subfolder)
         except Exception as e:     # noqa: BLE001 - batch lain tetap lanjut
             log.exception("  TERHENTI di %s: %s", pno, e)
+            lanjut = perintah_lanjut(pno, folder_label, label_file or label, subfolder=subfolder)
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
                      "No Picklist": pno, "Total Pesanan": len(ids_pakai),
-                     "Catatan": f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"}
+                     "Catatan": f"TERHENTI: {e}. Lanjutkan: {lanjut}"}
         baris["Durasi"] = durasi(time.monotonic() - mulai)
         catat_riwayat(file_riwayat, baris)
         rekap_master_excel.catat(baris, nomor_terlompat)
@@ -1529,32 +1543,44 @@ def _expired(e: ProsesError) -> bool:
 
 
 def _buat_instance_report(k: Klien, rs: dict, referer: str) -> str:
-    """clients -> parameters -> instances. Jika node report-prod tetap tidak menemukan
-    client (HTTP 410 "Client ... not found. Expired."), ulangi dari awal dengan clientId baru."""
+    """clients -> parameters -> instances."""
+    c = k.report_post("clients", {"timeStamp": int(time.time() * 1000)},
+                      referer=referer)["clientId"]
+    params = k.report_post(f"clients/{c}/parameters",
+                           {"report": rs["report"], "parameterValues": rs["parameters"]},
+                           referer=referer)
+    nilai = {p["id"]: p["value"] for p in params}
+    inst = k.report_post(f"clients/{c}/instances",
+                         {"report": rs["report"], "parameterValues": nilai},
+                         referer=referer)
+    return f"clients/{c}/instances/{inst['instanceId']}"
+
+
+def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
+    """Client Telerik report-prod hanya hidup di memori 1 node; kalau node itu kehilangan
+    client kita (HTTP 410 "Client ... not found. Expired.") di langkah MANA PUN - instances,
+    documents, info, sampai unduh PDF-nya (insiden 2026-10-06: 20 picklist TERHENTI di
+    langkah documents, 1 di unduh PDF, yang dulu tidak ikut diulang) - ulangi SELURUH alur
+    dari halaman label dengan client baru, sampai TUNGGU_CLIENT_REPORT_S habis."""
     batas = time.monotonic() + TUNGGU_CLIENT_REPORT_S
     coba = 0
     while True:
         coba += 1
         try:
-            c = k.report_post("clients", {"timeStamp": int(time.time() * 1000)},
-                              referer=referer)["clientId"]
-            params = k.report_post(f"clients/{c}/parameters",
-                                   {"report": rs["report"], "parameterValues": rs["parameters"]},
-                                   referer=referer)
-            nilai = {p["id"]: p["value"] for p in params}
-            inst = k.report_post(f"clients/{c}/instances",
-                                 {"report": rs["report"], "parameterValues": nilai},
-                                 referer=referer)
-            return f"clients/{c}/instances/{inst['instanceId']}"
+            isi = _unduh_label_sekali(k, ids)
+            break
         except ProsesError as e:
             if not _expired(e) or time.monotonic() + JEDA_COBA_CLIENT_REPORT_S > batas:
                 raise
-            log.info("  Client report kedaluwarsa (percobaan %d), ulangi %d detik lagi: %s",
-                     coba, JEDA_COBA_CLIENT_REPORT_S, e)
+            log.info("  Client report kedaluwarsa (percobaan %d), ulangi dari awal %d detik "
+                     "lagi: %s", coba, JEDA_COBA_CLIENT_REPORT_S, e)
             k.tidur(JEDA_COBA_CLIENT_REPORT_S)
+    tujuan.parent.mkdir(parents=True, exist_ok=True)
+    tujuan.write_bytes(isi)
+    return tujuan
 
 
-def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
+def _unduh_label_sekali(k: Klien, ids: list[int]) -> bytes:
     j = k.get("reports/shipping-label/", {**_ids_param(ids), "tz": "Asia/Jakarta"})
     halaman = k.report_get(j["url"], referer="https://v2.jubelio.com/")
     if halaman.status_code != 200:
@@ -1572,6 +1598,8 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
         doc = k.report_post(f"{dasar}/documents", pdf, referer=referer)["documentId"]
         _tunggu_dokumen(k, dasar, doc, referer)
     except ProsesError as e:
+        if _expired(e):
+            raise      # client-nya sudah hilang, HTML5 di client yang sama pasti 410 juga
         # cara web: buat tampilan HTML5 dulu, lalu PDF berdasarkan dokumen itu
         log.info("  PDF langsung gagal (%s), mencoba lewat HTML5", e)
         html5 = k.report_post(f"{dasar}/documents", {
@@ -1594,11 +1622,11 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
         r = k.report_get(url_alt, params={"response-content-disposition": "attachment"},
                          referer=referer, timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
-        raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, "
-                          f"{r.headers.get('content-type')})")
-    tujuan.parent.mkdir(parents=True, exist_ok=True)
-    tujuan.write_bytes(r.content)
-    return tujuan
+        jenis = r.headers.get("content-type") or ""
+        # isi JSON ikut dicantumkan supaya _expired() bisa mengenali 410 "Client ... Expired."
+        rinci = f": {jubelio._pesan(r)}" if "json" in jenis else ""
+        raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, {jenis}){rinci}")
+    return r.content
 
 
 # ============================================================== riwayat
@@ -1727,6 +1755,25 @@ def tutup_riwayat() -> None:
 # ============================================================== alur
 def _nama_file(teks: str) -> str:
     return re.sub(r"[^\w.-]+", "_", teks)
+
+
+def perintah_lanjut(picklist_no: str, folder_label: Path, nama: str,
+                    tag: str | None = None, subfolder: str | None = None) -> str:
+    """Perintah --lanjut lengkap untuk picklist yang TERHENTI, dicantumkan di Catatan
+    riwayat/peringatan supaya tinggal disalin. Membawa nama label, tag/subfolder, dan folder
+    sesi asal - tanpa itu lanjutkan() tidak tahu picklist ini dari alur mana, sehingga PDF-nya
+    tidak masuk subfolder yang dibaca print_spesial.py --jenis dan tidak satu sesi dengan
+    label lain dari proses yang sama."""
+    def _kutip(s: str) -> str:
+        return f'"{s}"' if " " in s else s
+
+    bagian = [r".\jalankan.bat", "--lanjut", picklist_no, "--nama", _kutip(nama)]
+    if tag:
+        bagian += ["--tag", tag]
+    if subfolder:
+        bagian += ["--subfolder", subfolder]
+    bagian += ["--sesi", f"{folder_label.parent.name}/{folder_label.name}", "--jalankan"]
+    return " ".join(bagian)
 
 
 def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int,
@@ -1864,12 +1911,13 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
         idx, mulai, pid, pno, jumlah, sku, nomor_terlompat = t
         baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
                  "No Picklist": pno, "Total Pesanan": jumlah}
+        tag = _tag_spesial(kurir)
         try:
-            baris = lanjutkan_picklist(k, pid, pno, jumlah, sku, folder_label,
-                                       tag=_tag_spesial(kurir))
+            baris = lanjutkan_picklist(k, pid, pno, jumlah, sku, folder_label, tag=tag)
         except Exception as e:     # noqa: BLE001 - satu SKU gagal, SKU lain tetap jalan
             log.exception("  TERHENTI di %s: %s", pno, e)
-            baris["Catatan"] = f"TERHENTI: {e}. Lanjutkan: .\\run.bat --lanjut {pno} --jalankan"
+            baris["Catatan"] = (f"TERHENTI: {e}. Lanjutkan: "
+                                f"{perintah_lanjut(pno, folder_label, sku, tag=tag)}")
         return idx, mulai, nomor_terlompat, baris
 
     if tugas:
@@ -1888,19 +1936,28 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
     return hasil
 
 
-def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path) -> dict:
-    """Lanjutkan picklist yang prosesnya terhenti (mis. PICK-000154839)."""
+def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
+              nama: str | None = None, tag: str | None = None,
+              subfolder: str | None = None) -> dict:
+    """Lanjutkan picklist yang prosesnya terhenti (mis. PICK-000154839). `nama`/`tag`/
+    `subfolder`: sama dengan saat picklist itu dibuat (lihat perintah_lanjut() - sudah
+    tercantum di Catatan TERHENTI-nya), supaya nama file & subfolder PDF-nya sama dengan alur
+    asalnya. Tanpa `nama`, nama file memakai SKU-nya kalau cuma 1 SKU, selain itu "LANJUTAN"
+    - BUKAN gabungan semua SKU, yang untuk picklist lintas SKU bisa ratusan karakter
+    (PICK-000157269: 70 SKU) dan melewati batas 255 karakter nama file Windows."""
     m = re.fullmatch(r"PICK-0*(\d+)", picklist_no.strip().upper())
     if not m:
         raise ProsesError(f"Format nomor picklist tidak dikenal: {picklist_no}")
     p = k.get(f"sales/picklists/{int(m.group(1))}")
     skus = sorted({str(i.get("item_code")) for i in p["items"]})
-    sku = "+".join(skus)
+    sku = nama or "+".join(skus)
+    nama_file = nama or (skus[0] if len(skus) == 1 else "LANJUTAN")
     jumlah = len({i["salesorder_id"] for i in p["items"]})
     log.info("=== Lanjutkan %s (SKU %s, %d pesanan)", p["picklist_no"], sku, jumlah)
     mulai = time.monotonic()
     try:
-        baris = lanjutkan_picklist(k, p["picklist_id"], p["picklist_no"], jumlah, sku, folder_label)
+        baris = lanjutkan_picklist(k, p["picklist_id"], p["picklist_no"], jumlah, sku, folder_label,
+                                   nama_file=nama_file, tag=tag, subfolder=subfolder)
     except Exception as e:
         baris_gagal = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
                        "No Picklist": p["picklist_no"], "Total Pesanan": jumlah,

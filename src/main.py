@@ -12,6 +12,10 @@ Proses sampai label pengiriman (proses_label.py):
     python src/main.py --label --sku T01-BSBI-5 --jalankan
     python src/main.py --label --tanpa-reguler --jalankan   # SKU spesial saja, tanpa lanjut reguler
     python src/main.py --lanjut PICK-000154839 --jalankan   # lanjutkan picklist yang terhenti
+    python src/main.py --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 \
+        --subfolder KOMBINASI --sesi 2026-10-06/11 --jalankan
+        # nama file/subfolder/folder sesi sama dengan alur asalnya - perintah lengkap ini
+        # sudah tercantum di Catatan TERHENTI (riwayat & blok PERHATIAN), tinggal disalin
 
 Dengan "--label --jalankan", PDF BARU dibuat setelah proses selesai, dari jumlah pesanan
 yang benar-benar berhasil dipicklist per SKU (bukan daftar kandidat awal).
@@ -75,6 +79,7 @@ supaya pesanan yang pulih ikut terhitung di langkah-langkah berikutnya:
 import argparse
 import logging
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -119,6 +124,14 @@ def sesi_label_baru() -> str:
     nama = f"{tanggal}/{urutan_terbesar + 1}"
     (FOLDER_LABEL / nama).mkdir(parents=True, exist_ok=True)
     return nama
+
+
+def _sesi_valid(teks: str) -> str:
+    """Validasi --sesi: harus pola folder sesi `YYYY-MM-DD/N` (lihat sesi_label_baru())."""
+    teks = teks.replace("\\", "/").strip("/")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}/\d+", teks):
+        raise argparse.ArgumentTypeError(f"format sesi harus YYYY-MM-DD/N, bukan {teks!r}")
+    return teks
 
 
 def folder_label_sesi() -> Path:
@@ -298,12 +311,25 @@ def _main() -> int:
                     help="benar-benar buat picklist, selesaikan picking, minta resi, cetak label")
     ap.add_argument("--lanjut", metavar="PICK-000xxxxxx",
                     help="lanjutkan picklist yang prosesnya terhenti")
+    ap.add_argument("--nama", metavar="LABEL",
+                    help="dipakai bersama --lanjut: nama label di nama file PDF & kolom SKU "
+                        "riwayat (mis. KOMBINASI-REGULER-LANTAI2, atau SKU-nya utk SKU spesial)")
+    ap.add_argument("--tag", metavar="TAG",
+                    help="dipakai bersama --lanjut: penanda SKU spesial (SPESIAL/JNT_SPESIAL/"
+                        "SPX_SPESIAL) - disisipkan di nama file & jadi subfolder")
+    ap.add_argument("--subfolder", metavar="SUBFOLDER",
+                    help="dipakai bersama --lanjut: subfolder tujuan PDF (URGENT, SATUAN, "
+                        "KOMBINASI, JNT_SATUAN, dst)")
+    ap.add_argument("--sesi", metavar="YYYY-MM-DD/N", type=_sesi_valid,
+                    help="simpan label ke folder sesi ini (mis. 2026-10-06/12, folder sesi "
+                        "asal picklist yang terhenti), bukan folder sesi baru")
     args = ap.parse_args()
 
     muat_env(ROOT / ".env")
     log = siapkan_log()
     global FOLDER_LABEL_SESI
-    FOLDER_LABEL_SESI = folder_label_sesi()
+    FOLDER_LABEL_SESI = FOLDER_LABEL / args.sesi if args.sesi else folder_label_sesi()
+    FOLDER_LABEL_SESI.mkdir(parents=True, exist_ok=True)
     log.info("Folder sesi label: %s", FOLDER_LABEL_SESI)
     try:
         if args.lanjut:
@@ -625,7 +651,8 @@ def lanjut_picklist(log: logging.Logger, args) -> int:
                  "Tambahkan --jalankan untuk melanjutkan.", p["picklist_no"],
                  len({i['salesorder_id'] for i in p['items']}), status, p.get("is_completed"))
         return 0
-    baris = proses_label.lanjutkan(k, args.lanjut, FOLDER_LABEL_SESI, FILE_RIWAYAT)
+    baris = proses_label.lanjutkan(k, args.lanjut, FOLDER_LABEL_SESI, FILE_RIWAYAT,
+                                   nama=args.nama, tag=args.tag, subfolder=args.subfolder)
     log.info("SELESAI: %s", baris)
     return 0
 

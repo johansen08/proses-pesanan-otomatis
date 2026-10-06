@@ -260,11 +260,19 @@ jalankan.bat --label --tanpa-reguler --jalankan
 jalankan.bat --label --kurir jnt --tanpa-reguler --jalankan    # J&T saja (TIPE 2/TIPE 3)
 jalankan.bat --label --kurir spx --tanpa-reguler --jalankan    # SPX saja (TIPE 2/TIPE 3)
 jalankan.bat --lanjut PICK-000154839 --jalankan
+jalankan.bat --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 --subfolder KOMBINASI --sesi 2026-10-06/11 --jalankan
 ```
 
 Urutan pakai: (1) mode uji semua SKU, (2) mode uji satu SKU, (3) jalankan sungguhan untuk
 **satu SKU** dan cek hasilnya di web Jubelio, (4) baru semua SKU. `--lanjut` dipakai untuk
-picklist yang prosesnya terhenti di tengah. **Catatan**: `--sku` melewatkan langkah picklist
+picklist yang prosesnya terhenti di tengah — **salin perintah lengkapnya dari Catatan
+`TERHENTI`** (blok PERHATIAN di akhir proses / `riwayat_picklist.xlsx`): perintah itu sudah
+membawa `--nama` (label, mis. `KOMBINASI-REGULER-LANTAI2` atau SKU-nya), `--subfolder`
+(`URGENT`/`SATUAN`/`KOMBINASI`/...) atau `--tag` (SKU spesial: `SPESIAL`/`JNT_SPESIAL`/
+`SPX_SPESIAL`), dan `--sesi` (folder sesi asal), sehingga PDF hasil lanjutan bernama & tersimpan
+persis seperti alur aslinya dan ikut tercetak lewat .bat cetak bulk per jenis. Tanpa opsi-opsi
+itu, PDF disimpan langsung di folder sesi BARU dengan nama `PICK-..._<SKU>_...` (1 SKU) atau
+`PICK-..._LANJUTAN_...` (lintas SKU) — tidak terbaca .bat cetak bulk. **Catatan**: `--sku` melewatkan langkah picklist
 reguler otomatis (lihat bagian 3) karena perlu daftar SKU spesial yang lengkap, bukan
 sebagian (picklist urgent tidak terpengaruh — memang tidak pernah otomatis, lihat bagian 1).
 `--tanpa-reguler` melewatkan langkah yang sama tapi tetap memproses SEMUA SKU spesial (dipakai

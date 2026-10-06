@@ -197,10 +197,12 @@ bukan nilai baru):
   dicatat di sini (bukan dibuang), supaya kelihatan saat memilah resi fisik hasil cetak.
 
 Mode uji (tanpa `--jalankan`) tidak pernah menulis file ini - tidak ada resi/label sungguhan
-yang bisa dicatat. Picklist yang diselesaikan lewat `--lanjut` (resume generik via
-`lanjutkan()`, bukan `proses()`) juga tidak mengisi file ini, karena `lanjutkan()` tidak tahu
-picklist itu dari alur mana (tidak memakai `tag` - batasan yang sama berlaku untuk penanda
-nama file & subfolder `SPESIAL`, lihat bagian 1 README).
+yang bisa dicatat. Picklist yang diselesaikan lewat `--lanjut` (resume via `lanjutkan()`,
+bukan `proses()`) hanya mengisi file ini kalau dijalankan dengan `--tag SPESIAL`/
+`JNT_SPESIAL`/`SPX_SPESIAL` - perintah lengkapnya sudah tercantum di Catatan `TERHENTI`
+picklist itu (lihat `perintah_lanjut()` di `proses_label.py`); tanpa `--tag`, `lanjutkan()`
+tidak tahu picklist itu dari alur mana, sehingga file ini, penanda nama file, dan subfolder
+`SPESIAL` tidak dipakai.
 
 > **Sumber angka di tabel** (implementasi di `main.py`, bukan `sku_spesial.py`): dasarnya
 > **kandidat** hasil algoritma bagian 4 (langkah 1-8 dokumen ini) untuk `main.py` biasa dan

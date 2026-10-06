@@ -1622,6 +1622,239 @@ def uji_unduh_label_referer_tidak_bocor_antar_thread_paralel():
           "tumpang tindih persis di titik paling rawan (regresi insiden 2026-10-06)")
 
 
+class _SesiReportGangguan:
+    """Sesi tiruan alur unduh_label() dengan gangguan report-prod seperti insiden 2026-10-06:
+    `gangguan` = {langkah: [kode HTTP yang dibalas berurutan sebelum normal]}, langkah salah
+    satu: halaman, clients, documents, info, unduh. 410 dibalas dengan isi JSON asli dari log
+    produksi ("Client with ID ... not found. Expired.")."""
+
+    EXPIRED = {"message": "", "exceptionMessage": "Client with ID 'b2f4b52dc79' not found. Expired.",
+               "exceptionType": None, "stackTrace": None}
+    HTML = ('<script>jQuery("#reportViewer").telerik_ReportViewer({"serviceUrl":"/api/reports/",'
+            '"reportSource":{"report":"Label-x","parameters":{"ids":["1"]}},'
+            '"viewMode":"PRINT_PREVIEW"});</script>')
+
+    def __init__(self, gangguan: dict[str, list[int]]):
+        self.gangguan = {k: list(v) for k, v in gangguan.items()}
+        self.langkah: list[str] = []
+        self.client = 0
+
+    def _ganggu(self, langkah):
+        self.langkah.append(langkah)
+        antre = self.gangguan.get(langkah)
+        if antre:
+            kode = antre.pop(0)
+            return Resp(kode, self.EXPIRED if kode == 410 else {"message": "Gateway Time-out"})
+        return None
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        path = urlsplit(url).path
+        if path.endswith("shipping-label/"):
+            return Resp(data={"status": "ok", "url": "https://report-prod.jubelio.com/?&token=T",
+                              "title": "Label Pengiriman"})
+        if path == "/":
+            return self._ganggu("halaman") or Resp(content=self.HTML.encode(),
+                                                   headers={"content-type": "text/html"})
+        if path.endswith("/info"):
+            return self._ganggu("info") or Resp(200, {})
+        if "/documents/" in path:
+            return self._ganggu("unduh") or Resp(content=b"%PDF-1.4 x",
+                                                 headers={"content-type": "application/pdf"})
+        raise AssertionError(f"GET tak dikenal {url}")
+
+    def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+        path = urlsplit(url).path
+        if path.endswith("/clients"):
+            self.client += 1
+            return self._ganggu("clients") or Resp(data={"clientId": f"c{self.client}"})
+        if path.endswith("/parameters"):
+            return Resp(data=[{"id": k, "value": v} for k, v in json["parameterValues"].items()])
+        if path.endswith("/instances"):
+            return Resp(201, {"instanceId": "i1"})
+        if path.endswith("/documents"):
+            self.langkah.append("documents")
+            antre = self.gangguan.get("documents")
+            if antre:
+                kode = antre.pop(0)
+                return Resp(kode, self.EXPIRED if kode == 410 else {"message": "x"})
+            return Resp(202, {"documentId": "d1"})
+        raise AssertionError(f"POST tak dikenal {url}")
+
+
+def _unduh_dengan_gangguan(gangguan: dict[str, list[int]]) -> tuple[_SesiReportGangguan, Path | Exception]:
+    sesi = _SesiReportGangguan(gangguan)
+    k = pl.Klien("TKN", sesi=sesi, tidur=lambda s: None)
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            hasil = pl.unduh_label(k, [1], Path(d) / "x.pdf")
+            assert hasil.read_bytes().startswith(b"%PDF")
+        except pl.ProsesError as e:
+            hasil = e
+    return sesi, hasil
+
+
+def uji_unduh_label_410_di_documents_diulang_dengan_client_baru():
+    sesi, hasil = _unduh_dengan_gangguan({"documents": [410]})
+    assert isinstance(hasil, Path), hasil
+    assert sesi.client == 2, f"harus buat client baru setelah 410 di documents: {sesi.client}"
+    assert sesi.langkah.count("documents") == 2, \
+        f"410 = client hilang -> jangan coba HTML5 di client yang sama: {sesi.langkah}"
+    print("  410 Expired di langkah documents (20 dari 26 picklist insiden 2026-10-06): diulang "
+          "dari awal dengan client baru, tidak buang waktu coba HTML5 di client yang sudah hilang")
+
+
+def uji_unduh_label_410_saat_unduh_pdf_diulang_dengan_client_baru():
+    # 410 di domain utama DAN cadangan report.jubelio.com (PICK-000157363 di insiden)
+    sesi, hasil = _unduh_dengan_gangguan({"unduh": [410, 410]})
+    assert isinstance(hasil, Path), hasil
+    assert sesi.client == 2, sesi.client
+    print("  410 Expired saat unduh PDF: dikenali sebagai client kedaluwarsa & diulang dari awal")
+
+
+def uji_unduh_label_410_terus_menerus_berhenti_setelah_batas_waktu():
+    lama, pl.TUNGGU_CLIENT_REPORT_S = pl.TUNGGU_CLIENT_REPORT_S, 0
+    try:
+        sesi, hasil = _unduh_dengan_gangguan({"documents": [410] * 10})
+    finally:
+        pl.TUNGGU_CLIENT_REPORT_S = lama
+    assert isinstance(hasil, pl.ProsesError) and pl._expired(hasil), hasil
+    assert sesi.client == 1, "batas waktu habis -> tidak diulang lagi"
+    print("  410 Expired terus-menerus: berhenti setelah TUNGGU_CLIENT_REPORT_S (tidak loop selamanya)")
+
+
+def uji_unduh_label_gagal_bukan_410_tidak_diulang():
+    sesi, hasil = _unduh_dengan_gangguan({"clients": [500]})
+    assert isinstance(hasil, pl.ProsesError) and "500" in str(hasil), hasil
+    assert sesi.client == 1, sesi.client
+    print("  error report selain 410 (mis. 500): langsung TERHENTI seperti semula, tidak diulang")
+
+
+def uji_report_504_diulang_tapi_api_utama_tidak():
+    sesi, hasil = _unduh_dengan_gangguan({"halaman": [504, 502]})
+    assert isinstance(hasil, Path), hasil
+    assert sesi.langkah.count("halaman") == 3, sesi.langkah
+    print("  HTTP 504/502 dari report-prod (halaman label, retry insiden 2026-10-06): diulang")
+
+    sesi, hasil = _unduh_dengan_gangguan({"halaman": [504] * pl.MAKS_COBA_KONEKSI})
+    assert isinstance(hasil, pl.ProsesError) and "504" in str(hasil), hasil
+    assert sesi.langkah.count("halaman") == pl.MAKS_COBA_KONEKSI, sesi.langkah
+    print(f"  504 terus-menerus: berhenti setelah {pl.MAKS_COBA_KONEKSI}x percobaan")
+
+    class ApiUtama504:
+        panggil = 0
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            ApiUtama504.panggil += 1
+            return Resp(504, {"message": "Gateway Time-out"})
+
+    k = pl.Klien("TKN", sesi=ApiUtama504(), tidur=lambda s: None)
+    try:
+        k.post("wms/sales/picklists/", {})
+    except pl.ProsesError:
+        pass
+    assert ApiUtama504.panggil == 1, \
+        "POST API utama (mis. buat picklist) TIDAK boleh diulang saat 504 - bisa picklist ganda"
+    print("  504 di API utama (buat picklist dll) TIDAK diulang - mencegah picklist ganda")
+
+
+def uji_perintah_lanjut_di_catatan_terhenti():
+    folder = Path("label-pengiriman") / "2026-10-06" / "12"
+    p = pl.perintah_lanjut("PICK-000157269", folder, "KOMBINASI-REGULER-LANTAI2",
+                           subfolder="KOMBINASI")
+    assert p == (r".\jalankan.bat --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 "
+                 "--subfolder KOMBINASI --sesi 2026-10-06/12 --jalankan"), p
+    p = pl.perintah_lanjut("PICK-000157391", folder, "TRC1", tag="SPX_SPESIAL")
+    assert "--nama TRC1 --tag SPX_SPESIAL --sesi 2026-10-06/12" in p and "--subfolder" not in p, p
+
+    class JubelioPalsuTerhenti:
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            raise AssertionError(f"GET tak dikenal {url}")
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                                   "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                                   "item_full_name": "X", "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            if url.endswith("wms/sales/picklists/"):
+                return Resp(data={"status": "ok", "data": {
+                    "picks": [{"picklist_id": 1, "picklist_no": "PICK-000157269", "status": "ok"}],
+                    "invalidSO": []}})
+            raise AssertionError(f"POST tak dikenal {url}")
+
+    asli = pl.lanjutkan_picklist
+
+    def stub(*a, **kw):
+        raise pl.ProsesError("report documents gagal (HTTP 410)")
+    pl.lanjutkan_picklist = stub
+    try:
+        k = pl.Klien("TKN", sesi=JubelioPalsuTerhenti(), tidur=lambda s: None)
+        with tempfile.TemporaryDirectory() as d:
+            sesi = Path(d) / "2026-10-06" / "12"
+            hasil = pl._proses_channel_batch(
+                k, "Reguler kombinasi", "KOMBINASI-REGULER-LANTAI2", [{"salesorder_id": 5}],
+                Path(d) / "riwayat.xlsx", sesi, subfolder=pl.SUBFOLDER_KOMBINASI)
+            pl.tutup_riwayat()
+    finally:
+        pl.lanjutkan_picklist = asli
+    catatan = hasil[0]["Catatan"]
+    assert catatan.startswith("TERHENTI: report documents gagal (HTTP 410)"), catatan
+    assert catatan.endswith(r"Lanjutkan: .\jalankan.bat --lanjut PICK-000157269 --nama "
+                            "KOMBINASI-REGULER-LANTAI2 --subfolder KOMBINASI --sesi 2026-10-06/12 "
+                            "--jalankan"), catatan
+    assert "run.bat" not in catatan, "run.bat sudah lama diganti jalankan.bat"
+    print("  Catatan TERHENTI berisi perintah --lanjut LENGKAP (nama, subfolder, sesi asal) "
+          "pakai jalankan.bat - tinggal disalin, PDF-nya otomatis ke subfolder yang benar")
+
+
+def uji_lanjutkan_nama_subfolder_dan_sesi_sama_dengan_alur_asal():
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    _picklist_selesai(j, [9068214])
+    with tempfile.TemporaryDirectory() as d:
+        sesi = Path(d) / "2026-10-06" / "11"
+        baris = pl.lanjutkan(k, "PICK-000154839", sesi, Path(d) / "riwayat.xlsx",
+                             nama="KOMBINASI-REGULER-LANTAI2", subfolder=pl.SUBFOLDER_KOMBINASI)
+        pl.tutup_riwayat()
+    pdf = Path(baris["File Label"])
+    assert pdf.parent == sesi / pl.SUBFOLDER_KOMBINASI, pdf
+    assert re.fullmatch(r"PICK-000154839_KOMBINASI-REGULER-LANTAI2_\d{4}-\d\d-\d\d_\d{6}\.pdf",
+                        pdf.name), pdf.name
+    assert baris["SKU"] == "KOMBINASI-REGULER-LANTAI2", baris
+    print("  --lanjut --nama/--subfolder: PDF bernama & di subfolder sama dengan alur asalnya "
+          "(terbaca print_spesial.py --jenis kombinasi)")
+
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    _picklist_selesai(j, [9068214])
+    j.picklist["items"][0]["item_code"] = "MX-5054-3"
+    with tempfile.TemporaryDirectory() as d:
+        baris = pl.lanjutkan(k, "PICK-000154839", Path(d), Path(d) / "riwayat.xlsx",
+                             nama="MX-5054-3", tag="SPX_SPESIAL")
+        pl.tutup_riwayat()
+        pdf = Path(baris["File Label"])
+        assert pdf.parent.name == "SPX_SPESIAL", pdf
+        assert pdf.name.startswith("PICK-000154839_SPX_SPESIAL_MX-5054-3_"), pdf.name
+        assert (Path(d) / pl.NAMA_DETAIL_BUKAN_SPESIAL).exists(), \
+            "SKU spesial yang dilanjutkan tetap dicatat ke detail resi seperti alur aslinya"
+    print("  --lanjut --tag SPX_SPESIAL: format nama & subfolder SKU spesial sama dgn Alur 1")
+
+
+def uji_lanjutkan_tanpa_nama_tidak_pakai_gabungan_puluhan_sku():
+    j = JubelioPalsu(_html_label())
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    _picklist_selesai(j, [9068214] * 70)                # 70 SKU seperti PICK-000157269
+    for n, item in enumerate(j.picklist["items"]):
+        item["item_code"] = f"C222-AK394-{n:03d}"
+    with tempfile.TemporaryDirectory() as d:
+        baris = pl.lanjutkan(k, "PICK-000154839", Path(d), Path(d) / "riwayat.xlsx")
+        pl.tutup_riwayat()
+    nama = Path(baris["File Label"]).name
+    assert nama.startswith("PICK-000154839_LANJUTAN_") and len(nama) < 60, nama
+    print("  --lanjut tanpa --nama utk picklist 70 SKU: nama file PICK-..._LANJUTAN_... (dulu "
+          "gabungan 70 SKU, >255 karakter -> gagal disimpan di Windows)")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":
