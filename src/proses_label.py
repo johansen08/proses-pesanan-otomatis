@@ -225,10 +225,18 @@ TUNGGU_PICKING_S = 90                   # batas tunggu status FINISH_PICK
 TUNGGU_FINISH_PICK_S = 90               # batas tunggu pesanan muncul di Picking > Selesai
 TUNGGU_RESI_S = 180                     # batas tunggu semua nomor resi keluar
 JEDA_RESI_S = 3.5                       # jeda polling resi (sama dengan web)
-TUNGGU_PDF_S = 180
+# Dokumen label NORMALNYA jadi dalam hitungan detik: 613 label 02-06/10/2026 (selisih jam di
+# nama file vs waktu file ditulis = seluruh unduh_label()) median 3-5 detik, PALING LAMA 25,5
+# detik - termasuk label 198 halaman (7,2 detik), jadi ukuran label bukan penyebab lambat.
+# Dokumen yang belum jadi setelah TUNGGU_PDF_S praktis MACET di node report-prod-nya (insiden
+# 2026-10-06: dulu ditunggu 180 detik lalu HTML5 180 detik lagi di client/node yang SAMA =
+# 6 menit sia-sia per picklist, menahan seluruh langkah urgent/reguler yang berurutan) ->
+# unduh_label() mengulang dari awal dengan client baru, sama seperti 410 Expired.
+TUNGGU_PDF_S = 60
+TUNGGU_INFO_DOKUMEN_S = 30              # batas 1 request cek status dokumen (biasanya instan)
 TUNGGU_UNDUH_PDF_S = 30                 # batas tunggu request unduh dokumen PDF itu sendiri
-TUNGGU_CLIENT_REPORT_S = 300            # batas total coba ulang report-prod "410 Expired"
-JEDA_COBA_CLIENT_REPORT_S = 5
+TUNGGU_LABEL_S = 240                    # batas total coba ulang label (410 Expired/dokumen macet)
+JEDA_COBA_LABEL_S = 5
 # Koneksi putus di tengah request (mis. RemoteDisconnected) - ulangi request YANG SAMA
 # beberapa kali sebelum menyerah, supaya 1 kedipan koneksi tidak menggagalkan seluruh
 # picklist (operator harus --lanjut manual). Dipasang di Klien._kirim(), dipakai semua
@@ -274,6 +282,10 @@ class ProsesError(RuntimeError):
 
 class Lewati(Exception):
     """SKU tidak diproses (bukan error sistem), mis. pesanan tersisa < MIN_RESI."""
+
+
+class DokumenMacet(ProsesError):
+    """Dokumen label report-prod belum jadi setelah TUNGGU_PDF_S - lihat unduh_label()."""
 
 
 # ============================================================== koneksi
@@ -1528,18 +1540,24 @@ def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str, referer: str) -> None:
     batas = time.monotonic() + TUNGGU_PDF_S
     backoff = _mulai_backoff(0.3, 2)
     while True:
-        r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info", referer=referer)
+        r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info", referer=referer,
+                         timeout=TUNGGU_INFO_DOKUMEN_S)
         if r.status_code == 200:
             return
         if r.status_code != 202:
             raise ProsesError(f"Pembuatan dokumen gagal (HTTP {r.status_code}): {r.text[:200]}")
         if time.monotonic() > batas:
-            raise ProsesError(f"Dokumen belum selesai dibuat setelah {TUNGGU_PDF_S} detik")
+            raise DokumenMacet(f"Dokumen belum selesai dibuat setelah {TUNGGU_PDF_S} detik")
         k.tidur(next(backoff))
 
 
 def _expired(e: ProsesError) -> bool:
     return "410" in str(e) and "Expired" in str(e)
+
+
+def _ulang_label(e: ProsesError) -> bool:
+    """Gagal yang diulang unduh_label() dari awal dengan client baru (lihat di sana)."""
+    return _expired(e) or isinstance(e, DokumenMacet)
 
 
 def _buat_instance_report(k: Klien, rs: dict, referer: str) -> str:
@@ -1560,9 +1578,12 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
     """Client Telerik report-prod hanya hidup di memori 1 node; kalau node itu kehilangan
     client kita (HTTP 410 "Client ... not found. Expired.") di langkah MANA PUN - instances,
     documents, info, sampai unduh PDF-nya (insiden 2026-10-06: 20 picklist TERHENTI di
-    langkah documents, 1 di unduh PDF, yang dulu tidak ikut diulang) - ulangi SELURUH alur
-    dari halaman label dengan client baru, sampai TUNGGU_CLIENT_REPORT_S habis."""
-    batas = time.monotonic() + TUNGGU_CLIENT_REPORT_S
+    langkah documents, 1 di unduh PDF, yang dulu tidak ikut diulang) - ATAU dokumennya macet
+    tidak kunjung jadi (DokumenMacet, lihat TUNGGU_PDF_S), ulangi SELURUH alur dari halaman
+    label dengan client baru (url label & token baru, bisa jatuh ke node lain), sampai
+    TUNGGU_LABEL_S habis."""
+    mulai = time.monotonic()
+    batas = mulai + TUNGGU_LABEL_S
     coba = 0
     while True:
         coba += 1
@@ -1570,11 +1591,16 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
             isi = _unduh_label_sekali(k, ids)
             break
         except ProsesError as e:
-            if not _expired(e) or time.monotonic() + JEDA_COBA_CLIENT_REPORT_S > batas:
+            if not _ulang_label(e):
                 raise
-            log.info("  Client report kedaluwarsa (percobaan %d), ulangi dari awal %d detik "
-                     "lagi: %s", coba, JEDA_COBA_CLIENT_REPORT_S, e)
-            k.tidur(JEDA_COBA_CLIENT_REPORT_S)
+            if time.monotonic() + JEDA_COBA_LABEL_S > batas:
+                raise type(e)(f"{e} (menyerah setelah {coba} percobaan dengan client baru, "
+                              f"{durasi(time.monotonic() - mulai)})") from e
+            log.info("  Label gagal (percobaan %d: %s), ulangi dari awal dengan client baru %d "
+                     "detik lagi", coba, e, JEDA_COBA_LABEL_S)
+            k.tidur(JEDA_COBA_LABEL_S)
+    if coba > 1:
+        log.info("  Label berhasil di percobaan %d (%s)", coba, durasi(time.monotonic() - mulai))
     tujuan.parent.mkdir(parents=True, exist_ok=True)
     tujuan.write_bytes(isi)
     return tujuan
@@ -1598,8 +1624,11 @@ def _unduh_label_sekali(k: Klien, ids: list[int]) -> bytes:
         doc = k.report_post(f"{dasar}/documents", pdf, referer=referer)["documentId"]
         _tunggu_dokumen(k, dasar, doc, referer)
     except ProsesError as e:
-        if _expired(e):
-            raise      # client-nya sudah hilang, HTML5 di client yang sama pasti 410 juga
+        if _ulang_label(e):
+            # client hilang (HTML5 di client yang sama pasti 410 juga) / dokumen macet di node
+            # ini (HTML5 di node yang sama ikut macet - insiden 2026-10-06) -> unduh_label()
+            # mengulang dari awal dengan client baru
+            raise
         # cara web: buat tampilan HTML5 dulu, lalu PDF berdasarkan dokumen itu
         log.info("  PDF langsung gagal (%s), mencoba lewat HTML5", e)
         html5 = k.report_post(f"{dasar}/documents", {

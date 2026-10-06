@@ -1638,6 +1638,7 @@ class _SesiReportGangguan:
         self.gangguan = {k: list(v) for k, v in gangguan.items()}
         self.langkah: list[str] = []
         self.client = 0
+        self.timeout_info: set = set()
 
     def _ganggu(self, langkah):
         self.langkah.append(langkah)
@@ -1656,6 +1657,7 @@ class _SesiReportGangguan:
             return self._ganggu("halaman") or Resp(content=self.HTML.encode(),
                                                    headers={"content-type": "text/html"})
         if path.endswith("/info"):
+            self.timeout_info.add(timeout)
             return self._ganggu("info") or Resp(200, {})
         if "/documents/" in path:
             return self._ganggu("unduh") or Resp(content=b"%PDF-1.4 x",
@@ -1712,14 +1714,53 @@ def uji_unduh_label_410_saat_unduh_pdf_diulang_dengan_client_baru():
 
 
 def uji_unduh_label_410_terus_menerus_berhenti_setelah_batas_waktu():
-    lama, pl.TUNGGU_CLIENT_REPORT_S = pl.TUNGGU_CLIENT_REPORT_S, 0
+    lama, pl.TUNGGU_LABEL_S = pl.TUNGGU_LABEL_S, 0
     try:
         sesi, hasil = _unduh_dengan_gangguan({"documents": [410] * 10})
     finally:
-        pl.TUNGGU_CLIENT_REPORT_S = lama
+        pl.TUNGGU_LABEL_S = lama
     assert isinstance(hasil, pl.ProsesError) and pl._expired(hasil), hasil
     assert sesi.client == 1, "batas waktu habis -> tidak diulang lagi"
-    print("  410 Expired terus-menerus: berhenti setelah TUNGGU_CLIENT_REPORT_S (tidak loop selamanya)")
+    print("  410 Expired terus-menerus: berhenti setelah TUNGGU_LABEL_S (tidak loop selamanya)")
+
+
+def uji_unduh_label_dokumen_macet_diulang_dengan_client_baru_bukan_html5():
+    # info terus 202 (dokumen tidak kunjung jadi) - PICK-000157341/157346/157438 insiden
+    # 2026-10-06: dulu ditunggu 180 detik + HTML5 180 detik di client/node yang SAMA
+    lama, pl.TUNGGU_PDF_S = pl.TUNGGU_PDF_S, 0
+    try:
+        sesi, hasil = _unduh_dengan_gangguan({"info": [202]})
+    finally:
+        pl.TUNGGU_PDF_S = lama
+    assert isinstance(hasil, Path), hasil
+    assert sesi.client == 2, f"dokumen macet -> ulangi dengan client baru: {sesi.client}"
+    assert sesi.langkah.count("documents") == 2, \
+        f"jangan coba HTML5 di client/node yang macet (1 dokumen per percobaan): {sesi.langkah}"
+    assert sesi.timeout_info == {pl.TUNGGU_INFO_DOKUMEN_S}, sesi.timeout_info
+    print("  dokumen macet (> TUNGGU_PDF_S): diulang dari awal dengan client baru, tidak HTML5 "
+          "di client yang sama; cek status pakai timeout request pendek")
+
+
+def uji_unduh_label_dokumen_macet_terus_berhenti_setelah_batas_waktu():
+    lama = pl.TUNGGU_PDF_S, pl.TUNGGU_LABEL_S
+    pl.TUNGGU_PDF_S, pl.TUNGGU_LABEL_S = 0, 0
+    try:
+        sesi, hasil = _unduh_dengan_gangguan({"info": [202] * 10})
+    finally:
+        pl.TUNGGU_PDF_S, pl.TUNGGU_LABEL_S = lama
+    assert isinstance(hasil, pl.DokumenMacet), hasil
+    assert "1 percobaan" in str(hasil), hasil
+    assert sesi.client == 1, "batas waktu habis -> tidak diulang lagi"
+    print("  dokumen macet terus-menerus: berhenti setelah TUNGGU_LABEL_S, jumlah percobaan "
+          "tercantum di pesan TERHENTI")
+
+
+def uji_unduh_label_pdf_gagal_lain_tetap_lewat_html5():
+    sesi, hasil = _unduh_dengan_gangguan({"documents": [500]})
+    assert isinstance(hasil, Path), hasil
+    assert sesi.client == 1 and sesi.langkah.count("documents") == 3, (sesi.client, sesi.langkah)
+    print("  PDF langsung gagal selain 410/macet (mis. HTTP 500): tetap fallback HTML5 -> PDF "
+          "di client yang sama seperti cara web")
 
 
 def uji_unduh_label_gagal_bukan_410_tidak_diulang():

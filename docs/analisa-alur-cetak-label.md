@@ -169,7 +169,20 @@ Terbukti di rekaman: isi langkah 2 **sama persis** dengan `reportSource` di HTML
 `parameterValues` langkah 3 **sama persis** dengan `{id: value}` dari respons langkah 2.
 Web membuat dokumen HTML5 lebih dulu lalu PDF (dengan `baseDocumentID`). Program (`unduh_label()`
 di `proses_label.py`) langsung meminta PDF terlebih dahulu — sudah terbukti jalan ke server
-Jubelio — dan baru fallback ke jalur HTML5→PDF kalau permintaan PDF langsung gagal.
+Jubelio — dan baru fallback ke jalur HTML5→PDF kalau permintaan PDF langsung gagal dengan
+error biasa (mis. HTTP 500).
+
+**Waktu normal & penanganan macet (revisi 2026-10-06)**: dari 613 label 02–06/10/2026 (selisih
+jam di nama file vs waktu file ditulis = seluruh `unduh_label()`), pembuatan label normalnya
+median 3–5 detik, paling lama 25,5 detik — label 198 halaman pun cuma 7,2 detik, jadi ukuran
+label bukan penyebab lambat. Dokumen yang belum jadi setelah `TUNGGU_PDF_S` (60 detik) dianggap
+**macet** di node report-prod-nya: seluruh alur di atas diulang dari langkah a dengan client
+baru (URL & token baru, bisa jatuh ke node lain) — sama seperti client yang hilang (HTTP 410
+"Client ... not found. Expired.") — sampai `TUNGGU_LABEL_S` (240 detik) habis, baru picklist
+dinyatakan TERHENTI. Dulu dokumen macet ditunggu 180 detik lalu dicoba HTML5 180 detik lagi di
+client/node yang SAMA (6 menit sia-sia per picklist, menahan langkah urgent/reguler yang
+berurutan — insiden 2026-10-06). Tiap cek status (langkah 5) dibatasi `TUNGGU_INFO_DOKUMEN_S`
+(30 detik) per request.
 
 Beda kecil dari rekaman asli: langkah 6 di kode saat ini memakai
 `response-content-disposition=attachment` (bukan `inline` seperti di rekaman) — sama-sama
