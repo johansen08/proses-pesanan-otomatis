@@ -5,6 +5,12 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
+**Revisi 2026-10-06**: tambah langkah **Recheck Stok** (`--recheck-stok`) sebagai langkah
+PALING PERTAMA di tiap TIPE 1-4 (sebelum Sampel TikTok) — cek ulang stok SEMUA pesanan
+berstatus stok kosong (`EMPTY_STOCK`, biasanya bekas picklist sebelumnya yang gagal karena
+stok tidak ada) sekaligus, supaya pesanan yang stoknya sudah tersedia lagi ikut terhitung di
+langkah-langkah berikutnya TIPE yang sama. Lihat bagian "Recheck stok" di bawah.
+
 **Revisi 2026-10-01**: `proses-harian.bat` memakai **4 TIPE** (menggantikan
 penamaan "SESI PAGI/JAM 13.00/SESI SORE/JAM 15.00" sebelumnya yang kurang
 jelas) — **TIPE 1**, **TIPE 2**, **TIPE 3**, **TIPE 4**, dijalankan **1 kali
@@ -23,6 +29,7 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 
 | Istilah tim | Perintah (`jalankan.bat ...`) |
 |---|---|
+| Recheck stok | `--recheck-stok --jalankan` |
 | Sampel TikTok (nilai 0/kosong) | `--sampel --jalankan` |
 | Urgent Lazada | `--urgent --channel lazada --jalankan` |
 | Urgent GTL & SiCepat | `--urgent --channel gtl-sicepat --jalankan` |
@@ -49,20 +56,23 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 ```
 
 Tiap pilihan menjalankan urutan langkah di bawah **berurut, 1 kali klik +
-1 konfirmasi Y/N**. Picklist sampel (TikTok Shop nilai 0/kosong) **selalu**
-dicek PALING PERTAMA di tiap tipe (dilewati kalau tidak ada pesanannya),
-lalu picklist urgent (Lazada, GTL/SiCepat) **selalu** ikut setelahnya —
-tidak ada lagi cara memicunya sendirian lewat menu (masih bisa manual lewat
-`jalankan.bat --sampel ...`/`jalankan.bat --urgent ...` kalau perlu).
+1 konfirmasi Y/N**. Recheck stok **selalu** dijalankan PALING PERTAMA di
+tiap tipe (lihat pembahasan lebih lanjut di bawah), lalu picklist sampel
+(TikTok Shop nilai 0/kosong) **selalu** dicek setelahnya (dilewati kalau
+tidak ada pesanannya), lalu picklist urgent (Lazada, GTL/SiCepat) **selalu**
+ikut setelahnya — tidak ada lagi cara memicunya sendirian lewat menu (masih
+bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
+...`/`jalankan.bat --urgent ...` kalau perlu).
 
 ### TIPE 1 — gabung J&T+SPX (07.00-12.00, dan 16.00-07.00 keesokan harinya)
 
-1. SAMPEL TIKTOK (NILAI 0)
-2. URGENT LAZADA
-3. URGENT GTL & SICEPAT
-4. SPX - J&T SPESIAL
-5. SPX - J&T 1 QTY REGULER
-6. SPX - J&T KOMBINASI
+1. RECHECK STOK
+2. SAMPEL TIKTOK (NILAI 0)
+3. URGENT LAZADA
+4. URGENT GTL & SICEPAT
+5. SPX - J&T SPESIAL
+6. SPX - J&T 1 QTY REGULER
+7. SPX - J&T KOMBINASI
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore/malam/dini hari **16.00 sampai 07.00 keesokan harinya** — begitu TIPE 4
@@ -73,18 +83,19 @@ didokumentasikan terpisah pakai TIPE 3 (dipisah) — sekarang malam hari
 
 ### TIPE 2 — dipisah + SPX Resi Pagi (TEPAT jam 13.00)
 
-1. SAMPEL TIKTOK (NILAI 0)
-2. URGENT LAZADA
-3. URGENT GTL & SICEPAT
-4. SPX ≤ 12.00 (SPX RESI PAGI)
-5. J&T SPESIAL
-6. J&T 1 QTY REGULER
-7. J&T KOMBINASI
-8. SPX - SPESIAL
-9. SPX - 1 QTY REGULER
-10. SPX - KOMBINASI
+1. RECHECK STOK
+2. SAMPEL TIKTOK (NILAI 0)
+3. URGENT LAZADA
+4. URGENT GTL & SICEPAT
+5. SPX ≤ 12.00 (SPX RESI PAGI)
+6. J&T SPESIAL
+7. J&T 1 QTY REGULER
+8. J&T KOMBINASI
+9. SPX - SPESIAL
+10. SPX - 1 QTY REGULER
+11. SPX - KOMBINASI
 
-Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 3,
+Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 5,
 channel Shopee, jam pesan WIB maksimal 12.00 siang hari itu, cukup
 **1x sehari** — jangan diulang di TIPE 3). Jam **12.00-13.00 sengaja
 dikosongkan** dari jendela tipe mana pun (jam istirahat tim) — bukan celah
@@ -92,15 +103,16 @@ jadwal.
 
 ### TIPE 3 — dipisah, tanpa SPX Resi Pagi (13.00-15.00)
 
-1. SAMPEL TIKTOK (NILAI 0)
-2. URGENT LAZADA
-3. URGENT GTL & SICEPAT
-4. J&T SPESIAL
-5. J&T 1 QTY REGULER
-6. J&T KOMBINASI
-7. SPX - SPESIAL
-8. SPX - 1 QTY REGULER
-9. SPX - KOMBINASI
+1. RECHECK STOK
+2. SAMPEL TIKTOK (NILAI 0)
+3. URGENT LAZADA
+4. URGENT GTL & SICEPAT
+5. J&T SPESIAL
+6. J&T 1 QTY REGULER
+7. J&T KOMBINASI
+8. SPX - SPESIAL
+9. SPX - 1 QTY REGULER
+10. SPX - KOMBINASI
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
@@ -109,17 +121,18 @@ di atas).
 
 ### TIPE 4 — gabung lagi + J&T Resi Siang (TEPAT jam 15.00)
 
-1. SAMPEL TIKTOK (NILAI 0)
-2. URGENT LAZADA
-3. URGENT GTL & SICEPAT
-4. J&T ≤ 15.00 (J&T RESI SIANG)
-5. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
-6. SPX - J&T 1 QTY REGULER *(digabung)*
-7. SPX - J&T KOMBINASI *(digabung)*
+1. RECHECK STOK
+2. SAMPEL TIKTOK (NILAI 0)
+3. URGENT LAZADA
+4. URGENT GTL & SICEPAT
+5. J&T ≤ 15.00 (J&T RESI SIANG)
+6. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
+7. SPX - J&T 1 QTY REGULER *(digabung)*
+8. SPX - J&T KOMBINASI *(digabung)*
 
 Dipicu **tepat jam 15.00**, menghabiskan wajib keluar TikTok Shop (langkah
-3, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
-cukup **1x sehari** — jangan diulang di TIPE 1 berikutnya). Mulai langkah 4,
+4, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
+cukup **1x sehari** — jangan diulang di TIPE 1 berikutnya). Mulai langkah 5,
 kurir **tidak** dipisah lagi — langsung memakai pola gabungan TIPE 1, karena
 setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
@@ -143,9 +156,27 @@ sudah lewat jam 16.00, batas tunda diabaikan sepenuhnya). Implementasi kode:
 `JAM_CUTOFF_URGENT_LAZADA`/`JAM_CUTOFF_URGENT_GTL_SICEPAT`/`JAM_LANJUT_URGENT` &
 `_saring_jam_urgent()` di `src/proses_label.py`.
 
+### Recheck stok
+
+Dijalankan **PALING PERTAMA di tiap TIPE 1-4** (langkah 1, sebelum picklist sampel) — cek
+ulang stok untuk SEMUA pesanan yang berstatus stok kosong (`EMPTY_STOCK`, biasanya bekas
+picklist sebelumnya yang gagal karena stok tidak ada). Pesanan yang stoknya sudah tersedia
+lagi otomatis kembali ke proses normal, sehingga ikut terhitung di langkah-langkah
+berikutnya (sampel/urgent/spesial/reguler) TIPE yang sama. Kalau tidak ada pesanan stok
+kosong saat itu, langkah ini otomatis dilewati tanpa memanggil Jubelio lagi.
+
+| | Recheck stok |
+|---|---|
+| Lingkup | SEMUA pesanan `EMPTY_STOCK` sekaligus (bukan per-pesanan/per-SKU) |
+| Dipicu di | TIPE 1-4, langkah 1 (paling pertama, tiap kali TIPE dijalankan) |
+| CLI | `--recheck-stok` |
+
+Implementasi kode: `ambil_stok_kosong()`/`recheck_stok()` di `src/jubelio.py`,
+`recheck_stok_pesanan()` di `src/main.py`.
+
 ### Picklist sampel (TikTok Shop nilai 0/kosong)
 
-Dicek **PALING PERTAMA di tiap TIPE 1-4** (langkah 1, sebelum Urgent Lazada) — pesanan
+Dicek **langkah 2 di tiap TIPE 1-4** (setelah Recheck Stok, sebelum Urgent Lazada) — pesanan
 channel TikTok Shop yang nilainya 0/kosong (sampel/kreator) digabung jadi **1 picklist**
 ("SAMPEL-TIKTOK"), bukan dibuang. Kalau tidak ada pesanan sampel saat itu, langkah ini
 otomatis dilewati tanpa membuat picklist apa pun, lalu lanjut ke langkah berikutnya.
@@ -154,7 +185,7 @@ otomatis dilewati tanpa membuat picklist apa pun, lalu lanjut ke langkah berikut
 |---|---|
 | Channel | TikTok Shop ("Shop \| Tokopedia") |
 | Syarat | nilai pesanan (`grand_total`) 0 atau kosong |
-| Dipicu di | TIPE 1-4, langkah 1 (paling pertama, tiap kali TIPE dijalankan) |
+| Dipicu di | TIPE 1-4, langkah 2 (setelah Recheck Stok, tiap kali TIPE dijalankan) |
 | CLI | `--sampel` |
 | Label riwayat/PDF | `SAMPEL-TIKTOK` |
 
@@ -227,23 +258,23 @@ jam di luar jam kerja:
 
 | Jam | Yang dijalankan | TIPE proses-harian.bat |
 |---|---|---|
-| 07.00 | Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX & J&T spesial, 1 qty reguler, kombinasi reguler (**digabung**) | 1 |
+| 07.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX & J&T spesial, 1 qty reguler, kombinasi reguler (**digabung**) | 1 |
 | 07.xx (setelah transfer) | (ulang) | 1 |
 | 09.00 | (ulang) | 1 |
 | 09.xx (setelah transfer) | (ulang) | 1 |
 | 11.00 | (ulang) | 1 |
 | 11.xx (setelah transfer) | (ulang) | 1 |
 | 12.00-13.00 | *(jam istirahat, tidak ada proses)* | - |
-| 13.00 | Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **SPX ≤ 12.00 (SPX Resi Pagi)**, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**) | 2 |
-| 13.xx (setelah TIPE 2 selesai) | Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**, tanpa SPX Resi Pagi lagi) | 3 |
-| 15.00 | Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **J&T ≤ 15.00 (J&T Resi Siang)**, lalu SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung lagi**) | 4 |
-| 16.00 | Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
+| 13.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **SPX ≤ 12.00 (SPX Resi Pagi)**, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**) | 2 |
+| 13.xx (setelah TIPE 2 selesai) | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**, tanpa SPX Resi Pagi lagi) | 3 |
+| 15.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **J&T ≤ 15.00 (J&T Resi Siang)**, lalu SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung lagi**) | 4 |
+| 16.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
 | 16.xx (setelah transfer) | (ulang) | 1 |
 | 18.00, 19.00, 20.00, 21.00, 22.00, 23.00 | (ulang, 1x per jam - tidak ada proses transfer di jam-jam ini) | 1 |
 | 00.00-06.xx (dini hari) | (ulang kalau ada pesanan masuk) | 1 |
 
 **Catatan jam 13.00**: hanya siklus ini yang menyertakan SPX Resi Pagi
-(langkah 3 di TIPE 2 — channel Shopee, jam pesan WIB maksimal 12.00 siang
+(langkah 5 di TIPE 2 — channel Shopee, jam pesan WIB maksimal 12.00 siang
 hari itu). Setelah jam 13.00, siklus berikutnya (13.xx dst, sebelum jam
 15.00) pakai TIPE 3, bukan TIPE 2 lagi.
 

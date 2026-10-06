@@ -9,6 +9,14 @@ Alur (berdasarkan rekaman sniff 26-09-2026 08:18):
   4. GET  open.jubelio.com/core-api/wms/sales/v2/orders/ready-to-process/
                                                                 -> grand_total per pesanan
                                                                    (Excel tidak punya kolom nilai)
+
+Recheck stok (berdasarkan rekaman sniff 05-10-2026 15:17, lihat ambil_stok_kosong()/
+recheck_stok() & main.py --recheck-stok):
+  1. GET open.jubelio.com/core-api/wms/sales/v2/orders/empty-stock/   -> daftar pesanan
+                                                                          stok kosong
+  2. GET open.jubelio.com/core-api/wms/sales/orders/recheck-stock/    -> picu cek ulang
+                                                                          (berlaku utk SEMUA
+                                                                          pesanan di atas)
 """
 import os
 import time
@@ -23,6 +31,8 @@ API = "https://open.jubelio.com/core-api"
 URL_LOGIN = f"{API}/login"
 URL_LAPORAN = f"{API}/reports/sales-list/ready-to-pick-list/"
 URL_PESANAN = f"{API}/wms/sales/v2/orders/ready-to-process/"
+URL_STOK_KOSONG = f"{API}/wms/sales/v2/orders/empty-stock/"
+URL_RECHECK_STOK = f"{API}/wms/sales/orders/recheck-stock/"
 UKURAN_HALAMAN_PESANAN = 200  # maksimum yang didukung API Jubelio - kurangi jumlah request
 MAKS_HALAMAN = 50          # pengaman: 50 x 200 = 10.000 pesanan
 
@@ -151,6 +161,43 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
                 if o.get("salesorder_no") == no:
                     nilai[no] = _angka(o.get("grand_total"))
     return nilai
+
+
+def ambil_stok_kosong(token: str, timeout: int = 60) -> list[dict]:
+    """Ambil daftar pesanan yang berstatus EMPTY_STOCK (stok kosong saat pembuatan picklist
+    sebelumnya - tombol "Stok Kosong" di web, lihat rekaman sniff 05-10-2026 15:17). Bentuk
+    tiap pesanan sama dengan _halaman_pesanan()/ambil_nilai_pesanan() (salesorder_no, dst)."""
+    hasil: list[dict] = []
+    with requests.Session() as sesi:
+        page, total = 1, None
+        while page <= MAKS_HALAMAN:
+            r = _kirim_dengan_retry429(
+                sesi.get, URL_STOK_KOSONG, headers=_header(token), timeout=timeout,
+                params={"page": page, "q": "", "sort_by": "transaction_date",
+                        "page_size": UKURAN_HALAMAN_PESANAN, "sort_direction": "DESC"})
+            if r.status_code != 200:
+                raise JubelioError(f"Gagal ambil daftar stok kosong (HTTP {r.status_code}): {_pesan(r)}")
+            j = r.json()
+            data = j.get("data") or []
+            hasil.extend(data)
+            total = j.get("totalCount", total)
+            if not data or (total is not None and page * UKURAN_HALAMAN_PESANAN >= int(total)):
+                break
+            page += 1
+    return hasil
+
+
+def recheck_stok(token: str, timeout: int = 60) -> None:
+    """Picu Jubelio mengecek ulang stok SEMUA pesanan yang berstatus EMPTY_STOCK sekaligus
+    (tombol "Recheck Stok" di web) - GET tanpa body/parameter, bukan per-pesanan (lihat
+    rekaman sniff 05-10-2026 15:17: dipanggil sekali, langsung mengosongkan daftar
+    stok kosong yang sebelumnya berisi 15 pesanan)."""
+    r = _kirim_dengan_retry429(requests.get, URL_RECHECK_STOK, headers=_header(token),
+                               timeout=timeout)
+    if r.status_code != 200:
+        raise JubelioError(f"Gagal recheck stok (HTTP {r.status_code}): {_pesan(r)}")
+    if r.json().get("status") != "ok":
+        raise JubelioError(f"Respons recheck stok tidak valid: {_pesan(r)}")
 
 
 def _pesan(r: requests.Response) -> str:

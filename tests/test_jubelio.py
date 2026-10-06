@@ -248,6 +248,105 @@ def uji_ambil_nilai_pesanan_cari_satu_per_satu_yang_belum_ketemu():
           "yang tetap tak ketemu dilewati tanpa error")
 
 
+# -------------------------------------------------- ambil_stok_kosong() / recheck_stok()
+def uji_ambil_stok_kosong_gabung_semua_halaman():
+    halaman1 = [{"salesorder_no": f"X{i}", "wms_status": "EMPTY_STOCK"} for i in range(200)]
+    halaman2 = [{"salesorder_no": "C", "wms_status": "EMPTY_STOCK"}]
+    sesi = SesiPalsu([halaman1, halaman2], hasil_q={})
+    lama = {}
+    import requests
+    lama["Session"] = requests.Session
+    requests.Session = lambda: sesi
+    try:
+        hasil = jb.ambil_stok_kosong("TKN")
+    finally:
+        requests.Session = lama["Session"]
+    assert len(hasil) == 201, len(hasil)
+    assert {o["salesorder_no"] for o in hasil} == {f"X{i}" for i in range(200)} | {"C"}
+    print("  ambil_stok_kosong: halaman ke-2 ikut diambil & digabung selama totalCount > "
+          "yang sudah terkumpul")
+
+
+class SesiGagalPalsu:
+    """Sesi palsu yang selalu membalas HTTP 500 - meniru requests.Session() dipakai
+    ambil_stok_kosong() (beda dari ambil_nilai_pesanan(): patch requests.get TIDAK memengaruhi
+    sesi.get() di dalam `with requests.Session() as sesi`, jadi harus patch requests.Session)."""
+
+    def get(self, url, headers=None, timeout=None, params=None):
+        return Resp(500, text="server error")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def uji_ambil_stok_kosong_http_gagal():
+    lama = {}
+    import requests
+    lama["Session"] = requests.Session
+    requests.Session = SesiGagalPalsu
+    try:
+        try:
+            jb.ambil_stok_kosong("TKN")
+        except jb.JubelioError as e:
+            assert "500" in str(e)
+        else:
+            raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
+    finally:
+        requests.Session = lama["Session"]
+    print("  ambil_stok_kosong: HTTP bukan 200 -> JubelioError")
+
+
+def uji_recheck_stok_sukses():
+    lama = {}
+    dipanggil = {}
+
+    def get_palsu(url, headers=None, timeout=None):
+        dipanggil["url"], dipanggil["headers"] = url, headers
+        return Resp(200, {"status": "ok"})
+
+    _tempel(lama, "get", get_palsu)
+    try:
+        jb.recheck_stok("TKN")   # tidak error = sukses
+    finally:
+        _pulihkan(lama)
+    assert dipanggil["url"] == jb.URL_RECHECK_STOK
+    assert dipanggil["headers"]["authorization"] == "TKN"
+    print("  recheck_stok: GET tanpa body/parameter ke URL_RECHECK_STOK, authorization terisi")
+
+
+def uji_recheck_stok_status_bukan_ok():
+    lama = {}
+    _tempel(lama, "get", lambda *a, **k: Resp(200, {"status": "gagal"}))
+    try:
+        try:
+            jb.recheck_stok("TKN")
+        except jb.JubelioError:
+            pass
+        else:
+            raise AssertionError("seharusnya JubelioError kalau status respons bukan 'ok'")
+    finally:
+        _pulihkan(lama)
+    print("  recheck_stok: respons status bukan 'ok' -> JubelioError")
+
+
+def uji_recheck_stok_http_gagal():
+    lama = {}
+    _tempel(lama, "get", lambda *a, **k: Resp(500, text="server error"))
+    try:
+        try:
+            jb.recheck_stok("TKN")
+        except jb.JubelioError as e:
+            assert "500" in str(e)
+        else:
+            raise AssertionError("seharusnya JubelioError kalau HTTP bukan 200")
+    finally:
+        _pulihkan(lama)
+    print("  recheck_stok: HTTP bukan 200 -> JubelioError")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

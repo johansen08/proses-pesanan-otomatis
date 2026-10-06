@@ -64,6 +64,13 @@ LAINNYA, sama pola dengan Shopee Pagi di atas) - aturan bisnis J&T: wajib keluar
 paling lambat jam 15.00, lihat docs/jadwal-proses.md:
     python src/main.py --jnt-siang                        # MODE UJI: hanya tampilkan rencana
     python src/main.py --jnt-siang --jalankan
+
+Recheck stok (jubelio.py): cek ulang stok SEMUA pesanan yang berstatus stok kosong (tombol
+"Recheck Stok" di web) - pesanan yang stoknya sudah tersedia lagi otomatis kembali ke proses
+normal. Dijalankan PALING PERTAMA di tiap TIPE proses-harian.bat (sebelum picklist sampel),
+supaya pesanan yang pulih ikut terhitung di langkah-langkah berikutnya:
+    python src/main.py --recheck-stok                    # MODE UJI: hanya tampilkan daftar
+    python src/main.py --recheck-stok --jalankan
 """
 import argparse
 import logging
@@ -266,6 +273,11 @@ def _main() -> int:
                         "J&T, jam pesan s.d. 15:00 WIB hari ini, dipecah per lantai rak "
                         "gudang) sampai label PDF - dijalankan manual 1x sehari, BUKAN "
                         "bagian alur otomatis --label (tanpa --jalankan = mode uji)")
+    ap.add_argument("--recheck-stok", action="store_true",
+                    help="cek ulang stok untuk SEMUA pesanan yang berstatus stok kosong "
+                        "(tombol 'Recheck Stok' di web) - pesanan yang stoknya sudah "
+                        "tersedia lagi otomatis kembali diproses normal (dijalankan paling "
+                        "pertama di tiap TIPE proses-harian.bat; tanpa --jalankan = mode uji)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -282,6 +294,8 @@ def _main() -> int:
     try:
         if args.lanjut:
             return lanjut_picklist(log, args)
+        if args.recheck_stok:
+            return recheck_stok_pesanan(log, args)
         if args.sampel:
             return sampel_picklist(log, args)
         if args.urgent:
@@ -448,6 +462,34 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     log.info("Riwayat: %s", FILE_RIWAYAT)
     bermasalah = cetak_bermasalah(hasil + hasil_reguler)
     return 1 if bermasalah else 0
+
+
+def recheck_stok_pesanan(log: logging.Logger, args) -> int:
+    import jubelio
+
+    token = login(log)
+    sebelum = jubelio.ambil_stok_kosong(token)
+    log.info("%d pesanan berstatus stok kosong saat ini", len(sebelum))
+    if not sebelum:
+        log.info("Tidak ada pesanan stok kosong untuk di-recheck")
+        return 0
+    for o in sebelum:
+        log.info("  - %s (%s)", o.get("salesorder_no"), o.get("store_name", "-"))
+
+    if not args.jalankan:
+        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
+        return 0
+
+    jubelio.recheck_stok(token)
+    sesudah = jubelio.ambil_stok_kosong(token)
+    nomor_sebelum = {o.get("salesorder_no") for o in sebelum}
+    nomor_sesudah = {o.get("salesorder_no") for o in sesudah}
+    pulih = nomor_sebelum - nomor_sesudah
+    log.info("SELESAI recheck stok: %d pesanan kembali normal, %d masih stok kosong",
+             len(pulih), len(sesudah))
+    for o in sesudah:
+        log.info("  - masih stok kosong: %s (%s)", o.get("salesorder_no"), o.get("store_name", "-"))
+    return 0
 
 
 def sampel_picklist(log: logging.Logger, args) -> int:

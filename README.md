@@ -410,6 +410,32 @@ setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama
 SKU di riwayat: `JNT-SIANG-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
 `label-pengiriman/PICK-000155500_JNT-SIANG-LANTAI1_...pdf`.
 
+## 6. Recheck stok (`--recheck-stok`)
+
+**Alur berdiri sendiri, dijalankan PALING PERTAMA di tiap TIPE `proses-harian.bat`** (sebelum
+picklist sampel) — cek ulang stok untuk SEMUA pesanan yang berstatus stok kosong
+(`EMPTY_STOCK`, biasanya bekas picklist sebelumnya yang gagal karena stok tidak ada
+sekaligus, bukan per-pesanan/per-SKU). Pesanan yang stoknya sudah tersedia lagi otomatis
+kembali diproses normal, sehingga ikut terhitung di langkah-langkah berikutnya TIPE yang sama
+(sampel/urgent/spesial/reguler). Kalau tidak ada pesanan stok kosong saat itu, langkah ini
+otomatis dilewati tanpa memanggil Jubelio lagi — tidak membuat picklist/label apa pun, cuma
+memicu Jubelio mengecek ulang stok.
+
+```bash
+jalankan.bat --recheck-stok                 # mode uji: tampilkan daftar pesanan stok kosong
+jalankan.bat --recheck-stok --jalankan      # sungguhan
+```
+
+Dijalankan sebagai langkah PERTAMA di setiap TIPE `proses-harian.bat` (TIPE 1-4), sebelum
+picklist sampel. `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
+
+Alur (berdasarkan rekaman sniff, lihat `jubelio.ambil_stok_kosong()`/`jubelio.recheck_stok()`):
+
+1. `GET wms/sales/v2/orders/empty-stock/` — daftar pesanan berstatus stok kosong saat ini.
+2. `GET wms/sales/orders/recheck-stock/` — picu Jubelio mengecek ulang stok SEMUA pesanan di
+   atas sekaligus (tombol "Recheck Stok" di web, GET tanpa body/parameter).
+3. Daftar diambil ulang untuk tahu berapa pesanan yang kembali normal vs masih stok kosong.
+
 ## Cetak bulk label (`cetak-label-*.bat`, `src/print_spesial.py`)
 
 Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md).
