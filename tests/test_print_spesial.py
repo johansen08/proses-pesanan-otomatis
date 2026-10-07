@@ -104,7 +104,7 @@ def uji_daftar_label_spesial_folder_kosong():
         print("  daftar_label_spesial: list kosong kalau tidak ada label spesial")
 
 
-def uji_daftar_label_urgent_semua_pdf_di_subfolder_tanpa_filter_nama():
+def uji_daftar_label_gtl_sicepat_hanya_file_gtl_sicepat():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         subfolder = folder / "URGENT"
@@ -114,23 +114,25 @@ def uji_daftar_label_urgent_semua_pdf_di_subfolder_tanpa_filter_nama():
              "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
              "catatan.txt")
         _buat(folder, "PICK-000155999_1QTY-REGULER-2A_2026-10-01_091500.pdf")
-        hasil = ps.daftar_label(folder, "urgent")
+        _buat(subfolder, "PICK-000155620_GTL-SICEPAT-LANTAI1_2026-10-01_080250.pdf")
+        hasil = ps.daftar_label(folder, "gtl-sicepat")
         assert [f.name for f in hasil] == [
-            "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+            "PICK-000155620_GTL-SICEPAT-LANTAI1_2026-10-01_080250.pdf",
             "PICK-000155622_GTL-SICEPAT-LANTAI2_2026-10-01_080320.pdf",
         ], [f.name for f in hasil]
-        print("  daftar_label(urgent): semua PDF di subfolder URGENT ikut walau nama "
-             "bervariasi, urut nomor PICK naik, file di folder sesi (bukan subfolder) "
-             "diabaikan")
+        semua = ps.daftar_label(folder, "gtl-sicepat", saring_nama=False)
+        assert len(semua) == 3, [f.name for f in semua]
+        print("  daftar_label(gtl-sicepat): hanya PDF GTL-SICEPAT di subfolder URGENT (Lazada "
+             "tidak ikut), urut nomor PICK naik, file di folder sesi (bukan subfolder) diabaikan")
 
 
-def uji_daftar_label_urgent_tidak_ada_varian_kurir():
+def uji_daftar_label_gtl_sicepat_tidak_ada_varian_kurir():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         (folder / "JNT_URGENT").mkdir()
-        _buat(folder / "JNT_URGENT", "PICK-000155621_LAZADA_2026-10-01_080302.pdf")
-        assert ps.daftar_label(folder, "urgent") == []
-        print("  daftar_label(urgent): subfolder JNT_URGENT TIDAK dicari (urgent tidak "
+        _buat(folder / "JNT_URGENT", "PICK-000155621_GTL-SICEPAT-LANTAI1_2026-10-01_080302.pdf")
+        assert ps.daftar_label(folder, "gtl-sicepat") == []
+        print("  daftar_label(gtl-sicepat): subfolder JNT_URGENT TIDAK dicari (tidak "
              "punya varian kurir)")
 
 
@@ -213,18 +215,20 @@ def uji_cari_nomor_terlompat_kurang_dari_2_file():
         print("  cari_nomor_terlompat: list kosong kalau <2 file (tidak ada rentang untuk dicek)")
 
 
-def uji_cari_nomor_terlompat_jenis_urgent_pola_generik():
+def uji_cari_nomor_terlompat_jenis_gtl_sicepat_hitung_dari_semua_urgent():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         subfolder = folder / "URGENT"
         subfolder.mkdir()
         _buat(subfolder,
-             "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+             "PICK-000155621_GTL-SICEPAT-LANTAI1_2026-10-01_080302.pdf",
+             "PICK-000155622_LAZADA_2026-10-01_080400.pdf",
              "PICK-000155625_GTL-SICEPAT-LANTAI1_2026-10-01_090000.pdf")
-        file_pdf = ps.daftar_label(folder, "urgent")
-        assert ps.cari_nomor_terlompat(file_pdf, "urgent") == [155622, 155623, 155624]
-        print("  cari_nomor_terlompat: tetap mendeteksi gap untuk jenis urgent lewat "
-             "pola generik (bukan pola _SPESIAL_)")
+        semua = ps.daftar_label(folder, "gtl-sicepat", saring_nama=False)
+        # picklist Lazada (622) bukan nomor hilang; hanya 623 & 624 yang benar-benar terlompat
+        assert ps.cari_nomor_terlompat(semua, "gtl-sicepat") == [155623, 155624]
+        print("  cari_nomor_terlompat: gap dihitung dari SEMUA PDF subfolder URGENT, jadi picklist "
+             "Lazada di antara nomor GTL-SiCepat tidak dianggap hilang")
 
 
 def uji_simpan_dan_baca_daftar_gagal_roundtrip():

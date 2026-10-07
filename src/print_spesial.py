@@ -1,4 +1,4 @@
-"""Cetak bulk label pengiriman (SPESIAL/URGENT/SATUAN/KOMBINASI) dari folder sesi
+"""Cetak bulk label pengiriman (SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI) dari folder sesi
 label-pengiriman TERBARU.
 
 Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di
@@ -7,9 +7,11 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         spesial - lihat TAG_SPESIAL & _tag_spesial() di
                         proses_label.py), HANYA file bertanda `_SPESIAL_` yang ikut
                         (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf).
-  --jenis urgent     -> subfolder URGENT saja (Alur 2, Lazada & GTL-SiCepat - TIDAK
-                        ada varian kurir), SEMUA PDF di subfolder itu ikut (nama file
-                        variatif, mis. Lazada/GTL-SiCepat-LANTAI1).
+  --jenis gtl-sicepat -> subfolder URGENT (Alur 2), HANYA file GTL-SiCepat yang ikut (nama
+                        file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1). Label
+                        Lazada di subfolder yang sama TIDAK ikut dicetak bulk (dicetak
+                        manual; sudah berukuran 100x150 mm, lihat proses_label.
+                        skala_label_lazada()).
   --jenis satuan     -> subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3 bagian "1qty"),
                         SEMUA PDF ikut (mis. 1QTY-REGULER-2A).
   --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
@@ -26,12 +28,12 @@ sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masu
 (masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
 meski pakai --tanpa-konfirmasi.
 
-Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-urgent.bat/
+Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/
 cetak-label-satuan.bat/cetak-label-kombinasi.bat, masing-masing isinya cuma
 memanggil ini dengan --jenis tetap):
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis spesial
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
-    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis urgent --folder label-pengiriman/2026-10-01/3
+    .venv\\Scripts\\python.exe src\\print_spesial.py --jenis gtl-sicepat --folder label-pengiriman/2026-10-01/3
         # pakai folder sesi tertentu, bukan yang terbaru
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis satuan --tanpa-konfirmasi
         # lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)
@@ -95,23 +97,26 @@ POLA_SPESIAL = re.compile(
 # semuanya supaya label dari ketiga kemungkinan tetap ketemu dan tercetak.
 SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_FILE.values()]
 
-# Pola generik untuk jenis selain `spesial`: label urgent/satuan/kombinasi TIDAK
-# punya tag unik di nama file (variatif: Lazada, GTL-SiCepat-LANTAI1,
-# 1QTY-REGULER-2A, KOMBINASI-REGULER-LANTAI2, dst - lihat proses_label.py), jadi
-# keanggotaan "ikut dicetak jenis ini" ditentukan LOKASI SUBFOLDER saja (lihat
-# JENIS_LABEL & daftar_label() di bawah) - pola ini cuma dipakai mengekstrak nomor
-# PICK di awal nama file (selalu ada di semua label, lihat _nama_file() di
-# proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
+# Pola generik untuk jenis selain `spesial`: label gtl-sicepat/satuan/kombinasi TIDAK
+# punya tag unik di nama file (variatif: GTL-SiCepat-LANTAI1, 1QTY-REGULER-2A,
+# KOMBINASI-REGULER-LANTAI2, dst - lihat proses_label.py), jadi keanggotaan "ikut dicetak
+# jenis ini" ditentukan LOKASI SUBFOLDER (lihat JENIS_LABEL & daftar_label() di bawah),
+# ditambah FILTER_NAMA untuk subfolder yang dipakai bersama - pola ini cuma dipakai
+# mengekstrak nomor PICK di awal nama file (selalu ada di semua label, lihat _nama_file()
+# di proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
 POLA_PICK = re.compile(r"^PICK-0*(\d+)_.*\.pdf$", re.IGNORECASE)
+# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, tapi cetak bulk hanya GTL-SiCepat
+# (nama file memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
+FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE)}
 
 # Jenis label yang didukung cetak bulk -> daftar subfolder yang dicari & digabung
 # di dalam folder sesi (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI
-# & TAG_SPESIAL di proses_label.py). "urgent" SENGAJA tanpa varian kurir -
+# & TAG_SPESIAL di proses_label.py). "gtl-sicepat" SENGAJA tanpa varian kurir -
 # proses_urgent() di proses_label.py memanggil subfolder=SUBFOLDER_URGENT polos,
 # tidak lewat _gabung_kurir(), jadi tidak ada JNT_URGENT/SPX_URGENT.
 JENIS_LABEL: dict[str, list[str]] = {
     "spesial": SUBFOLDER_SPESIAL,
-    "urgent": [SUBFOLDER_URGENT],
+    "gtl-sicepat": [SUBFOLDER_URGENT],
     "satuan": [SUBFOLDER_SATUAN] + [f"{v}_{SUBFOLDER_SATUAN}"
                                      for v in KURIR_LABEL_FILE.values()],
     "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
@@ -176,22 +181,26 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
     return terbaik[1]
 
 
-def daftar_label(folder_sesi: Path, jenis: str) -> list[Path]:
+def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> list[Path]:
     """PDF label jenis `jenis` (salah satu key JENIS_LABEL) di subfolder-subfolder
     terkait folder_sesi (lihat JENIS_LABEL), digabung lalu diurutkan dari nomor PICK
     terkecil (urutan dibuat), BUKAN diurutkan abjad nama file apa adanya. Untuk jenis
     `spesial`, nama file juga divalidasi mengandung tag SPESIAL (POLA_SPESIAL) - untuk
     jenis lain, SEMUA *.pdf di subfolder ikut (POLA_PICK hanya mengekstrak nomor PICK,
-    lihat catatan di atas POLA_PICK). Kosong (bukan error) kalau belum ada subfolder
+    lihat catatan di atas POLA_PICK), kecuali jenis di FILTER_NAMA (subfolder dipakai
+    bersama) yang disaring lagi lewat nama file. `saring_nama=False` melewati saringan itu -
+    dipakai cek nomor terlompat, karena nomor PICK jenis lain di subfolder yang sama (mis.
+    Lazada) bukan nomor yang hilang. Kosong (bukan error) kalau belum ada subfolder
     sama sekali."""
     pola = POLA_SPESIAL if jenis == "spesial" else POLA_PICK
+    filter_nama = FILTER_NAMA.get(jenis) if saring_nama else None
     berlabel = []
     for nama_folder in JENIS_LABEL[jenis]:
         folder = folder_sesi / nama_folder
         if not folder.is_dir():
             continue
         for f in folder.iterdir():
-            if f.is_file():
+            if f.is_file() and (filter_nama is None or filter_nama.match(f.name)):
                 cocok = pola.match(f.name)
                 if cocok:
                     berlabel.append((int(cocok.group(1)), f))
@@ -393,7 +402,7 @@ def baca_daftar_ulang(file_daftar: Path) -> list[Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Cetak bulk label dari folder sesi label-pengiriman terbaru "
-                    "(SPESIAL/URGENT/SATUAN/KOMBINASI)")
+                    "(SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI)")
     ap.add_argument("--jenis", required=True, choices=sorted(JENIS_LABEL),
                     help="Jenis label yang dicetak bulk")
     ap.add_argument("--folder", type=Path,
@@ -423,7 +432,8 @@ def main() -> int:
             for f in file_pdf:
                 log.info("  %s", f.name)
 
-            terlompat = cari_nomor_terlompat(file_pdf, args.jenis)
+            terlompat = cari_nomor_terlompat(
+                daftar_label(folder, args.jenis, saring_nama=False), args.jenis)
             if terlompat:
                 log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
                            len(terlompat), ", ".join(str(n) for n in terlompat))

@@ -133,7 +133,7 @@ picklist sungguhan.
 ## 7. (Opsional) Install SumatraPDF untuk fitur cetak bulk label
 
 Hanya diperlukan jika akan memakai salah satu `cetak-label-*.bat` (cetak ulang bulk
-label SPESIAL/URGENT/SATUAN/KOMBINASI lewat printer, tanpa buka PDF satu-satu).
+label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI lewat printer, tanpa buka PDF satu-satu).
 **Tidak** diperlukan untuk alur `proses-harian.bat`/`jalankan.bat` biasa. Panduan
 download, install, dan setup lengkap: [cetak-bulk-label.md](cetak-bulk-label.md)
 bagian 2.

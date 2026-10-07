@@ -72,7 +72,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   diperkecil ke skala 68% di kertas 100x150 mm oleh `skala_label_lazada()` (pypdf) —
   tanpa `isFromLz` PDF-nya beda dari unduhan manual (sniff 2026-10-07).
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
-  parameter `--jenis`) label SPESIAL/URGENT/SATUAN/KOMBINASI yang sudah ada; tidak
+  parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
   membuat picklist/label baru.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
