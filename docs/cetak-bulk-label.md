@@ -10,14 +10,13 @@ SumatraPDF (syarat wajib fitur ini) dan cara pakai fiturnya sehari-hari.
 Mencetak ulang semua label pengiriman yang sudah ada di subfolder tertentu folder
 sesi `label-pengiriman/<tanggal>/<sesi>/`, secara **bulk dan berurut** (nomor PICK
 terkecil/paling dulu dibuat, duluan dicetak), langsung ke printer pilihan, tanpa
-perlu buka file PDF satu-satu secara manual. Ada 5 jenis, masing-masing `.bat`
+perlu buka file PDF satu-satu secara manual. Ada 4 jenis, masing-masing `.bat`
 sendiri:
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
 |---|---|---|---|
 | `spesial` | `cetak-label-spesial.bat` | `SPESIAL`, `JNT_SPESIAL`, `SPX_SPESIAL` — hanya file bertanda `_SPESIAL_` | `--label` (Alur 1, SKU spesial) |
 | `gtl-sicepat` | `cetak-label-gtl-sicepat.bat` | `URGENT` (tanpa varian kurir) — hanya file `GTL-SICEPAT-*` | `--urgent --channel gtl-sicepat` (Alur 2) |
-| `lazada` | `cetak-label-lazada.bat` | `URGENT` (tanpa varian kurir) — hanya file `LAZADA` | `--urgent --channel lazada` (Alur 2) |
 | `satuan` | `cetak-label-satuan.bat` | `SATUAN`, `JNT_SATUAN`, `SPX_SATUAN` — semua PDF | `--reguler --bagian 1qty` (Alur 3) |
 | `kombinasi` | `cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
@@ -26,21 +25,12 @@ Untuk jenis `satuan`/`kombinasi`, nama file labelnya variatif (mis. `1QTY-REGULE
 subfolder-nya sendiri sudah eksklusif per jenis (dibuat `proses_label.py` khusus alur itu),
 **semua PDF** di subfolder itu ikut dicetak, tanpa filter nama tambahan.
 
-Jenis `gtl-sicepat` (dulu `urgent`) dan `lazada` berbagi subfolder `URGENT`, jadi ada saringan
-nama: `gtl-sicepat` hanya mencetak `PICK-..._GTL-SICEPAT-...` (LANTAI1/2/3/LAINNYA), `lazada`
-hanya `PICK-..._LAZADA_...`. Pengecekan "nomor PICK terlompat" dihitung dari SEMUA PDF di
-`URGENT` (Lazada + GTL-SiCepat), supaya picklist jenis lain di antara nomornya tidak salah
-dianggap hilang.
-
-**`lazada` memakai skala custom 68%.** Label Lazada disimpan sebagai A5 (148x210 mm, template
-"Label Pengiriman Lazada"), sedangkan kertas label 100x150 mm. Jenis ini **tidak memakai
-SumatraPDF** (skalanya tidak diterapkan di printer): tiap PDF dirender ke gambar pada skala
-68% sesuai resolusi printer lalu dicetak lewat driver Windows (`src/cetak_gambar.ps1`) di
-kertas 100x150 mm, rata tengah dan atas; file asli di folder sesi tidak diubah. Karena itu
-SumatraPDF tidak wajib untuk `cetak-label-lazada.bat`, tetapi `pypdfium2` wajib terpasang
-(`pip install -r requirements.txt`). Pilih printer & konfirmasi Y/N tetap muncul seperti
-`.bat` lain. Detailnya di `docs/analisa-alur-cetak-label.md` bagian 6. File lama yang sudah
-100x150 mm tidak diperkecil lagi.
+Jenis `gtl-sicepat` (dulu `urgent`) memakai subfolder `URGENT` yang dipakai bersama label
+**Lazada**, jadi ada saringan nama: hanya `PICK-..._GTL-SICEPAT-...` (LANTAI1/2/3/LAINNYA) yang
+dicetak. **Label Lazada TIDAK ikut cetak bulk** — dicetak manual (skala custom 68% di kertas
+100x150 mm, lihat `docs/analisa-alur-cetak-label.md` bagian 6). Pengecekan "nomor PICK
+terlompat" tetap dihitung dari SEMUA PDF di `URGENT` (termasuk Lazada), supaya picklist Lazada
+di antara nomor GTL-SiCepat tidak salah dianggap hilang.
 
 **Program ini TIDAK membuat picklist/label baru.** Fungsinya cuma mencetak ulang
 PDF label yang sudah ada. Picklist & label itu sendiri dibuat lewat alur
@@ -51,7 +41,7 @@ PDF label yang sudah ada. Picklist & label itu sendiri dibuat lewat alur
 Fitur ini **wajib** menggunakan [SumatraPDF](https://www.sumatrapdfreader.org/) —
 pembaca PDF gratis & ringan yang dipakai di sini untuk mencetak PDF langsung dari
 command line (`-print-to -silent`) tanpa jendela PDF reader terbuka satu per satu
-untuk tiap label. Setup ini berlaku untuk KELIMA jenis (`spesial`/`gtl-sicepat`/`lazada`/
+untuk tiap label. Setup ini berlaku untuk KEEMPAT jenis (`spesial`/`gtl-sicepat`/
 `satuan`/`kombinasi`) — sekali install, dipakai semua `.bat` cetak bulk.
 
 ### 2.1 Download & install
@@ -109,12 +99,11 @@ Pilih `.bat` sesuai jenis label yang mau dicetak (lihat tabel bagian 1):
 ```bash
 cetak-label-spesial.bat
 cetak-label-gtl-sicepat.bat
-cetak-label-lazada.bat
 cetak-label-satuan.bat
 cetak-label-kombinasi.bat
 ```
 
-Urutan kerja program (sama untuk kelima jenis):
+Urutan kerja program (sama untuk keempat jenis):
 
 1. Cari folder sesi `label-pengiriman/YYYY-MM-DD/N` **terbaru** secara otomatis
    (dibandingkan dari tanggal lalu nomor urut sesi di nama folder, bukan dari waktu
@@ -127,7 +116,7 @@ Urutan kerja program (sama untuk kelima jenis):
 
 ### Pilihan tambahan
 
-Berlaku sama untuk kelima `.bat` (contoh pakai `cetak-label-gtl-sicepat.bat`, ganti
+Berlaku sama untuk keempat `.bat` (contoh pakai `cetak-label-gtl-sicepat.bat`, ganti
 nama `.bat`-nya sesuai jenis yang mau dicetak):
 
 | Perintah | Kegunaan |
@@ -162,7 +151,7 @@ mulai), dan daftar berhasil/gagal (bagian 5) jadi jaring pengaman untuk kasus it
 - **Log tiap file**: setiap file yang diproses (berhasil, gagal, atau dilewati)
   dicatat ke `logs/cetak_YYYY-MM.log` (format sama seperti `logs/run_YYYY-MM.log`
   di `main.py`) sekaligus ditampilkan di layar — log ini DIBAGI bersama untuk
-  kelima jenis (tidak dipisah per jenis).
+  keempat jenis (tidak dipisah per jenis).
 - **Kalau ada yang gagal**: setelah semua file selesai diproses, daftar nama file
   yang gagal/dilewati disimpan ke `logs/gagal_cetak_<tanggal>_<jam>.txt` (satu path
   file per baris), dan program langsung menawarkan mencetak **ULANG hanya file yang

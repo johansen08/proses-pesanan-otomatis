@@ -45,7 +45,7 @@ otomatis saat program pertama kali jalan).
 
 Proyek ini dites dengan **Python 3.13** (versi persis di PC sumber: 3.13.7).
 Gunakan Python **3.11 atau lebih baru** kalau 3.13 tidak tersedia — semua
-library yang dipakai (`pandas`, `openpyxl`, `reportlab`, `pypdfium2`, `requests`, `tzdata`,
+library yang dipakai (`pandas`, `openpyxl`, `reportlab`, `requests`, `tzdata`,
 `playwright`) kompatibel dengan versi-versi itu.
 
 1. Unduh installer dari https://www.python.org/downloads/windows/
@@ -78,7 +78,6 @@ Ini akan menginstall 6 library dari `requirements.txt`:
 | `pandas` | Baca/olah data Excel laporan pesanan |
 | `openpyxl` | Baca/tulis file `.xlsx` (Excel) |
 | `reportlab` | Membuat PDF (label & laporan SKU spesial) |
-| `pypdfium2` | Render label Lazada (A5) ke gambar skala 68% untuk dicetak lewat `cetak-label-lazada.bat` (tanpa SumatraPDF) |
 | `requests` | Panggil API Jubelio |
 | `tzdata` | Data zona waktu WIB (Windows tidak punya bawaan) — dipakai fitur Shopee Pagi |
 | `playwright` | Hanya dipakai skrip perekam di folder `sniff/` (opsional, lihat langkah 4) |
@@ -156,7 +155,7 @@ Jalankan urutan berikut untuk memastikan semua terpasang benar:
 ```bash
 python --version
 .venv\Scripts\python -m pip list
-.venv\Scripts\python -c "import pandas, openpyxl, reportlab, pypdfium2, requests, tzdata; print('OK: semua library utama terbaca')"
+.venv\Scripts\python -c "import pandas, openpyxl, reportlab, requests, tzdata; print('OK: semua library utama terbaca')"
 ```
 
 Lalu jalankan semua uji offline (tanpa internet & tanpa menyentuh Jubelio sungguhan; server Jubelio ditiru di dalam test). Tiap file adalah skrip mandiri dan harus berakhir dengan `SEMUA UJI LULUS`:

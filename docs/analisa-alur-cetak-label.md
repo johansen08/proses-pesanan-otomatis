@@ -158,24 +158,10 @@ umum sehingga PDF Lazada beda dari unduhan manual (sniff 2026-10-07, insiden lab
 Program menambahkannya otomatis di `lanjutkan_picklist()` bila semua pesanan yang dicetak
 berasal dari Lazada.
 
-Template Lazada berukuran **A5 (148x210 mm)**, bukan 100x150 mm seperti template umum, jadi
-saat dicetak manual di web dipakai skala custom **68%** (100/148 = 67,6%). SumatraPDF tidak
-punya skala persen di command line (dan skala hasil PDF yang sudah diperkecil pun terbukti
-tidak diterapkan di printer), jadi `cetak-label-lazada.bat` (`print_spesial.py --jenis lazada`)
-TIDAK memakai SumatraPDF:
-
-1. `render_label_lazada()` (pypdfium2) merender tiap halaman PDF ke PNG pada skala 68% dengan
-   resolusi SAMA dengan printer (`dpi_printer()`, mis. 203 dpi untuk Blueprint BP-TD110D) -
-   1 piksel = 1 dot, tanpa antialias lalu dithering hitam-putih supaya garis barcode tajam &
-   logo berwarna tidak hilang.
-2. `src/cetak_gambar.ps1` (PowerShell + System.Drawing) mencetak PNG itu lewat driver Windows
-   pada kertas 100x150 mm (memakai ukuran kertas bawaan printer yang cocok), 1 PDF = 1 print
-   job, ditempel di pojok kiri-atas (rata tengah horizontal) pada ukuran sebenarnya tanpa
-   skala lagi. Hasilnya diuji sama dengan cetak Chrome skala 68 (konten mulai ±1 mm dari kiri,
-   ±4 mm dari atas, lebar 98 mm).
-
-PDF di folder sesi tetap A5 asli (sama dengan unduhan manual) - jangan diperkecil saat
-diunduh, nanti terkecil dua kali. Halaman yang sudah <= 100x150 mm (file lama) dirender 100%.
+Template Lazada berukuran **A5 (148x210 mm)**, bukan 100x150 mm seperti template umum. PDF
+disimpan apa adanya (A5), sama dengan unduhan manual. Label Lazada dicetak **manual** oleh tim
+dengan skala custom **68%** (100/148 = 67,6%) di kertas 100x150 mm; tidak ada cetak bulk Lazada
+(`print_spesial.py` hanya untuk SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI).
 
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`

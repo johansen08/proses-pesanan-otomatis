@@ -1632,10 +1632,8 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path, lazada: bool = False) ->
 
 
 # Template "Label Pengiriman Lazada" berukuran A5 (148x210 mm), sedangkan kertas label thermal
-# 100x150 mm: cetak manual di web memakai skala custom 68% (100/148 = 67,6%). Skala itu
-# diterapkan print_spesial.py --jenis lazada TEPAT SEBELUM mencetak (tanpa SumatraPDF, yang
-# tidak punya skala persen). PDF yang disimpan di folder sesi tetap A5 asli (sama dengan
-# unduhan manual) - JANGAN diperkecil saat diunduh, nanti terkecil 2x.
+# 100x150 mm. PDF disimpan A5 asli (sama dengan unduhan manual); label Lazada dicetak MANUAL
+# oleh tim dengan skala custom 68% (100/148 = 67,6%) - TIDAK ada cetak bulk Lazada.
 
 
 def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,

@@ -1,4 +1,4 @@
-"""Cetak bulk label pengiriman (SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI) dari folder sesi
+"""Cetak bulk label pengiriman (SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI) dari folder sesi
 label-pengiriman TERBARU.
 
 Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di
@@ -8,12 +8,9 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         proses_label.py), HANYA file bertanda `_SPESIAL_` yang ikut
                         (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf).
   --jenis gtl-sicepat -> subfolder URGENT (Alur 2), HANYA file GTL-SiCepat yang ikut (nama
-                        file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1).
-  --jenis lazada     -> subfolder URGENT yang sama, HANYA file Lazada (`_LAZADA`). PDF-nya
-                        A5, jadi tiap halaman dirender ke gambar pada skala custom 68%
-                        (pypdfium2, resolusi = printer) lalu dicetak lewat driver Windows
-                        (PowerShell, src/cetak_gambar.ps1) di kertas 100x150 mm - TANPA
-                        SumatraPDF, yang tidak menerapkan skala itu.
+                        file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1). Label
+                        Lazada di subfolder yang sama TIDAK ikut dicetak bulk (dicetak
+                        manual, lihat docs/analisa-alur-cetak-label.md bagian 6).
   --jenis satuan     -> subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3 bagian "1qty"),
                         SEMUA PDF ikut (mis. 1QTY-REGULER-2A).
   --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
@@ -30,7 +27,7 @@ sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masu
 (masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
 meski pakai --tanpa-konfirmasi.
 
-Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/cetak-label-lazada.bat/
+Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/
 cetak-label-satuan.bat/cetak-label-kombinasi.bat, masing-masing isinya cuma
 memanggil ini dengan --jenis tetap):
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis spesial
@@ -75,7 +72,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -108,19 +104,9 @@ SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_F
 # mengekstrak nomor PICK di awal nama file (selalu ada di semua label, lihat _nama_file()
 # di proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
 POLA_PICK = re.compile(r"^PICK-0*(\d+)_.*\.pdf$", re.IGNORECASE)
-# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, dicetak bulk terpisah (nama file
-# memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
-FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE),
-               "lazada": re.compile(r"^PICK-\d+_LAZADA", re.IGNORECASE)}
-# Jenis yang TIDAK dicetak lewat SumatraPDF: PDF dirender ke gambar pada skala custom 68%
-# lalu dicetak lewat driver Windows (src/cetak_gambar.ps1), lihat _cetak_gambar().
-JENIS_CETAK_GAMBAR = {"lazada"}
-SKALA_LABEL_LAZADA = 0.68
-KERTAS_LABEL_MM = (100, 150)
-KERTAS_LABEL_PT = (100 / 25.4 * 72, 150 / 25.4 * 72)     # point (1 pt = 1/72 inci)
-DPI_CADANGAN = 203                  # resolusi printer label thermal umum, kalau gagal dibaca
-SKRIP_CETAK_GAMBAR = Path(__file__).resolve().parent / "cetak_gambar.ps1"
-TIMEOUT_CETAK_GAMBAR_S = 180
+# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, tapi cetak bulk hanya GTL-SiCepat
+# (nama file memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
+FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE)}
 
 # Jenis label yang didukung cetak bulk -> daftar subfolder yang dicari & digabung
 # di dalam folder sesi (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI
@@ -130,7 +116,6 @@ TIMEOUT_CETAK_GAMBAR_S = 180
 JENIS_LABEL: dict[str, list[str]] = {
     "spesial": SUBFOLDER_SPESIAL,
     "gtl-sicepat": [SUBFOLDER_URGENT],
-    "lazada": [SUBFOLDER_URGENT],
     "satuan": [SUBFOLDER_SATUAN] + [f"{v}_{SUBFOLDER_SATUAN}"
                                      for v in KURIR_LABEL_FILE.values()],
     "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
@@ -341,86 +326,18 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             return False
 
 
-def _cetak_sumatra(sumatra: Path, printer: str, file: Path) -> None:
+def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
+    """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
+    manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
+    Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
+    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih."""
+    sebelum = _job_ids(printer) if pantau else set()
     r = subprocess.run(
         [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
         capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
     if r.returncode != 0:
         raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
                          f"{r.stderr.strip() or r.stdout.strip()}")
-
-
-def dpi_printer(printer: str) -> int:
-    """Resolusi horizontal printer (dpi) lewat PowerShell; DPI_CADANGAN kalau gagal dibaca."""
-    out = _ps("Add-Type -AssemblyName System.Drawing; $pd = New-Object System.Drawing.Printing."
-              f"PrintDocument; $pd.PrinterSettings.PrinterName = '{_esc_ps(printer)}'; "
-              "$pd.DefaultPageSettings.PrinterResolution.X")
-    try:
-        dpi = int(out.strip().splitlines()[-1])
-    except (ValueError, IndexError):
-        return DPI_CADANGAN
-    return dpi if 100 <= dpi <= 1200 else DPI_CADANGAN
-
-
-def render_label_lazada(file: Path, dpi: int, folder_png: Path) -> list[Path]:
-    """Render tiap halaman PDF `file` ke PNG hitam-putih (dithering) pada skala custom 68% dengan resolusi
-    `dpi` (1 piksel = 1 dot printer, jadi garis barcode tajam). Halaman yang sudah <= kertas
-    100x150 mm (file lama yang dulu diperkecil saat diunduh) dirender 100%, tidak terkecil
-    lagi. Return daftar PNG urut halaman."""
-    try:
-        import pypdfium2 as pdfium
-    except ImportError as e:
-        raise CetakError("pypdfium2 belum terpasang (pip install -r requirements.txt)") from e
-    lebar, tinggi = KERTAS_LABEL_PT
-    hasil = []
-    try:
-        pdf = pdfium.PdfDocument(str(file))
-    except Exception as e:     # noqa: BLE001 - PDF rusak
-        raise CetakError(f"PDF tidak terbaca ({e}): {file.name}") from e
-    try:
-        for n, halaman in enumerate(pdf):
-            w, h = halaman.get_size()
-            skala = 1.0 if (w <= lebar + 1 and h <= tinggi + 1) else SKALA_LABEL_LAZADA
-            gambar = halaman.render(scale=dpi / 72 * skala, no_smoothtext=True,
-                                    no_smoothimage=True, no_smoothpath=True).to_pil()
-            gambar = gambar.convert("1").convert("L")     # dithering: logo berwarna tidak hilang
-            png = folder_png / f"{file.stem}_{n + 1:02d}.png"
-            gambar.save(png, dpi=(dpi, dpi))
-            hasil.append(png)
-    finally:
-        pdf.close()
-    return hasil
-
-
-def _cetak_gambar(printer: str, file: Path) -> None:
-    """Cetak PDF label Lazada tanpa SumatraPDF: render skala 68% ke gambar (lihat
-    render_label_lazada()) lalu tempel ke kertas 100x150 mm lewat cetak_gambar.ps1 (driver
-    Windows, 1 PDF = 1 print job). File asli di folder sesi tidak diubah."""
-    dpi = dpi_printer(printer)
-    with tempfile.TemporaryDirectory() as tmp:
-        png = render_label_lazada(file, dpi, Path(tmp))
-        r = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
-             "-File", str(SKRIP_CETAK_GAMBAR), "-Printer", printer, "-Dpi", str(dpi),
-             "-LebarMm", str(KERTAS_LABEL_MM[0]), "-TinggiMm", str(KERTAS_LABEL_MM[1]),
-             "-Gambar", ",".join(str(p) for p in png)],
-            capture_output=True, text=True, timeout=TIMEOUT_CETAK_GAMBAR_S)
-    if r.returncode != 0:
-        raise CetakError(f"Cetak gambar gagal (kode {r.returncode}): "
-                         f"{r.stderr.strip() or r.stdout.strip()}")
-
-
-def cetak(sumatra: Path | None, printer: str, file: Path, pantau: bool, jenis: str = "") -> bool:
-    """Kirim 1 file ke printer lewat SumatraPDF (jenis di JENIS_CETAK_GAMBAR: lewat
-    _cetak_gambar(), `sumatra` tidak dipakai). True = berhasil, False = dilewati
-    manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
-    Melempar CetakError kalau pencetakannya sendiri gagal (mis. file rusak/printer tidak
-    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih."""
-    sebelum = _job_ids(printer) if pantau else set()
-    if jenis in JENIS_CETAK_GAMBAR:
-        _cetak_gambar(printer, file)
-    else:
-        _cetak_sumatra(sumatra, printer, file)
     if not pantau:
         return True
     baru = _job_ids(printer) - sebelum
@@ -429,8 +346,8 @@ def cetak(sumatra: Path | None, printer: str, file: Path, pantau: bool, jenis: s
     return _tunggu_job_bersih(printer, next(iter(baru)), file.name)
 
 
-def cetak_semua(sumatra: Path | None, printer: str, file_pdf: list[Path],
-                pantau: bool, jenis: str = "") -> tuple[list[Path], list[Path]]:
+def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
+                pantau: bool) -> tuple[list[Path], list[Path]]:
     """Cetak `file_pdf` berurut. Setiap hasil (berhasil/gagal) dicatat jelas ke log.
     Return (berhasil, gagal) - urutan tetap dipertahankan."""
     berhasil, gagal = [], []
@@ -438,7 +355,7 @@ def cetak_semua(sumatra: Path | None, printer: str, file_pdf: list[Path],
         print(f"[{i}/{len(file_pdf)}] Mencetak {f.name} ...")
         mulai = time.monotonic()
         try:
-            ok = cetak(sumatra, printer, f, pantau, jenis)
+            ok = cetak(sumatra, printer, f, pantau)
         except CetakError as e:
             log.error("GAGAL cetak %s: %s", f.name, e)
             gagal.append(f)
@@ -484,7 +401,7 @@ def baca_daftar_ulang(file_daftar: Path) -> list[Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Cetak bulk label dari folder sesi label-pengiriman terbaru "
-                    "(SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI)")
+                    "(SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI)")
     ap.add_argument("--jenis", required=True, choices=sorted(JENIS_LABEL),
                     help="Jenis label yang dicetak bulk")
     ap.add_argument("--folder", type=Path,
@@ -530,7 +447,7 @@ def main() -> int:
                     log.info("Dibatalkan oleh user (nomor PICK terlompat).")
                     return 0
 
-        sumatra = None if args.jenis in JENIS_CETAK_GAMBAR else cari_sumatra()
+        sumatra = cari_sumatra()
         printer = pilih_printer(daftar_printer())
         log.info("Printer dipilih: %s", printer)
 
@@ -545,7 +462,7 @@ def main() -> int:
                 log.info("Dibatalkan oleh user.")
                 return 0
 
-        berhasil, gagal = cetak_semua(sumatra, printer, file_pdf, pantau, args.jenis)
+        berhasil, gagal = cetak_semua(sumatra, printer, file_pdf, pantau)
         log.info("Selesai: %d berhasil, %d gagal dari %d total.",
                  len(berhasil), len(gagal), len(file_pdf))
 
@@ -570,7 +487,7 @@ def main() -> int:
         sisa = gagal
         while sisa:
             log.info("Mencoba ulang %d file yang gagal ...", len(sisa))
-            berhasil_ulang, sisa = cetak_semua(sumatra, printer, sisa, pantau, args.jenis)
+            berhasil_ulang, sisa = cetak_semua(sumatra, printer, sisa, pantau)
             if not sisa:
                 break
             file_daftar_gagal = simpan_daftar_gagal(sisa)
