@@ -84,6 +84,7 @@ dan menampilkan rencana. Langkah 2-6 hanya dijalankan lewat proses*()/lanjutkan(
 from __future__ import annotations
 
 import csv
+import io
 import json
 import logging
 import re
@@ -1631,6 +1632,36 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path, lazada: bool = False) ->
     return tujuan
 
 
+# Template "Label Pengiriman Lazada" berukuran A5 (148x210 mm), sedangkan kertas label thermal
+# 100x150 mm: cetak manual di web memakai skala custom 68% (100/148 = 67,6%). SumatraPDF tidak
+# punya skala persen di command line, jadi PDF-nya diperkecil langsung saat diunduh.
+SKALA_LABEL_LAZADA = 0.68
+KERTAS_LABEL_PT = (283.465, 425.197)      # 100 x 150 mm dalam point (1 pt = 1/72 inci)
+
+
+def skala_label_lazada(isi: bytes) -> bytes:
+    """Kecilkan tiap halaman PDF label Lazada ke SKALA_LABEL_LAZADA di atas kertas 100x150 mm
+    (rata tengah horizontal, rata atas). Gagal membaca/mengubah PDF -> PDF asli dikembalikan
+    apa adanya (peringatan di log), supaya label tidak hilang cuma karena langkah ini."""
+    try:
+        from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+
+        lebar, tinggi = KERTAS_LABEL_PT
+        penulis = PdfWriter()
+        for halaman in PdfReader(io.BytesIO(isi)).pages:
+            w, h = float(halaman.mediabox.width), float(halaman.mediabox.height)
+            baru = PageObject.create_blank_page(width=lebar, height=tinggi)
+            baru.merge_transformed_page(halaman, Transformation().scale(SKALA_LABEL_LAZADA).translate(
+                (lebar - w * SKALA_LABEL_LAZADA) / 2, tinggi - h * SKALA_LABEL_LAZADA))
+            penulis.add_page(baru)
+        keluar = io.BytesIO()
+        penulis.write(keluar)
+        return keluar.getvalue()
+    except Exception as e:     # noqa: BLE001 - pypdf belum terpasang / PDF tak terbaca
+        log.warning("  Skala %d%% label Lazada gagal (%s), PDF asli dipakai", SKALA_LABEL_LAZADA * 100, e)
+        return isi
+
+
 def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,
                         lazada: bool = False) -> bytes:
     """`lazada`: tambahkan isFromLz=true seperti web untuk pesanan Lazada. Tanpa ini Jubelio
@@ -1689,7 +1720,7 @@ def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,
         # isi JSON ikut dicantumkan supaya _expired() bisa mengenali 410 "Client ... Expired."
         rinci = f": {jubelio._pesan(r)}" if "json" in jenis else ""
         raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, {jenis}){rinci}")
-    return r.content
+    return skala_label_lazada(r.content) if lazada else r.content
 
 
 # ============================================================== riwayat

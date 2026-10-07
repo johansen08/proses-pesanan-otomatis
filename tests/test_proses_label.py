@@ -1928,6 +1928,26 @@ def uji_label_lazada_pakai_isfromlz():
     print("  label Lazada: shipping-label/ diminta dengan isFromLz=true, channel lain tidak")
 
 
+def uji_skala_label_lazada_68_persen():
+    import io
+    from pypdf import PdfReader
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(419.528, 595.276))          # A5 seperti template Lazada
+    for n in range(3):
+        c.drawString(20, 560, f"HALAMAN {n}")
+        c.showPage()
+    c.save()
+    hasil = PdfReader(io.BytesIO(pl.skala_label_lazada(buf.getvalue())))
+    assert len(hasil.pages) == 3
+    for n, hal in enumerate(hasil.pages):
+        assert (round(float(hal.mediabox.width), 1), round(float(hal.mediabox.height), 1)) == (283.5, 425.2)
+        assert f"HALAMAN {n}" in hal.extract_text()
+    assert pl.skala_label_lazada(b"bukan pdf") == b"bukan pdf"       # gagal -> PDF asli
+    print("  label Lazada A5 -> 3 halaman di kertas 100x150 mm, skala 68%; PDF rusak tidak hilang")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":
