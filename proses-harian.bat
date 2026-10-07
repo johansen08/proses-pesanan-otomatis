@@ -88,7 +88,7 @@ echo === 8/9 TULIS PICKLIST.XLSX ===
 call :catat_waktu TX_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 9/9 UPLOAD FAKTUR KE IRESIS ===
+echo === 9/9 UPLOAD FAKTUR & PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
@@ -172,7 +172,7 @@ echo === 12/13 TULIS PICKLIST.XLSX ===
 call :catat_waktu TX_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 13/13 UPLOAD FAKTUR KE IRESIS ===
+echo === 13/13 UPLOAD FAKTUR & PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
@@ -251,7 +251,7 @@ echo === 11/12 TULIS PICKLIST.XLSX ===
 call :catat_waktu TX_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 12/12 UPLOAD FAKTUR KE IRESIS ===
+echo === 12/12 UPLOAD FAKTUR & PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
@@ -321,7 +321,7 @@ echo === 9/10 TULIS PICKLIST.XLSX ===
 call :catat_waktu TX_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 10/10 UPLOAD FAKTUR KE IRESIS ===
+echo === 10/10 UPLOAD FAKTUR & PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
