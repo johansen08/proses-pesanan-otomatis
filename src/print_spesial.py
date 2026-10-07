@@ -1,4 +1,4 @@
-"""Cetak bulk label pengiriman (SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI) dari folder sesi
+"""Cetak bulk label pengiriman (SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI) dari folder sesi
 label-pengiriman TERBARU.
 
 Program ini TIDAK membuat label baru - cuma mencari file PDF yang SUDAH ada di
@@ -8,10 +8,11 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         proses_label.py), HANYA file bertanda `_SPESIAL_` yang ikut
                         (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf).
   --jenis gtl-sicepat -> subfolder URGENT (Alur 2), HANYA file GTL-SiCepat yang ikut (nama
-                        file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1). Label
-                        Lazada di subfolder yang sama TIDAK ikut dicetak bulk (dicetak
-                        manual; sudah berukuran 100x150 mm, lihat proses_label.
-                        skala_label_lazada()).
+                        file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1).
+  --jenis lazada     -> subfolder URGENT yang sama, HANYA file Lazada (`_LAZADA`). PDF-nya
+                        A5, jadi tiap file diperkecil ke skala custom 68% di kertas 100x150
+                        mm (skala_label_lazada()) lalu dicetak noscale - SumatraPDF tidak
+                        punya skala persen di command line.
   --jenis satuan     -> subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3 bagian "1qty"),
                         SEMUA PDF ikut (mis. 1QTY-REGULER-2A).
   --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
@@ -28,7 +29,7 @@ sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masu
 (masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
 meski pakai --tanpa-konfirmasi.
 
-Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/
+Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/cetak-label-lazada.bat/
 cetak-label-satuan.bat/cetak-label-kombinasi.bat, masing-masing isinya cuma
 memanggil ini dengan --jenis tetap):
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis spesial
@@ -73,12 +74,13 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
 
 from proses_label import (KURIR_LABEL_FILE, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
-                           SUBFOLDER_URGENT, TAG_SPESIAL)
+                           SUBFOLDER_URGENT, TAG_SPESIAL, skala_label_lazada)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -105,9 +107,12 @@ SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_F
 # mengekstrak nomor PICK di awal nama file (selalu ada di semua label, lihat _nama_file()
 # di proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
 POLA_PICK = re.compile(r"^PICK-0*(\d+)_.*\.pdf$", re.IGNORECASE)
-# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, tapi cetak bulk hanya GTL-SiCepat
-# (nama file memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
-FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE)}
+# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, dicetak bulk terpisah (nama file
+# memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
+FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE),
+               "lazada": re.compile(r"^PICK-\d+_LAZADA", re.IGNORECASE)}
+# Jenis yang PDF-nya diperkecil dulu (skala custom 68%) sebelum dicetak, lihat cetak().
+JENIS_SKALA_LAZADA = {"lazada"}
 
 # Jenis label yang didukung cetak bulk -> daftar subfolder yang dicari & digabung
 # di dalam folder sesi (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI
@@ -117,6 +122,7 @@ FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE
 JENIS_LABEL: dict[str, list[str]] = {
     "spesial": SUBFOLDER_SPESIAL,
     "gtl-sicepat": [SUBFOLDER_URGENT],
+    "lazada": [SUBFOLDER_URGENT],
     "satuan": [SUBFOLDER_SATUAN] + [f"{v}_{SUBFOLDER_SATUAN}"
                                      for v in KURIR_LABEL_FILE.values()],
     "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
@@ -327,15 +333,23 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             return False
 
 
-def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
+def cetak(sumatra: Path, printer: str, file: Path, pantau: bool, jenis: str = "") -> bool:
     """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
     manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
     Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
-    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih."""
+    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih.
+    `jenis` di JENIS_SKALA_LAZADA: PDF diperkecil ke skala 68% di file sementara (nama sama)
+    lalu dicetak `noscale`, supaya skalanya persis 68% (bukan shrink otomatis printer)."""
     sebelum = _job_ids(printer) if pantau else set()
-    r = subprocess.run(
-        [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
-        capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
+    with tempfile.TemporaryDirectory() as tmp:
+        perintah = [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done"]
+        if jenis in JENIS_SKALA_LAZADA:
+            sementara = Path(tmp) / file.name
+            sementara.write_bytes(skala_label_lazada(file.read_bytes()))
+            perintah += ["-print-settings", "noscale", str(sementara)]
+        else:
+            perintah.append(str(file))
+        r = subprocess.run(perintah, capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
     if r.returncode != 0:
         raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
                          f"{r.stderr.strip() or r.stdout.strip()}")
@@ -348,7 +362,7 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
 
 
 def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
-                pantau: bool) -> tuple[list[Path], list[Path]]:
+                pantau: bool, jenis: str = "") -> tuple[list[Path], list[Path]]:
     """Cetak `file_pdf` berurut. Setiap hasil (berhasil/gagal) dicatat jelas ke log.
     Return (berhasil, gagal) - urutan tetap dipertahankan."""
     berhasil, gagal = [], []
@@ -356,7 +370,7 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
         print(f"[{i}/{len(file_pdf)}] Mencetak {f.name} ...")
         mulai = time.monotonic()
         try:
-            ok = cetak(sumatra, printer, f, pantau)
+            ok = cetak(sumatra, printer, f, pantau, jenis)
         except CetakError as e:
             log.error("GAGAL cetak %s: %s", f.name, e)
             gagal.append(f)
@@ -402,7 +416,7 @@ def baca_daftar_ulang(file_daftar: Path) -> list[Path]:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="Cetak bulk label dari folder sesi label-pengiriman terbaru "
-                    "(SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI)")
+                    "(SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI)")
     ap.add_argument("--jenis", required=True, choices=sorted(JENIS_LABEL),
                     help="Jenis label yang dicetak bulk")
     ap.add_argument("--folder", type=Path,
@@ -463,7 +477,7 @@ def main() -> int:
                 log.info("Dibatalkan oleh user.")
                 return 0
 
-        berhasil, gagal = cetak_semua(sumatra, printer, file_pdf, pantau)
+        berhasil, gagal = cetak_semua(sumatra, printer, file_pdf, pantau, args.jenis)
         log.info("Selesai: %d berhasil, %d gagal dari %d total.",
                  len(berhasil), len(gagal), len(file_pdf))
 
@@ -488,7 +502,7 @@ def main() -> int:
         sisa = gagal
         while sisa:
             log.info("Mencoba ulang %d file yang gagal ...", len(sisa))
-            berhasil_ulang, sisa = cetak_semua(sumatra, printer, sisa, pantau)
+            berhasil_ulang, sisa = cetak_semua(sumatra, printer, sisa, pantau, args.jenis)
             if not sisa:
                 break
             file_daftar_gagal = simpan_daftar_gagal(sisa)

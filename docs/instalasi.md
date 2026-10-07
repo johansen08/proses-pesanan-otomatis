@@ -78,7 +78,7 @@ Ini akan menginstall 6 library dari `requirements.txt`:
 | `pandas` | Baca/olah data Excel laporan pesanan |
 | `openpyxl` | Baca/tulis file `.xlsx` (Excel) |
 | `reportlab` | Membuat PDF (label & laporan SKU spesial) |
-| `pypdf` | Memperkecil label Lazada (A5) ke skala 68% di kertas 100x150 mm |
+| `pypdf` | Memperkecil label Lazada (A5) ke skala 68% di kertas 100x150 mm saat cetak (`cetak-label-lazada.bat`) |
 | `requests` | Panggil API Jubelio |
 | `tzdata` | Data zona waktu WIB (Windows tidak punya bawaan) — dipakai fitur Shopee Pagi |
 | `playwright` | Hanya dipakai skrip perekam di folder `sniff/` (opsional, lihat langkah 4) |

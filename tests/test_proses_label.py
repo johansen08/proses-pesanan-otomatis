@@ -1945,6 +1945,12 @@ def uji_skala_label_lazada_68_persen():
         assert (round(float(hal.mediabox.width), 1), round(float(hal.mediabox.height), 1)) == (283.5, 425.2)
         assert f"HALAMAN {n}" in hal.extract_text()
     assert pl.skala_label_lazada(b"bukan pdf") == b"bukan pdf"       # gagal -> PDF asli
+    ulang = PdfReader(io.BytesIO(pl.skala_label_lazada(pl.skala_label_lazada(buf.getvalue()))))
+    assert len(ulang.pages) == 3 and all(
+        round(float(h.mediabox.width), 1) == 283.5 for h in ulang.pages)
+    isi = pl.skala_label_lazada(buf.getvalue())
+    assert "HALAMAN 0" in PdfReader(io.BytesIO(pl.skala_label_lazada(isi))).pages[0].extract_text()
+    
     print("  label Lazada A5 -> 3 halaman di kertas 100x150 mm, skala 68%; PDF rusak tidak hilang")
 
 

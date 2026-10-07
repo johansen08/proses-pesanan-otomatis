@@ -81,7 +81,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
-| `src/print_spesial.py` | Cetak bulk label (SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
+| `src/print_spesial.py` | Cetak bulk label (SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
 | `src/peringatan_picklist.py` | Deteksi nomor picklist yang terlompat (picklist batal/gagal dibuat karena Jubelio error) |
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
 | `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
@@ -89,7 +89,8 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) — lewat antrean, ditulis sekaligus 1x per TIPE (`--tulis-excel`, lihat bagian "Rekap PICKLIST.xlsx") |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
-| `cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat, Lazada tidak ikut — lihat bagian "Cetak bulk label" |
+| `cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
+| `cetak-label-lazada.bat` | Menjalankan `src/print_spesial.py --jenis lazada` (klik 2x) — hanya label Lazada, diperkecil ke skala custom 68% sebelum dicetak — lihat bagian "Cetak bulk label" |
 | `cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
@@ -199,10 +200,10 @@ reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
 - **Lazada**: semua pesanan channel Lazada (`channel_id=4`), digabung jadi 1 picklist
   (dipecah kalau > 200, lihat di atas). Label PDF-nya memakai template khusus **"Label
   Pengiriman Lazada"** (program mengirim `isFromLz=true` ke `reports/shipping-label/`, sama
-  seperti web) yang berukuran A5; PDF otomatis **diperkecil ke skala 68%** di kertas label
-  100x150 mm segera setelah diunduh (`skala_label_lazada()`, pakai `pypdf`), sama dengan cetak
-  manual di web dengan skala custom 68%. Detailnya di `docs/analisa-alur-cetak-label.md`
-  bagian 6.
+  seperti web) yang berukuran A5 dan disimpan apa adanya. Cetaknya lewat
+  `cetak-label-lazada.bat`, yang memperkecil tiap label ke **skala custom 68%** di kertas
+  100x150 mm tepat sebelum mencetak (`skala_label_lazada()`, pakai `pypdf`), sama dengan cetak
+  manual di web. Detailnya di `docs/analisa-alur-cetak-label.md` bagian 6.
 - **GTL-SiCepat**: semua pesanan kurir **GTL** atau **SiCepat**, **lintas channel** (TIDAK
   difilter channel). Urgent-nya ditentukan kurir, bukan channel, jadi pesanan Tokopedia
   **asli** (`channel_id=128`) *dan* "Shop | Tokopedia" (`channel_id=131076`, nama lain TikTok
@@ -479,23 +480,24 @@ Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label.m
 Mencetak ulang label pengiriman yang sudah ada secara **bulk dan berurut** (nomor
 PICK terkecil/paling dulu dibuat, duluan dicetak), tanpa perlu buka file PDF
 satu-satu secara manual. Program ini **tidak** membuat picklist/label baru — cuma
-mencetak ulang PDF yang sudah ada. Ada 4 jenis, masing-masing `.bat` sendiri:
+mencetak ulang PDF yang sudah ada. Ada 5 jenis, masing-masing `.bat` sendiri:
 
 ```bash
 cetak-label-spesial.bat      # subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1)
-cetak-label-gtl-sicepat.bat       # file GTL-SiCepat di subfolder URGENT (Alur 2; Lazada tidak ikut)
+cetak-label-gtl-sicepat.bat  # file GTL-SiCepat di subfolder URGENT (Alur 2)
+cetak-label-lazada.bat       # file Lazada di subfolder URGENT (Alur 2), skala custom 68%
 cetak-label-satuan.bat       # subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3, 1qty)
 cetak-label-kombinasi.bat    # subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3, kombinasi)
 ```
 
-Urutan kerja (sama untuk keempat jenis): cari folder sesi `label-pengiriman/YYYY-MM-DD/N`
+Urutan kerja (sama untuk kelima jenis): cari folder sesi `label-pengiriman/YYYY-MM-DD/N`
 yang **terbaru** secara otomatis → cari file PDF di subfolder jenis itu (untuk
 `spesial`, hanya yang namanya mengandung `_SPESIAL_`; untuk jenis lain, semua PDF di
 subfolder itu, karena nama filenya variatif dan subfoldernya sudah eksklusif per
 jenis) → tampilkan daftar printer yang terhubung ke komputer → pilih nomor printer →
 konfirmasi (Y/N) → cetak satu per satu secara berurut.
 
-Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepat.bat`):
+Pilihan (berlaku sama untuk kelima `.bat`, contoh pakai `cetak-label-gtl-sicepat.bat`):
 
 - `cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder
   sesi tertentu, bukan yang terbaru.
@@ -517,7 +519,7 @@ mendukungnya, program tetap jalan tanpa pemantauan otomatis (ada peringatan di l
 
 **Log jelas tiap file**: setiap file yang diproses (berhasil, gagal, atau dilewati)
 dicatat ke `logs/cetak_YYYY-MM.log` (format sama seperti `logs/run_YYYY-MM.log` di
-`main.py`, dibagi bersama keempat jenis) sekaligus ditampilkan di layar.
+`main.py`, dibagi bersama kelima jenis) sekaligus ditampilkan di layar.
 
 ## Jadwal otomatis (Windows Task Scheduler)
 

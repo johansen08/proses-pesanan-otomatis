@@ -69,7 +69,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   label PDF, untuk SEMUA skenario (SKU spesial per-SKU, urgent per-channel/kurir, reguler,
   Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `riwayat_picklist.xlsx`. Label
   Lazada diminta dengan `isFromLz=true` (template "Label Pengiriman Lazada", A5) lalu
-  diperkecil ke skala 68% di kertas 100x150 mm oleh `skala_label_lazada()` (pypdf) —
+  disimpan apa adanya; `cetak-label-lazada.bat` memperkecilnya ke skala 68% di kertas 100x150 mm tepat sebelum cetak lewat `skala_label_lazada()` (pypdf) —
   tanpa `isFromLz` PDF-nya beda dari unduhan manual (sniff 2026-10-07).
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak

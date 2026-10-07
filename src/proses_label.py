@@ -1634,15 +1634,18 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path, lazada: bool = False) ->
 
 # Template "Label Pengiriman Lazada" berukuran A5 (148x210 mm), sedangkan kertas label thermal
 # 100x150 mm: cetak manual di web memakai skala custom 68% (100/148 = 67,6%). SumatraPDF tidak
-# punya skala persen di command line, jadi PDF-nya diperkecil langsung saat diunduh.
+# punya skala persen di command line, jadi print_spesial.py --jenis lazada memperkecil PDF-nya
+# lewat skala_label_lazada() TEPAT SEBELUM mencetak. PDF yang disimpan di folder sesi tetap
+# A5 asli (sama dengan unduhan manual) - JANGAN diperkecil saat diunduh, nanti terkecil 2x.
 SKALA_LABEL_LAZADA = 0.68
 KERTAS_LABEL_PT = (283.465, 425.197)      # 100 x 150 mm dalam point (1 pt = 1/72 inci)
 
 
 def skala_label_lazada(isi: bytes) -> bytes:
     """Kecilkan tiap halaman PDF label Lazada ke SKALA_LABEL_LAZADA di atas kertas 100x150 mm
-    (rata tengah horizontal, rata atas). Gagal membaca/mengubah PDF -> PDF asli dikembalikan
-    apa adanya (peringatan di log), supaya label tidak hilang cuma karena langkah ini."""
+    (rata tengah horizontal, rata atas). Halaman yang sudah <= kertas itu (mis. file lama yang
+    dulu diperkecil saat diunduh) dibiarkan, supaya tidak terkecil dua kali. Gagal
+    membaca/mengubah PDF -> PDF asli dikembalikan apa adanya (peringatan di log)."""
     try:
         from pypdf import PageObject, PdfReader, PdfWriter, Transformation
 
@@ -1650,6 +1653,9 @@ def skala_label_lazada(isi: bytes) -> bytes:
         penulis = PdfWriter()
         for halaman in PdfReader(io.BytesIO(isi)).pages:
             w, h = float(halaman.mediabox.width), float(halaman.mediabox.height)
+            if w <= lebar + 1 and h <= tinggi + 1:
+                penulis.add_page(halaman)
+                continue
             baru = PageObject.create_blank_page(width=lebar, height=tinggi)
             baru.merge_transformed_page(halaman, Transformation().scale(SKALA_LABEL_LAZADA).translate(
                 (lebar - w * SKALA_LABEL_LAZADA) / 2, tinggi - h * SKALA_LABEL_LAZADA))
@@ -1720,7 +1726,7 @@ def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,
         # isi JSON ikut dicantumkan supaya _expired() bisa mengenali 410 "Client ... Expired."
         rinci = f": {jubelio._pesan(r)}" if "json" in jenis else ""
         raise ProsesError(f"Unduh PDF label gagal (HTTP {r.status_code}, {jenis}){rinci}")
-    return skala_label_lazada(r.content) if lazada else r.content
+    return r.content
 
 
 # ============================================================== riwayat

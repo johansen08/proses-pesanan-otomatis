@@ -160,10 +160,12 @@ berasal dari Lazada.
 
 Template Lazada berukuran **A5 (148x210 mm)**, bukan 100x150 mm seperti template umum, jadi
 saat dicetak manual di web dipakai skala custom **68%** (100/148 = 67,6%). SumatraPDF tidak
-punya skala persen di command line, jadi `skala_label_lazada()` (pypdf) memperkecil tiap
-halaman ke 68% di atas kertas 100x150 mm (rata tengah, rata atas) langsung setelah unduh -
-cetak bulk maupun manual tinggal pakai ukuran kertas label tanpa skala tambahan. Kalau
-pypdf tidak ada/PDF tak terbaca, PDF asli tetap disimpan dengan peringatan di log.
+punya skala persen di command line, jadi `cetak-label-lazada.bat` (`print_spesial.py --jenis
+lazada`) memperkecil tiap halaman lewat `skala_label_lazada()` (pypdf) ke 68% di atas kertas
+100x150 mm (rata tengah, rata atas) di file sementara, lalu mencetaknya `noscale`. PDF di
+folder sesi tetap A5 asli (sama dengan unduhan manual) - jangan diperkecil saat diunduh,
+nanti terkecil dua kali. Halaman yang sudah <= 100x150 mm (file lama) dibiarkan. Kalau pypdf
+tidak ada/PDF tak terbaca, PDF asli dicetak apa adanya dengan peringatan di log.
 
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`

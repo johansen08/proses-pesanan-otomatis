@@ -126,6 +126,54 @@ def uji_daftar_label_gtl_sicepat_hanya_file_gtl_sicepat():
              "tidak ikut), urut nomor PICK naik, file di folder sesi (bukan subfolder) diabaikan")
 
 
+def uji_daftar_label_lazada_hanya_file_lazada():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "URGENT").mkdir()
+        _buat(folder / "URGENT",
+             "PICK-000155622_LAZADA_2026-10-01_080320.pdf",
+             "PICK-000155621_GTL-SICEPAT-LANTAI1_2026-10-01_080302.pdf")
+        assert [f.name for f in ps.daftar_label(folder, "lazada")] == [
+            "PICK-000155622_LAZADA_2026-10-01_080320.pdf"]
+        print("  daftar_label(lazada): hanya PDF Lazada di subfolder URGENT (GTL-SiCepat tidak ikut)")
+
+
+def uji_cetak_lazada_skala_68_noscale_dan_gtl_tanpa_skala():
+    import io
+    import subprocess
+    from pypdf import PdfReader
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(419.528, 595.276))        # A5, template Lazada
+    c.drawString(20, 560, "LABEL LAZADA")
+    c.save()
+    panggilan = []
+
+    def palsu(perintah, **kw):
+        file = Path(perintah[-1])
+        panggilan.append((perintah, PdfReader(io.BytesIO(file.read_bytes())).pages[0].mediabox))
+        return subprocess.CompletedProcess(perintah, 0, "", "")
+
+    asli = ps.subprocess.run
+    ps.subprocess.run = palsu
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "PICK-000155622_LAZADA_2026-10-01_080320.pdf"
+            f.write_bytes(buf.getvalue())
+            assert ps.cetak(Path("S.exe"), "PRN", f, pantau=False, jenis="lazada")
+            assert ps.cetak(Path("S.exe"), "PRN", f, pantau=False, jenis="gtl-sicepat")
+            asli_masih_a5 = PdfReader(str(f)).pages[0].mediabox
+    finally:
+        ps.subprocess.run = asli
+    (p1, box1), (p2, box2) = panggilan
+    assert "noscale" in p1 and p1[p1.index("-print-settings") + 1] == "noscale", p1
+    assert (round(float(box1.width), 1), round(float(box1.height), 1)) == (283.5, 425.2), box1
+    assert "-print-settings" not in p2 and round(float(box2.width), 1) == 419.5, (p2, box2)
+    assert round(float(asli_masih_a5.width), 1) == 419.5, "file di folder sesi tidak boleh diubah"
+    print("  cetak(lazada): file sementara 100x150 mm skala 68% + noscale; jenis lain & file asli tidak berubah")
+
+
 def uji_daftar_label_gtl_sicepat_tidak_ada_varian_kurir():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
