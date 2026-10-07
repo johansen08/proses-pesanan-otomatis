@@ -26,6 +26,11 @@ TIDAK punya tag unik seperti `_SPESIAL_` — karena subfolder-nya sendiri sudah
 eksklusif per jenis (dibuat `proses_label.py` khusus alur itu), **semua PDF** di
 subfolder itu ikut dicetak, tanpa filter nama tambahan.
 
+Label **Lazada** sudah berukuran 100x150 mm (diperkecil ke skala 68% dari template A5 saat
+diunduh, lihat `docs/analisa-alur-cetak-label.md` bagian 6) — jadi cetak bulk cukup memakai
+kertas label 100x150 mm tanpa pengaturan skala tambahan di printer. File Lazada yang
+diunduh SEBELUM perbaikan 2026-10-07 masih template umum/ukuran lama.
+
 **Program ini TIDAK membuat picklist/label baru.** Fungsinya cuma mencetak ulang
 PDF label yang sudah ada. Picklist & label itu sendiri dibuat lewat alur
 `--label`/`--urgent`/`--reguler` (lihat README bagian 1-3).

@@ -197,7 +197,12 @@ picklist **pertama**, bukan tertahan di picklist belakangan. Berlaku juga di pic
 reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
 
 - **Lazada**: semua pesanan channel Lazada (`channel_id=4`), digabung jadi 1 picklist
-  (dipecah kalau > 200, lihat di atas).
+  (dipecah kalau > 200, lihat di atas). Label PDF-nya memakai template khusus **"Label
+  Pengiriman Lazada"** (program mengirim `isFromLz=true` ke `reports/shipping-label/`, sama
+  seperti web) yang berukuran A5; PDF otomatis **diperkecil ke skala 68%** di kertas label
+  100x150 mm segera setelah diunduh (`skala_label_lazada()`, pakai `pypdf`), sama dengan cetak
+  manual di web dengan skala custom 68%. Detailnya di `docs/analisa-alur-cetak-label.md`
+  bagian 6.
 - **GTL-SiCepat**: semua pesanan kurir **GTL** atau **SiCepat**, **lintas channel** (TIDAK
   difilter channel). Urgent-nya ditentukan kurir, bukan channel, jadi pesanan Tokopedia
   **asli** (`channel_id=128`) *dan* "Shop | Tokopedia" (`channel_id=131076`, nama lain TikTok
