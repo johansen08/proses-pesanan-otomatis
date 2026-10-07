@@ -14,6 +14,8 @@ Laporan "Daftar Penjualan Faktur" (sniff 07-10-2026 10:53, lihat ambil_url_faktu
 iresis.py): sama dengan langkah 2-3 di atas, tapi endpoint
 GET open.jubelio.com/core-api/reports/sales-list/date-range/?date_from=..&date_to=..&
 reference=invoice&hpp=true&tz=Asia/Jakarta
+Versi pesanan (sniff 07-10-2026 14:12): endpoint sama, reference=order; hasilnya diunggah
+ke form IRESIS yang sama (receiptFile), kolom Excel identik.
 
 Recheck stok (berdasarkan rekaman sniff 05-10-2026 15:17, lihat ambil_stok_kosong()/
 recheck_stok() & main.py --recheck-stok):
@@ -151,23 +153,30 @@ def ambil_url_laporan(token: str, timeout: int = 60) -> str:
     return data["url"]
 
 
-def ambil_url_faktur(token: str, dari: date, sampai: date, timeout: int = 60) -> str:
+def ambil_url_faktur(token: str, dari: date, sampai: date, timeout: int = 60,
+                     reference: str = "invoice") -> str:
     """URL laporan 'Daftar Penjualan Faktur' (kolom picklist/resi/status ship) untuk rentang
     tanggal `dari`..`sampai` (WIB, inklusif) - diunggah ke IRESIS oleh iresis.py. Format
-    tanggal meniru web Jubelio (string Date JavaScript)."""
+    tanggal meniru web Jubelio (string Date JavaScript). `reference="order"` = laporan
+    berbasis PESANAN (sniff 07-10-2026 14:12), kolom & endpoint sama - lihat ambil_url_pesanan()."""
     def _js(d: date, jam: str) -> str:
         return f"{d:%a %b %d %Y} {jam} GMT+0700 (Western Indonesia Time)"
 
     r = _kirim_dengan_retry429(
         _sesi().get, URL_FAKTUR, headers=_header(token), timeout=timeout,
         params={"date_from": _js(dari, "00:00:00"), "date_to": _js(sampai, "23:59:59"),
-                "reference": "invoice", "hpp": "true", "tz": "Asia/Jakarta"})
+                "reference": reference, "hpp": "true", "tz": "Asia/Jakarta"})
     if r.status_code != 200:
         raise JubelioError(f"Gagal minta laporan faktur (HTTP {r.status_code}): {_pesan(r)}")
     data = r.json()
     if data.get("status") != "ok" or not data.get("url"):
         raise JubelioError(f"Respons laporan faktur tidak valid: status={data.get('status')}")
     return data["url"]
+
+
+def ambil_url_pesanan(token: str, dari: date, sampai: date, timeout: int = 60) -> str:
+    """URL laporan 'Daftar Penjualan' berbasis pesanan (reference=order) untuk `dari`..`sampai`."""
+    return ambil_url_faktur(token, dari, sampai, timeout=timeout, reference="order")
 
 
 def _halaman_pesanan(sesi: requests.Session, token: str, page: int, q: str = "",

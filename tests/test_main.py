@@ -234,15 +234,23 @@ def uji_upload_iresis_mode_uji_gagal_dan_sukses():
     unduh = Path(tempfile.mkdtemp()) / "faktur.xlsx"
     unduh.write_bytes(b"PK")
     env = {"IRESIS_USERNAME": "bot", "IRESIS_PASSWORD": "x"}
-    with mock.patch.dict(os.environ, env),             mock.patch.object(m, "login", return_value="TOK"),             mock.patch.object(jubelio, "ambil_url_faktur", return_value="u") as url,             mock.patch.object(jubelio, "unduh_excel", return_value=unduh),             mock.patch.object(iresis, "unggah", return_value="ok") as unggah,             mock.patch.object(m, "cetak_bermasalah") as bermasalah:
+    with mock.patch.dict(os.environ, env),             mock.patch.object(m, "login", return_value="TOK"),             mock.patch.object(jubelio, "ambil_url_faktur", return_value="u") as url,             mock.patch.object(jubelio, "ambil_url_pesanan", return_value="u2") as url_psn,             mock.patch.object(jubelio, "unduh_excel", return_value=unduh),             mock.patch.object(iresis, "unggah", return_value="ok") as unggah,             mock.patch.object(m, "cetak_bermasalah") as bermasalah:
         # mode uji: hanya unduh, tidak upload
         assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=False, hari=2)) == 0
         unggah.assert_not_called()
         dari, sampai = url.call_args.args[1:3]
         assert (sampai - dari).days == 1       # --hari 2 = kemarin + hari ini
+        dari_p, sampai_p = url_psn.call_args.args[1:3]
+        assert (sampai_p - dari_p).days == 3   # pesanan: 3 hari ke belakang + hari ini
         # sungguhan: upload dipanggil dengan file hasil unduh
         assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 0
-        unggah.assert_called_once_with(unduh, "bot", "x")
+        assert unggah.call_count == 2          # faktur lalu pesanan
+        unggah.reset_mock()
+        # faktur gagal tidak membatalkan upload pesanan, tapi exit code tetap 1
+        unggah.side_effect = [iresis.IresisError("faktur ditolak"), "ok"]
+        assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 1
+        assert unggah.call_count == 2
+        unggah.reset_mock()
         # gagal: exit 1 + peringatan mencolok, TIDAK melempar (TIPE tetap lanjut)
         unggah.side_effect = iresis.IresisError("server mati")
         assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 1

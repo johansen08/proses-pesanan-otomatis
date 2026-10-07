@@ -85,7 +85,8 @@ setelah beberapa --lanjut):
 
 Upload faktur ke IRESIS (iresis.py; dulu manual setelah proses pesanan selesai):
     python src/main.py --upload-iresis                   # MODE UJI: hanya unduh faktur
-    python src/main.py --upload-iresis --jalankan [--hari 2]
+    python src/main.py --upload-iresis --jalankan [--hari 2] [--hari-pesanan 4]
+(mengunggah 2 file berurutan: faktur N hari, lalu pesanan N hari)
 """
 import argparse
 import logging
@@ -330,6 +331,10 @@ def _main() -> int:
     ap.add_argument("--hari", type=int, default=2, metavar="N",
                     help="dipakai bersama --upload-iresis: rentang laporan faktur N hari "
                         "terakhir termasuk hari ini (bawaan 2, seperti kebiasaan tim)")
+    ap.add_argument("--hari-pesanan", type=int, default=4, metavar="N",
+                    help="dipakai bersama --upload-iresis: rentang laporan PESANAN N hari "
+                        "terakhir termasuk hari ini (bawaan 4 = 3 hari ke belakang + hari ini, "
+                        "sesuai sniff 07-10-2026)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -723,26 +728,34 @@ def upload_faktur_iresis(log: logging.Logger, args) -> int:
                            "IRESIS_PASSWORD belum diisi di .env"}], "PERHATIAN: UPLOAD IRESIS GAGAL")
         return 1
     hari_ini = datetime.now().date()
-    dari = hari_ini - timedelta(days=max(args.hari, 1) - 1)
-    try:
-        token = login(log)
-        log.info("Meminta URL laporan Daftar Penjualan Faktur %s s.d. %s", dari, hari_ini)
-        url = jubelio.ambil_url_faktur(token, dari, hari_ini)
-        file = jubelio.unduh_excel(token, url, FOLDER_FAKTUR, awalan="daftar_penjualan_faktur")
-        log.info("Faktur diunduh: %s", file.name)
-        if not args.jalankan:
-            log.info("MODE UJI - upload ke IRESIS (%s) tidak dilakukan. Tambahkan --jalankan "
-                     "untuk upload.", iresis._url_dasar())
-            return 0
-        log.info("Upload %s ke IRESIS", file.name)
-        ringkasan = iresis.unggah(file, username, password)
-    except Exception as e:   # noqa: BLE001 - catat semua kegagalan, jangan hentikan TIPE
-        log.exception("GAGAL upload faktur ke IRESIS: %s", e)
-        cetak_bermasalah([{"SKU": "UPLOAD IRESIS", "Catatan": f"GAGAL: {e}"}],
-                         "PERHATIAN: UPLOAD IRESIS GAGAL")
-        return 1
-    log.info("IRESIS: %s", ringkasan)
-    return 0
+    laporan = [("Faktur", jubelio.ambil_url_faktur, args.hari, "daftar_penjualan_faktur"),
+               ("Pesanan", jubelio.ambil_url_pesanan, getattr(args, "hari_pesanan", 4),
+                "daftar_penjualan_pesanan")]
+    gagal = False
+    token = None
+    for nama, ambil_url, hari, awalan in laporan:
+        # tiap laporan berdiri sendiri: gagalnya faktur tidak membatalkan upload pesanan
+        dari = hari_ini - timedelta(days=max(hari, 1) - 1)
+        try:
+            token = token or login(log)
+            log.info("Meminta URL laporan Daftar Penjualan %s %s s.d. %s", nama, dari, hari_ini)
+            url = ambil_url(token, dari, hari_ini)
+            file = jubelio.unduh_excel(token, url, FOLDER_FAKTUR, awalan=awalan)
+            log.info("%s diunduh: %s", nama, file.name)
+            if not args.jalankan:
+                log.info("MODE UJI - upload %s ke IRESIS (%s) tidak dilakukan. Tambahkan "
+                         "--jalankan untuk upload.", nama.lower(), iresis._url_dasar())
+                continue
+            log.info("Upload %s ke IRESIS", file.name)
+            ringkasan = iresis.unggah(file, username, password)
+        except Exception as e:   # noqa: BLE001 - catat semua kegagalan, jangan hentikan TIPE
+            log.exception("GAGAL upload %s ke IRESIS: %s", nama.lower(), e)
+            cetak_bermasalah([{"SKU": "UPLOAD IRESIS", "Catatan": f"GAGAL ({nama}): {e}"}],
+                             "PERHATIAN: UPLOAD IRESIS GAGAL")
+            gagal = True
+            continue
+        log.info("IRESIS (%s): %s", nama.lower(), ringkasan)
+    return 1 if gagal else 0
 
 
 if __name__ == "__main__":

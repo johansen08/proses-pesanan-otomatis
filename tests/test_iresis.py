@@ -163,6 +163,18 @@ def uji_url_faktur():
     assert k["params"]["reference"] == "invoice" and k["headers"]["authorization"] == "TOK"
 
 
+def uji_url_pesanan():
+    s = Sesi({("GET", "/date-range/"): [Resp(200, {"status": "ok", "url": "https://r/?&token=T"})]})
+    jubelio._sesi_bersama = s
+    try:
+        jubelio.ambil_url_pesanan("TOK", date(2026, 10, 4), date(2026, 10, 7))
+    finally:
+        jubelio._sesi_bersama = None
+    k = s.log[0][2]
+    assert k["params"]["reference"] == "order"
+    assert k["params"]["date_from"] == "Sun Oct 04 2026 00:00:00 GMT+0700 (Western Indonesia Time)"
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("uji_"):
