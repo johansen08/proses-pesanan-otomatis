@@ -223,6 +223,37 @@ def uji_tulis_picklist_excel_exit_1_kalau_masih_tertunda():
     print("  --tulis-excel --jalankan: terapkan() sekali; exit 1 kalau antrean masih tertunda")
 
 
+def uji_upload_iresis_mode_uji_gagal_dan_sukses():
+    import logging
+    import os
+    from types import SimpleNamespace
+
+    import iresis
+    import jubelio
+    log = logging.getLogger("uji-main")
+    unduh = Path(tempfile.mkdtemp()) / "faktur.xlsx"
+    unduh.write_bytes(b"PK")
+    env = {"IRESIS_USERNAME": "bot", "IRESIS_PASSWORD": "x"}
+    with mock.patch.dict(os.environ, env),             mock.patch.object(m, "login", return_value="TOK"),             mock.patch.object(jubelio, "ambil_url_faktur", return_value="u") as url,             mock.patch.object(jubelio, "unduh_excel", return_value=unduh),             mock.patch.object(iresis, "unggah", return_value="ok") as unggah,             mock.patch.object(m, "cetak_bermasalah") as bermasalah:
+        # mode uji: hanya unduh, tidak upload
+        assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=False, hari=2)) == 0
+        unggah.assert_not_called()
+        dari, sampai = url.call_args.args[1:3]
+        assert (sampai - dari).days == 1       # --hari 2 = kemarin + hari ini
+        # sungguhan: upload dipanggil dengan file hasil unduh
+        assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 0
+        unggah.assert_called_once_with(unduh, "bot", "x")
+        # gagal: exit 1 + peringatan mencolok, TIDAK melempar (TIPE tetap lanjut)
+        unggah.side_effect = iresis.IresisError("server mati")
+        assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 1
+        assert "server mati" in bermasalah.call_args.args[0][0]["Catatan"]
+    # kredensial kosong + --jalankan: gagal tanpa menyentuh jaringan
+    with mock.patch.dict(os.environ, {}, clear=True),             mock.patch.object(m, "login") as login, mock.patch.object(m, "cetak_bermasalah"):
+        assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 1
+        login.assert_not_called()
+    print("  --upload-iresis: mode uji hanya unduh; gagal -> exit 1 tanpa menghentikan TIPE")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

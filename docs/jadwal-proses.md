@@ -74,6 +74,7 @@ bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 6. SPX - J&T 1 QTY REGULER
 7. SPX - J&T KOMBINASI
 8. TULIS PICKLIST.XLSX *(lihat "Rekap PICKLIST.xlsx" di bawah)*
+9. UPLOAD FAKTUR KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore/malam/dini hari **16.00 sampai 07.00 keesokan harinya** — begitu TIPE 4
@@ -96,6 +97,7 @@ didokumentasikan terpisah pakai TIPE 3 (dipisah) — sekarang malam hari
 10. SPX - 1 QTY REGULER
 11. SPX - KOMBINASI
 12. TULIS PICKLIST.XLSX
+13. UPLOAD FAKTUR KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 5,
 channel Shopee, jam pesan WIB maksimal 12.00 siang hari itu, cukup
@@ -116,6 +118,7 @@ jadwal.
 9. SPX - 1 QTY REGULER
 10. SPX - KOMBINASI
 11. TULIS PICKLIST.XLSX
+12. UPLOAD FAKTUR KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
@@ -133,6 +136,7 @@ di atas).
 7. SPX - J&T 1 QTY REGULER *(digabung)*
 8. SPX - J&T KOMBINASI *(digabung)*
 9. TULIS PICKLIST.XLSX
+10. UPLOAD FAKTUR KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 15.00**, menghabiskan wajib keluar TikTok Shop (langkah
 4, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
@@ -141,6 +145,21 @@ kurir **tidak** dipisah lagi — langsung memakai pola gabungan TIPE 1, karena
 setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
 atas) sampai jam 07.00 besok.
+
+### Upload faktur ke IRESIS (langkah paling terakhir tiap TIPE)
+
+**Sejak 2026-10-07**: langkah **UPLOAD FAKTUR KE IRESIS** (`--upload-iresis --jalankan`) jadi
+langkah paling akhir tiap TIPE 1-4. Dulu langkah manual tim: unduh Excel "Daftar Penjualan
+Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IRESIS
+(picklist/resi/status) ter-update. Sekarang program mengunduh laporan 2 hari terakhir
+(`--hari N` untuk mengubah) ke `laporan-faktur/` lalu mengunggahnya lewat `src/iresis.py`.
+
+- Butuh `IRESIS_USERNAME` & `IRESIS_PASSWORD` di `.env` (opsional `IRESIS_URL`,
+  `IRESIS_NAMA_PK`, `IRESIS_CA_BUNDLE`); PC harus satu LAN dengan server IRESIS.
+- Upload ulang aman (IRESIS melewati baris yang tidak berubah).
+- Gagal (server mati/login salah/respons aneh): TIPE tetap selesai, peringatan "UPLOAD IRESIS
+  GAGAL" dicetak mencolok & muncul lagi di rekap waktu; upload ulang manual dengan
+  `jalankan.bat --upload-iresis --jalankan`.
 
 ### Rekap PICKLIST.xlsx (langkah terakhir tiap TIPE)
 

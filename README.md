@@ -94,7 +94,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
-| `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) |
+| `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) + akun IRESIS (`IRESIS_USERNAME`, `IRESIS_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
 | `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label) |
 

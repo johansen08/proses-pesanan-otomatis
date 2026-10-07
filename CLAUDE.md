@@ -105,6 +105,12 @@ project secara umum, root tidak boleh berisi file `.py`):
   `proses-harian.bat`), disimpan atomik (file sementara lalu `os.replace`). Dulu dibuka &
   disimpan di TIAP proses — ±15-20 menit per TIPE habis untuk Excel, dan file pernah rusak
   (insiden 2026-10-06). Kalau gagal (file dibuka di Excel/rusak), antrean tidak dibuang.
+- `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
+  `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
+  `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat
+  `main.py --upload-iresis [--jalankan]` — langkah paling akhir tiap TIPE `proses-harian.bat`.
+  Kegagalan tidak menghentikan TIPE (cetak_bermasalah + rekap waktu). Butuh `IRESIS_USERNAME`/
+  `IRESIS_PASSWORD` di `.env`.
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder

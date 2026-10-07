@@ -2,6 +2,7 @@
 .venv/
 sniff_*.json
 laporan-siap-proses/
+laporan-faktur/
 laporan-sku-spesial/
 logs/
 __pycache__/

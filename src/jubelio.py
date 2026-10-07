@@ -10,6 +10,11 @@ Alur (berdasarkan rekaman sniff 26-09-2026 08:18):
                                                                 -> grand_total per pesanan
                                                                    (Excel tidak punya kolom nilai)
 
+Laporan "Daftar Penjualan Faktur" (sniff 07-10-2026 10:53, lihat ambil_url_faktur() &
+iresis.py): sama dengan langkah 2-3 di atas, tapi endpoint
+GET open.jubelio.com/core-api/reports/sales-list/date-range/?date_from=..&date_to=..&
+reference=invoice&hpp=true&tz=Asia/Jakarta
+
 Recheck stok (berdasarkan rekaman sniff 05-10-2026 15:17, lihat ambil_stok_kosong()/
 recheck_stok() & main.py --recheck-stok):
   1. GET open.jubelio.com/core-api/wms/sales/v2/orders/empty-stock/   -> daftar pesanan
@@ -24,7 +29,7 @@ import random
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -36,6 +41,7 @@ API = "https://open.jubelio.com/core-api"
 HOST_REPORT = ("report.jubelio.com", "report-prod.jubelio.com")   # urutan coba: utama, cadangan
 URL_LOGIN = f"{API}/login"
 URL_LAPORAN = f"{API}/reports/sales-list/ready-to-pick-list/"
+URL_FAKTUR = f"{API}/reports/sales-list/date-range/"
 URL_PESANAN = f"{API}/wms/sales/v2/orders/ready-to-process/"
 URL_STOK_KOSONG = f"{API}/wms/sales/v2/orders/empty-stock/"
 URL_RECHECK_STOK = f"{API}/wms/sales/orders/recheck-stock/"
@@ -142,6 +148,25 @@ def ambil_url_laporan(token: str, timeout: int = 60) -> str:
     data = r.json()
     if data.get("status") != "ok" or not data.get("url"):
         raise JubelioError(f"Respons laporan tidak valid: status={data.get('status')}")
+    return data["url"]
+
+
+def ambil_url_faktur(token: str, dari: date, sampai: date, timeout: int = 60) -> str:
+    """URL laporan 'Daftar Penjualan Faktur' (kolom picklist/resi/status ship) untuk rentang
+    tanggal `dari`..`sampai` (WIB, inklusif) - diunggah ke IRESIS oleh iresis.py. Format
+    tanggal meniru web Jubelio (string Date JavaScript)."""
+    def _js(d: date, jam: str) -> str:
+        return f"{d:%a %b %d %Y} {jam} GMT+0700 (Western Indonesia Time)"
+
+    r = _kirim_dengan_retry429(
+        _sesi().get, URL_FAKTUR, headers=_header(token), timeout=timeout,
+        params={"date_from": _js(dari, "00:00:00"), "date_to": _js(sampai, "23:59:59"),
+                "reference": "invoice", "hpp": "true", "tz": "Asia/Jakarta"})
+    if r.status_code != 200:
+        raise JubelioError(f"Gagal minta laporan faktur (HTTP {r.status_code}): {_pesan(r)}")
+    data = r.json()
+    if data.get("status") != "ok" or not data.get("url"):
+        raise JubelioError(f"Respons laporan faktur tidak valid: status={data.get('status')}")
     return data["url"]
 
 
@@ -253,7 +278,8 @@ def url_excel(url_laporan: str) -> str:
     return urlunsplit((u.scheme, u.netloc, "/xlsx/", u.query, ""))
 
 
-def unduh_excel(token: str, url_laporan: str, folder: Path, timeout: int = 180) -> Path:
+def unduh_excel(token: str, url_laporan: str, folder: Path, timeout: int = 180,
+                awalan: str = "laporan_siap_proses") -> Path:
     # report.jubelio.com lebih stabil -> dicoba dulu; report-prod.jubelio.com (host bawaan URL
     # dari API) sebagai cadangan kalau gagal/bukan Excel
     url = urlsplit(url_excel(url_laporan))
@@ -281,6 +307,6 @@ def unduh_excel(token: str, url_laporan: str, folder: Path, timeout: int = 180) 
         raise galat
 
     folder.mkdir(parents=True, exist_ok=True)
-    tujuan = folder / f"laporan_siap_proses_{datetime.now():%Y-%m-%d_%H%M%S}.xlsx"
+    tujuan = folder / f"{awalan}_{datetime.now():%Y-%m-%d_%H%M%S}.xlsx"
     tujuan.write_bytes(r.content)
     return tujuan

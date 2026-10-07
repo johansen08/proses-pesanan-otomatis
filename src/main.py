@@ -82,6 +82,10 @@ TIPE proses-harian.bat ("TULIS PICKLIST.XLSX"). Jalankan manual kalau perlu lebi
 setelah beberapa --lanjut):
     python src/main.py --tulis-excel                     # MODE UJI: hanya tampilkan jumlah antrean
     python src/main.py --tulis-excel --jalankan
+
+Upload faktur ke IRESIS (iresis.py; dulu manual setelah proses pesanan selesai):
+    python src/main.py --upload-iresis                   # MODE UJI: hanya unduh faktur
+    python src/main.py --upload-iresis --jalankan [--hari 2]
 """
 import argparse
 import logging
@@ -89,7 +93,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -105,6 +109,7 @@ from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_EXCEL = ROOT / "laporan-siap-proses"
+FOLDER_FAKTUR = ROOT / "laporan-faktur"
 FOLDER_PDF = ROOT / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -317,6 +322,14 @@ def _main() -> int:
                         "simpan) - dijalankan otomatis di langkah terakhir tiap TIPE "
                         "proses-harian.bat; tanpa --jalankan = mode uji, hanya tampilkan "
                         "jumlah antrean")
+    ap.add_argument("--upload-iresis", action="store_true",
+                    help="unduh Excel 'Daftar Penjualan Faktur' terbaru dari Jubelio lalu upload "
+                        "ke menu Upload Resi IRESIS (dulu manual, setelah proses pesanan "
+                        "selesai) - langkah terakhir tiap TIPE proses-harian.bat; tanpa "
+                        "--jalankan = mode uji, hanya unduh & tampilkan rencana")
+    ap.add_argument("--hari", type=int, default=2, metavar="N",
+                    help="dipakai bersama --upload-iresis: rentang laporan faktur N hari "
+                        "terakhir termasuk hari ini (bawaan 2, seperti kebiasaan tim)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -342,6 +355,9 @@ def _main() -> int:
     if args.tulis_excel:
         # bukan proses picklist - jangan buat folder sesi label baru yang kosong
         return tulis_picklist_excel(log, args)
+    if args.upload_iresis:
+        # bukan proses picklist - jangan buat folder sesi label baru yang kosong
+        return upload_faktur_iresis(log, args)
     global FOLDER_LABEL_SESI
     FOLDER_LABEL_SESI = FOLDER_LABEL / args.sesi if args.sesi else folder_label_sesi()
     FOLDER_LABEL_SESI.mkdir(parents=True, exist_ok=True)
@@ -689,6 +705,44 @@ def tulis_picklist_excel(log: logging.Logger, args) -> int:
     except Exception as e:   # noqa: BLE001 - catat semua kegagalan ke log
         log.exception("GAGAL tulis %s: %s", rekap_master_excel.NAMA_SALINAN, e)
     return 1 if rekap_master_excel.jumlah_antrian() else 0
+
+
+def upload_faktur_iresis(log: logging.Logger, args) -> int:
+    """Langkah UPLOAD IRESIS (akhir tiap TIPE proses-harian.bat): unduh 'Daftar Penjualan
+    Faktur' lalu upload ke IRESIS. Kegagalan TIDAK menghentikan TIPE - dicetak mencolok lewat
+    cetak_bermasalah() (juga muncul lagi di rekap waktu) dan exit code 1. Mode uji (tanpa
+    --jalankan): hanya unduh, upload tidak dilakukan."""
+    import iresis
+    import jubelio
+
+    username = os.environ.get("IRESIS_USERNAME")
+    password = os.environ.get("IRESIS_PASSWORD")
+    if args.jalankan and not (username and password):
+        log.error("IRESIS_USERNAME / IRESIS_PASSWORD belum diisi di file .env")
+        cetak_bermasalah([{"SKU": "UPLOAD IRESIS", "Catatan": "GAGAL: IRESIS_USERNAME/"
+                           "IRESIS_PASSWORD belum diisi di .env"}], "PERHATIAN: UPLOAD IRESIS GAGAL")
+        return 1
+    hari_ini = datetime.now().date()
+    dari = hari_ini - timedelta(days=max(args.hari, 1) - 1)
+    try:
+        token = login(log)
+        log.info("Meminta URL laporan Daftar Penjualan Faktur %s s.d. %s", dari, hari_ini)
+        url = jubelio.ambil_url_faktur(token, dari, hari_ini)
+        file = jubelio.unduh_excel(token, url, FOLDER_FAKTUR, awalan="daftar_penjualan_faktur")
+        log.info("Faktur diunduh: %s", file.name)
+        if not args.jalankan:
+            log.info("MODE UJI - upload ke IRESIS (%s) tidak dilakukan. Tambahkan --jalankan "
+                     "untuk upload.", iresis._url_dasar())
+            return 0
+        log.info("Upload %s ke IRESIS", file.name)
+        ringkasan = iresis.unggah(file, username, password)
+    except Exception as e:   # noqa: BLE001 - catat semua kegagalan, jangan hentikan TIPE
+        log.exception("GAGAL upload faktur ke IRESIS: %s", e)
+        cetak_bermasalah([{"SKU": "UPLOAD IRESIS", "Catatan": f"GAGAL: {e}"}],
+                         "PERHATIAN: UPLOAD IRESIS GAGAL")
+        return 1
+    log.info("IRESIS: %s", ringkasan)
+    return 0
 
 
 if __name__ == "__main__":

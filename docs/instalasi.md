@@ -101,6 +101,9 @@ langkah 1) dengan isi:
 ```
 JUBELIO_EMAIL=email_akun_jubelio_anda
 JUBELIO_PASSWORD=password_akun_jubelio_anda
+IRESIS_USERNAME=akun_iresis_khusus_bot
+IRESIS_PASSWORD=password_akun_iresis
+# opsional: IRESIS_URL=https://192.168.3.37/new-iresis  IRESIS_NAMA_PK=SRV-1  IRESIS_CA_BUNDLE=path\ke\sertifikat.pem
 ```
 
 Ganti dengan email & password akun Jubelio yang sebenarnya. Baris
