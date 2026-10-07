@@ -18,6 +18,7 @@ recheck_stok() & main.py --recheck-stok):
                                                                           (berlaku utk SEMUA
                                                                           pesanan di atas)
 """
+import logging
 import os
 import random
 import time
@@ -29,7 +30,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 import requests
 
+log = logging.getLogger("sku-spesial")
+
 API = "https://open.jubelio.com/core-api"
+HOST_REPORT = ("report.jubelio.com", "report-prod.jubelio.com")   # urutan coba: utama, cadangan
 URL_LOGIN = f"{API}/login"
 URL_LAPORAN = f"{API}/reports/sales-list/ready-to-pick-list/"
 URL_PESANAN = f"{API}/wms/sales/v2/orders/ready-to-process/"
@@ -250,15 +254,31 @@ def url_excel(url_laporan: str) -> str:
 
 
 def unduh_excel(token: str, url_laporan: str, folder: Path, timeout: int = 180) -> Path:
-    r = _kirim_dengan_retry429(
-        _sesi().get, url_excel(url_laporan), timeout=timeout,
-        cookies={"JB_OMNI_ACCESS_TOKEN": token},
-        headers={"User-Agent": USER_AGENT, "Referer": "https://v2.jubelio.com/"})
-    if r.status_code != 200:
-        raise JubelioError(f"Gagal download Excel (HTTP {r.status_code}): {r.text[:300]}")
-    if not r.content.startswith(b"PK"):        # file .xlsx selalu diawali 'PK' (zip)
-        raise JubelioError("Respons download bukan file Excel "
-                           f"(content-type: {r.headers.get('content-type')})")
+    # report.jubelio.com lebih stabil -> dicoba dulu; report-prod.jubelio.com (host bawaan URL
+    # dari API) sebagai cadangan kalau gagal/bukan Excel
+    url = urlsplit(url_excel(url_laporan))
+    galat = None
+    for host in HOST_REPORT:
+        try:
+            r = _kirim_dengan_retry429(
+                _sesi().get, urlunsplit(url._replace(netloc=host)), timeout=timeout,
+                cookies={"JB_OMNI_ACCESS_TOKEN": token},
+                headers={"User-Agent": USER_AGENT, "Referer": "https://v2.jubelio.com/"})
+        except requests.exceptions.RequestException as e:
+            galat = JubelioError(f"Gagal download Excel dari {host}: {e}")
+            continue
+        if r.status_code != 200:
+            galat = JubelioError(f"Gagal download Excel (HTTP {r.status_code}): {r.text[:300]}")
+        elif not r.content.startswith(b"PK"):    # file .xlsx selalu diawali 'PK' (zip)
+            galat = JubelioError("Respons download bukan file Excel "
+                                 f"(content-type: {r.headers.get('content-type')})")
+        else:
+            galat = None
+            break
+        log.warning("%s (%s)%s", galat, host,
+                    ", coba host cadangan" if host != HOST_REPORT[-1] else "")
+    if galat:
+        raise galat
 
     folder.mkdir(parents=True, exist_ok=True)
     tujuan = folder / f"laporan_siap_proses_{datetime.now():%Y-%m-%d_%H%M%S}.xlsx"

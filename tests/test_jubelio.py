@@ -166,9 +166,32 @@ def uji_unduh_excel_sukses_simpan_file():
             assert tujuan.parent == Path(tmp)
     finally:
         _lepas_sesi(lama)
-    assert dipanggil["url"] == "https://report-prod.jubelio.com/xlsx/?&token=X"
+    assert dipanggil["url"] == "https://report.jubelio.com/xlsx/?&token=X"
     assert dipanggil["cookies"] == {"JB_OMNI_ACCESS_TOKEN": "TKN"}
     print("  unduh_excel: file disimpan ke folder tujuan, memakai url /xlsx/ & cookie token")
+
+
+def uji_unduh_excel_fallback_ke_report_prod():
+    lama = {}
+    isi = b"PKisi excel palsu"
+    urls = []
+
+    def get_palsu(url, timeout=None, cookies=None, headers=None):
+        urls.append(url)
+        if "report-prod" not in url:
+            return Resp(504, content=b"", headers={})
+        return Resp(200, content=isi, headers={})
+
+    _pasang_sesi(lama, _SesiPalsu(get=get_palsu))
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tujuan = jb.unduh_excel("TKN", "https://report-prod.jubelio.com/?&token=X", Path(tmp))
+            assert tujuan.read_bytes() == isi
+    finally:
+        _lepas_sesi(lama)
+    assert urls == ["https://report.jubelio.com/xlsx/?&token=X",
+                    "https://report-prod.jubelio.com/xlsx/?&token=X"], urls
+    print("  unduh_excel: report.jubelio.com gagal -> fallback report-prod.jubelio.com")
 
 
 def uji_unduh_excel_bukan_file_excel():

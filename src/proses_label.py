@@ -89,6 +89,7 @@ import logging
 import re
 import threading
 import time
+from urllib.parse import urlsplit, urlunsplit
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -102,7 +103,13 @@ import peringatan_resi
 import rekap_master_excel
 from sku_spesial import AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
 
-REPORT_API = "https://report-prod.jubelio.com/api/reports"
+# Host server report (Telerik) Jubelio, urut dari yang dicoba PERTAMA. report.jubelio.com lebih
+# stabil; report-prod.jubelio.com (host bawaan URL dari API Jubelio) sering bermasalah (410/504/
+# dokumen macet), jadi dipakai sebagai cadangan. unduh_label() menjalankan SELURUH alur
+# (halaman -> client -> dokumen -> unduh) di SATU host per percobaan, lalu berganti host di
+# percobaan berikutnya.
+HOST_REPORT = ("report.jubelio.com", "report-prod.jubelio.com")
+HOST_REPORT_UTAMA = HOST_REPORT[0]
 KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # Pemisahan J&T/SPX saat proses (dipakai TIPE 2 & TIPE 3 - lihat proses-harian.bat/
 # JADWAL-PROSES.md): nilai --kurir CLI ("jnt"/"spx") -> nilai filter kurir Jubelio.
@@ -304,7 +311,7 @@ class Klien:
         # 2026-10-06), tapi harus meneruskan `referer` secara eksplisit ke tiap report_get()/
         # report_post() di sepanjang alurnya sendiri (lihat _buat_instance_report(),
         # _tunggu_dokumen(), unduh_label()).
-        self.halaman_report = "https://report-prod.jubelio.com/"
+        self.halaman_report = f"https://{HOST_REPORT_UTAMA}/"
 
     @staticmethod
     def _json(r, apa: str):
@@ -367,13 +374,25 @@ class Klien:
                                     "Referer": referer or self.halaman_report})
 
     def report_post(self, path: str, body, referer: str | None = None):
-        r = self._kirim(self.sesi.post, f"{REPORT_API}/{path}", json=body, cookies=self.cookie,
-                        timeout=120, ulang_gateway=True,
+        referer = referer or self.halaman_report
+        r = self._kirim(self.sesi.post, f"{_api_report(referer)}/{path}", json=body,
+                        cookies=self.cookie, timeout=120, ulang_gateway=True,
                         headers={"User-Agent": jubelio.USER_AGENT,
-                                 "Referer": referer or self.halaman_report,
-                                 "Origin": "https://report-prod.jubelio.com",
+                                 "Referer": referer,
+                                 "Origin": f"https://{urlsplit(referer).netloc}",
                                  "X-Requested-With": "XMLHttpRequest"})
         return self._json(r, f"report {path.rsplit('/', 1)[-1]}")
+
+
+def _ganti_host(url: str, host: str) -> str:
+    u = urlsplit(url)
+    return urlunsplit((u.scheme, host, u.path, u.query, u.fragment))
+
+
+def _api_report(referer: str) -> str:
+    """Basis API report di host yang SAMA dengan `referer` (URL halaman label)."""
+    host = urlsplit(referer).netloc
+    return f"https://{host if host in HOST_REPORT else HOST_REPORT_UTAMA}/api/reports"
 
 
 def _angka(v) -> float:
@@ -1540,7 +1559,7 @@ def _tunggu_dokumen(k: Klien, dasar: str, doc_id: str, referer: str) -> None:
     batas = time.monotonic() + TUNGGU_PDF_S
     backoff = _mulai_backoff(0.3, 2)
     while True:
-        r = k.report_get(f"{REPORT_API}/{dasar}/documents/{doc_id}/info", referer=referer,
+        r = k.report_get(f"{_api_report(referer)}/{dasar}/documents/{doc_id}/info", referer=referer,
                          timeout=TUNGGU_INFO_DOKUMEN_S)
         if r.status_code == 200:
             return
@@ -1587,34 +1606,42 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
     coba = 0
     while True:
         coba += 1
+        host = HOST_REPORT[(coba - 1) % len(HOST_REPORT)]
         try:
-            isi = _unduh_label_sekali(k, ids)
+            isi = _unduh_label_sekali(k, ids, host)
             break
-        except ProsesError as e:
-            if not _ulang_label(e):
+        except (ProsesError, requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            # gagal APA PUN di host pertama -> langsung coba host cadangan; selanjutnya hanya
+            # kalau client kedaluwarsa/dokumen macet
+            if coba > 1 and not (isinstance(e, ProsesError) and _ulang_label(e)):
                 raise
             if time.monotonic() + JEDA_COBA_LABEL_S > batas:
                 raise type(e)(f"{e} (menyerah setelah {coba} percobaan dengan client baru, "
                               f"{durasi(time.monotonic() - mulai)})") from e
-            log.info("  Label gagal (percobaan %d: %s), ulangi dari awal dengan client baru %d "
-                     "detik lagi", coba, e, JEDA_COBA_LABEL_S)
+            log.info("  Label gagal di %s (percobaan %d: %s), ulangi dari awal dengan client "
+                     "baru di %s %d detik lagi", host, coba, e,
+                     HOST_REPORT[coba % len(HOST_REPORT)], JEDA_COBA_LABEL_S)
             k.tidur(JEDA_COBA_LABEL_S)
     if coba > 1:
-        log.info("  Label berhasil di percobaan %d (%s)", coba, durasi(time.monotonic() - mulai))
+        log.info("  Label berhasil di percobaan %d via %s (%s)", coba, host,
+                 durasi(time.monotonic() - mulai))
     tujuan.parent.mkdir(parents=True, exist_ok=True)
     tujuan.write_bytes(isi)
     return tujuan
 
 
-def _unduh_label_sekali(k: Klien, ids: list[int]) -> bytes:
+def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA) -> bytes:
     j = k.get("reports/shipping-label/", {**_ids_param(ids), "tz": "Asia/Jakarta"})
-    halaman = k.report_get(j["url"], referer="https://v2.jubelio.com/")
+    # API Jubelio memberi URL di report-prod; dialihkan ke `host` untuk seluruh alur ini
+    url_halaman = _ganti_host(j["url"], host)
+    halaman = k.report_get(url_halaman, referer="https://v2.jubelio.com/")
     if halaman.status_code != 200:
         raise ProsesError(f"Halaman label gagal dibuka (HTTP {halaman.status_code})")
     rs = _report_source(halaman.text)
     # referer LOKAL (bukan k.halaman_report - k dibagi banyak worker paralel sekaligus, lihat
     # proses(); menimpa atribut bersama itu race condition, lihat catatan di Klien.__init__).
-    referer = j["url"]
+    referer = url_halaman
 
     dasar = _buat_instance_report(k, rs, referer)
 
@@ -1641,11 +1668,11 @@ def _unduh_label_sekali(k: Klien, ids: list[int]) -> bytes:
                             referer=referer)["documentId"]
         _tunggu_dokumen(k, dasar, doc, referer)
 
-    url_dok = f"{REPORT_API}/{dasar}/documents/{doc}"
+    url_dok = f"{_api_report(referer)}/{dasar}/documents/{doc}"
     r = k.report_get(url_dok, params={"response-content-disposition": "attachment"},
                      referer=referer, timeout=TUNGGU_UNDUH_PDF_S)
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
-        url_alt = url_dok.replace("report-prod.jubelio.com", "report.jubelio.com")
+        url_alt = _ganti_host(url_dok, next(h for h in HOST_REPORT if h != host))
         log.info("  Unduh PDF label dari %s gagal (HTTP %s), coba %s",
                  url_dok, r.status_code, url_alt)
         r = k.report_get(url_alt, params={"response-content-disposition": "attachment"},

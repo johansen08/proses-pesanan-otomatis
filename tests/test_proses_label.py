@@ -63,7 +63,7 @@ class JubelioPalsu:
     def get(self, url, params=None, headers=None, timeout=None, cookies=None):
         self._catat("GET", url, params)
         path = urlsplit(url).path
-        if "report-prod" in url and path == "/":
+        if urlsplit(url).netloc.startswith("report") and path == "/":
             assert cookies == {"JB_OMNI_ACCESS_TOKEN": "TKN"}
             return Resp(content=self.html_label.encode(), headers={"content-type": "text/html"})
         if path.endswith("/info"):
@@ -109,7 +109,7 @@ class JubelioPalsu:
     def post(self, url, json=None, headers=None, timeout=None, cookies=None):
         self._catat("POST", url, json)
         path = urlsplit(url).path
-        if "report-prod" in url:
+        if urlsplit(url).netloc.startswith("report"):
             assert cookies == {"JB_OMNI_ACCESS_TOKEN": "TKN"}
             if path.endswith("/clients"):
                 return Resp(data={"clientId": "c1"})
@@ -1639,6 +1639,7 @@ class _SesiReportGangguan:
         self.langkah: list[str] = []
         self.client = 0
         self.timeout_info: set = set()
+        self.host_halaman: list[str] = []
 
     def _ganggu(self, langkah):
         self.langkah.append(langkah)
@@ -1654,6 +1655,7 @@ class _SesiReportGangguan:
             return Resp(data={"status": "ok", "url": "https://report-prod.jubelio.com/?&token=T",
                               "title": "Label Pengiriman"})
         if path == "/":
+            self.host_halaman.append(urlsplit(url).netloc)
             return self._ganggu("halaman") or Resp(content=self.HTML.encode(),
                                                    headers={"content-type": "text/html"})
         if path.endswith("/info"):
@@ -1763,11 +1765,22 @@ def uji_unduh_label_pdf_gagal_lain_tetap_lewat_html5():
           "di client yang sama seperti cara web")
 
 
-def uji_unduh_label_gagal_bukan_410_tidak_diulang():
+def uji_unduh_label_host_utama_report_lalu_cadangan_report_prod():
+    sesi, hasil = _unduh_dengan_gangguan({})
+    assert isinstance(hasil, Path) and sesi.host_halaman == ["report.jubelio.com"], sesi.host_halaman
+    print("  unduh_label: dicoba di report.jubelio.com dulu (report-prod tidak disentuh kalau lancar)")
+
     sesi, hasil = _unduh_dengan_gangguan({"clients": [500]})
+    assert isinstance(hasil, Path), hasil
+    assert sesi.host_halaman == ["report.jubelio.com", "report-prod.jubelio.com"], sesi.host_halaman
+    print("  gagal di report.jubelio.com -> langsung ulang dari awal di report-prod.jubelio.com")
+
+
+def uji_unduh_label_gagal_di_kedua_host_tidak_diulang_lagi():
+    sesi, hasil = _unduh_dengan_gangguan({"clients": [500, 500]})
     assert isinstance(hasil, pl.ProsesError) and "500" in str(hasil), hasil
-    assert sesi.client == 1, sesi.client
-    print("  error report selain 410 (mis. 500): langsung TERHENTI seperti semula, tidak diulang")
+    assert sesi.client == 2, sesi.client
+    print("  error selain 410/macet di KEDUA host: TERHENTI, tidak diulang lagi")
 
 
 def uji_report_504_diulang_tapi_api_utama_tidak():
@@ -1776,10 +1789,10 @@ def uji_report_504_diulang_tapi_api_utama_tidak():
     assert sesi.langkah.count("halaman") == 3, sesi.langkah
     print("  HTTP 504/502 dari report-prod (halaman label, retry insiden 2026-10-06): diulang")
 
-    sesi, hasil = _unduh_dengan_gangguan({"halaman": [504] * pl.MAKS_COBA_KONEKSI})
+    sesi, hasil = _unduh_dengan_gangguan({"halaman": [504] * (2 * pl.MAKS_COBA_KONEKSI)})
     assert isinstance(hasil, pl.ProsesError) and "504" in str(hasil), hasil
-    assert sesi.langkah.count("halaman") == pl.MAKS_COBA_KONEKSI, sesi.langkah
-    print(f"  504 terus-menerus: berhenti setelah {pl.MAKS_COBA_KONEKSI}x percobaan")
+    assert sesi.langkah.count("halaman") == 2 * pl.MAKS_COBA_KONEKSI, sesi.langkah
+    print(f"  504 terus-menerus: {pl.MAKS_COBA_KONEKSI}x percobaan per host (2 host), lalu berhenti")
 
     class ApiUtama504:
         panggil = 0
