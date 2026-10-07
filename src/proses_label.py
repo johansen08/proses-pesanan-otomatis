@@ -1593,14 +1593,14 @@ def _buat_instance_report(k: Klien, rs: dict, referer: str) -> str:
     return f"clients/{c}/instances/{inst['instanceId']}"
 
 
-def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
+def unduh_label(k: Klien, ids: list[int], tujuan: Path, lazada: bool = False) -> Path:
     """Client Telerik report-prod hanya hidup di memori 1 node; kalau node itu kehilangan
     client kita (HTTP 410 "Client ... not found. Expired.") di langkah MANA PUN - instances,
     documents, info, sampai unduh PDF-nya (insiden 2026-10-06: 20 picklist TERHENTI di
     langkah documents, 1 di unduh PDF, yang dulu tidak ikut diulang) - ATAU dokumennya macet
     tidak kunjung jadi (DokumenMacet, lihat TUNGGU_PDF_S), ulangi SELURUH alur dari halaman
     label dengan client baru (url label & token baru, bisa jatuh ke node lain), sampai
-    TUNGGU_LABEL_S habis."""
+    TUNGGU_LABEL_S habis. `lazada`: lihat _unduh_label_sekali()."""
     mulai = time.monotonic()
     batas = mulai + TUNGGU_LABEL_S
     coba = 0
@@ -1608,7 +1608,7 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
         coba += 1
         host = HOST_REPORT[(coba - 1) % len(HOST_REPORT)]
         try:
-            isi = _unduh_label_sekali(k, ids, host)
+            isi = _unduh_label_sekali(k, ids, host, lazada)
             break
         except (ProsesError, requests.exceptions.ConnectionError,
                 requests.exceptions.Timeout) as e:
@@ -1631,8 +1631,15 @@ def unduh_label(k: Klien, ids: list[int], tujuan: Path) -> Path:
     return tujuan
 
 
-def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA) -> bytes:
-    j = k.get("reports/shipping-label/", {**_ids_param(ids), "tz": "Asia/Jakarta"})
+def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,
+                        lazada: bool = False) -> bytes:
+    """`lazada`: tambahkan isFromLz=true seperti web untuk pesanan Lazada. Tanpa ini Jubelio
+    memberi template umum "Label Pengiriman" (PDF beda dari unduhan manual); dengan ini
+    template "Label Pengiriman Lazada" (sniff 2026-10-07)."""
+    params = {**_ids_param(ids), "tz": "Asia/Jakarta"}
+    if lazada:
+        params["isFromLz"] = "true"
+    j = k.get("reports/shipping-label/", params)
     # API Jubelio memberi URL di report-prod; dialihkan ke `host` untuk seluruh alur ini
     url_halaman = _ganti_host(j["url"], host)
     halaman = k.report_get(url_halaman, referer="https://v2.jubelio.com/")
@@ -1886,7 +1893,8 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
         folder_tujuan = (folder_label / sub) if sub else folder_label
         tujuan = folder_tujuan / (f"{awalan}{_nama_file(nama_file or sku)}_"
                                   f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
-        file_label = str(unduh_label(k, ada_resi, tujuan))
+        sumber = {o.get("source") for o in pesanan if o["salesorder_id"] in set(ada_resi)}
+        file_label = str(unduh_label(k, ada_resi, tujuan, lazada=sumber == {CHANNEL_ID_LAZADA}))
         log.info("  Label: %s", file_label)
 
     if tag and tag.endswith(TAG_SPESIAL) and baris_ada_resi:

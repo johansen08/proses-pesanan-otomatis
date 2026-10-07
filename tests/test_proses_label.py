@@ -1909,6 +1909,25 @@ def uji_lanjutkan_tanpa_nama_tidak_pakai_gabungan_puluhan_sku():
           "gabungan 70 SKU, >255 karakter -> gagal disimpan di Windows)")
 
 
+def uji_label_lazada_pakai_isfromlz():
+    # sniff 2026-10-07: web memanggil shipping-label/ dengan isFromLz=true untuk Lazada (template
+    # "Label Pengiriman Lazada"); tanpa itu Jubelio memberi template umum -> PDF beda dari manual
+    def _jalankan(source):
+        j = JubelioPalsu(_html_label())
+        k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+        _picklist_selesai(j, [9068214, 9068180])
+        for o in j.orders:
+            o["source"] = source
+        with tempfile.TemporaryDirectory() as d:
+            pl.lanjutkan(k, "PICK-000154839", Path(d) / "label", Path(d) / "riwayat.xlsx")
+        return [b for m, p, b in j.log if p.endswith("shipping-label/")]
+
+    assert _jalankan(pl.CHANNEL_ID_LAZADA) == [
+        {"ids[0]": 9068214, "ids[1]": 9068180, "tz": "Asia/Jakarta", "isFromLz": "true"}]
+    assert "isFromLz" not in _jalankan(pl.CHANNEL_ID_SHOPEE)[0]
+    print("  label Lazada: shipping-label/ diminta dengan isFromLz=true, channel lain tidak")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":

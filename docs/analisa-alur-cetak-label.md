@@ -151,6 +151,13 @@ Respons per pesanan: `salesorder_id, shipment_no, tracking_no, shipper, internal
 **a.** `GET reports/shipping-label/?ids[0]=…&ids[1]=…&tz=Asia/Jakarta`
 → `{"status":"ok","url":"https://report-prod.jubelio.com/?&token=…","title":"Label Pengiriman"}`
 
+Untuk pesanan **Lazada** (`source == 4`), web menambahkan `&isFromLz=true` →
+`"title":"Label Pengiriman Lazada"` (template report lain; parameter `list` berisi
+`logo_delivery`, `shipper`, dst. per pesanan). Tanpa `isFromLz` Jubelio memberi template
+umum sehingga PDF Lazada beda dari unduhan manual (sniff 2026-10-07, insiden label Lazada).
+Program menambahkannya otomatis di `lanjutkan_picklist()` bila semua pesanan yang dicetak
+berasal dari Lazada.
+
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`
 
