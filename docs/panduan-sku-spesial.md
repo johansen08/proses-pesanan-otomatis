@@ -189,6 +189,10 @@ perlu sorting tambahan.
 **Nama file berbeda tergantung jumlah resi yang benar-benar keluar** (dibandingkan ke `MIN_RESI`,
 bukan nilai baru):
 
+- **Detail per kurir (TIPE 2 & 3)**: kalau `--kurir jnt`/`spx` dipakai, nama file disisipi akhiran
+  kurir — `detail-resi-spesial-jnt.xlsx` / `detail-resi-spesial-spx.xlsx` (dan
+  `detail-resi-bukan-spesial-jnt.xlsx` / `-spx.xlsx`). Tanpa `--kurir` (TIPE 1 & 4) tetap
+  `detail-resi-spesial.xlsx`. Lihat `nama_detail_per_kurir()` di `src/proses_label.py`.
 - **`detail-resi-spesial.xlsx`** - jumlah baris (resi keluar) di picklist itu masih **>= MIN_RESI**:
   SKU tetap sah spesial.
 - **`detail-resi-bukan-spesial.xlsx`** - jumlah baris **< MIN_RESI** (mis. dari 4 pesanan yang

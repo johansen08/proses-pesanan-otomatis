@@ -16,6 +16,11 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
   --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
                         bagian "kombinasi"), SEMUA PDF ikut (mis.
                         KOMBINASI-REGULER-LANTAI2).
+  --jenis spesial-jnt / spesial-spx / satuan-jnt / satuan-spx / kombinasi-jnt /
+  kombinasi-spx -> sama dengan tiga jenis di atas, tapi HANYA subfolder kurir itu
+                        (JNT_SPESIAL, SPX_SATUAN, dst - hasil --kurir jnt/spx, TIPE 2 & 3).
+  --jenis spx-pagi   -> subfolder SPX_PAGI (--shopee-pagi), SEMUA PDF ikut (SHOPEE-PAGI-LANTAI*).
+  --jenis jnt-siang  -> subfolder JNT_SIANG (--jnt-siang), SEMUA PDF ikut (JNT-SIANG-LANTAI*).
 Semua jenis dicetak BERURUT (nomor PICK terkecil dulu, nomor diekstrak dari awal nama
 file - lihat POLA_SPESIAL/POLA_PICK) ke printer pilihan lewat SumatraPDF (-print-to,
 -silent).
@@ -76,12 +81,17 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from proses_label import (KURIR_LABEL_FILE, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
-                           SUBFOLDER_URGENT, TAG_SPESIAL)
+from proses_label import (KURIR_LABEL_FILE, SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI,
+                           SUBFOLDER_SATUAN, SUBFOLDER_SPX_PAGI, SUBFOLDER_URGENT,
+                           TAG_SPESIAL)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
 FOLDER_LABEL = ROOT / "label-pengiriman"
 FOLDER_LOG = ROOT / "logs"
+# Daftar path label yang SUDAH berhasil dicetak (1 path absolut per baris, ditambah tiap file
+# sukses). Cetak berikutnya melewati file di daftar ini supaya tidak tercetak dobel waktu
+# folder sesi dipakai bersama beberapa TIPE; --cetak-ulang-semua mengabaikannya.
+FILE_SUDAH_DICETAK = FOLDER_LOG / "sudah_dicetak.txt"
 
 POLA_TANGGAL_SESI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # Penanda SPESIAL ini dibuat proses_label.py (lihat TAG_SPESIAL & _tag_spesial()) - HANYA
@@ -120,6 +130,15 @@ JENIS_LABEL: dict[str, list[str]] = {
                                      for v in KURIR_LABEL_FILE.values()],
     "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
                                            for v in KURIR_LABEL_FILE.values()],
+    # Varian per kurir (TIPE 2 & 3, kurir dipisah): HANYA subfolder kurir itu, supaya J&T dan
+    # SPX bisa dicetak terpisah (printer/rak/kurir pickup berbeda). Jenis tanpa akhiran kurir
+    # di atas tetap menggabung semuanya.
+    **{f"{dasar}-{kode}": [f"{KURIR_LABEL_FILE[kode]}_{sub}"]
+       for dasar, sub in (("spesial", TAG_SPESIAL), ("satuan", SUBFOLDER_SATUAN),
+                          ("kombinasi", SUBFOLDER_KOMBINASI))
+       for kode in KURIR_LABEL_FILE},
+    "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
+    "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
 }
 
 LOKASI_SUMATRA_UMUM = [
@@ -191,7 +210,7 @@ def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> lis
     dipakai cek nomor terlompat, karena nomor PICK jenis lain di subfolder yang sama (mis.
     Lazada) bukan nomor yang hilang. Kosong (bukan error) kalau belum ada subfolder
     sama sekali."""
-    pola = POLA_SPESIAL if jenis == "spesial" else POLA_PICK
+    pola = POLA_SPESIAL if jenis.startswith("spesial") else POLA_PICK
     filter_nama = FILTER_NAMA.get(jenis) if saring_nama else None
     berlabel = []
     for nama_folder in JENIS_LABEL[jenis]:
@@ -207,13 +226,53 @@ def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> lis
     return [f for _, f in berlabel]
 
 
-def cari_nomor_terlompat(file_pdf: list[Path], jenis: str) -> list[int]:
+def baca_sudah_dicetak(file_catatan: Path | None = None) -> set[str]:
+    """Path (string absolut, hasil resolve()) label yang sudah tercatat berhasil dicetak."""
+    file_catatan = file_catatan or FILE_SUDAH_DICETAK
+    if not file_catatan.is_file():
+        return set()
+    return {b.strip() for b in file_catatan.read_text(encoding="utf-8").splitlines() if b.strip()}
+
+
+def catat_sudah_dicetak(file: Path, file_catatan: Path | None = None) -> None:
+    file_catatan = file_catatan or FILE_SUDAH_DICETAK
+    file_catatan.parent.mkdir(exist_ok=True)
+    with open(file_catatan, "a", encoding="utf-8") as f:
+        f.write(str(file.resolve()) + "\n")
+
+
+def saring_belum_dicetak(file_pdf: list[Path],
+                         sudah: set[str]) -> tuple[list[Path], list[Path]]:
+    """Pisahkan `file_pdf` (urutan dipertahankan) jadi (belum dicetak, sudah dicetak)."""
+    belum, lewat = [], []
+    for f in file_pdf:
+        (lewat if str(f.resolve()) in sudah else belum).append(f)
+    return belum, lewat
+
+
+def nomor_pick_sesi(folder_sesi: Path) -> set[int]:
+    """SEMUA nomor PICK yang ada di folder sesi (root & semua subfolder, jenis apa pun).
+    Dipakai cari_nomor_terlompat(): nomor yang tidak ada di daftar satu jenis tapi ada di
+    jenis/kurir lain di sesi yang sama BUKAN nomor hilang (nomor PICK dipakai bersama J&T,
+    SPX, spesial, reguler, dst)."""
+    nomor = set()
+    for f in folder_sesi.rglob("*.pdf"):
+        cocok = POLA_PICK.match(f.name)
+        if cocok:
+            nomor.add(int(cocok.group(1)))
+    return nomor
+
+
+def cari_nomor_terlompat(file_pdf: list[Path], jenis: str,
+                         nomor_ada: set[int] | None = None) -> list[int]:
     """Cari nomor PICK yang terlompat (hilang) di antara nomor PICK terkecil dan
     terbesar pada `file_pdf` (hasil daftar_label(), sudah urut naik) - tanda
     kemungkinan ada label yang tidak ikut tercetak/tersalin ke folder ini. `jenis`
-    menentukan pola ekstraksi nomor PICK (sama seperti daftar_label()). Return list
+    menentukan pola ekstraksi nomor PICK (sama seperti daftar_label()). `nomor_ada`: nomor
+    PICK yang ada di tempat lain di sesi yang sama (lihat nomor_pick_sesi()) - tidak dihitung
+    hilang. Return list
     nomor yang hilang, urut naik (kosong kalau berurut sempurna atau <2 file)."""
-    pola = POLA_SPESIAL if jenis == "spesial" else POLA_PICK
+    pola = POLA_SPESIAL if jenis.startswith("spesial") else POLA_PICK
     nomor = []
     for f in file_pdf:
         cocok = pola.match(f.name)
@@ -222,7 +281,7 @@ def cari_nomor_terlompat(file_pdf: list[Path], jenis: str) -> list[int]:
     if len(nomor) < 2:
         return []
     lengkap = set(range(nomor[0], nomor[-1] + 1))
-    return sorted(lengkap - set(nomor))
+    return sorted(lengkap - set(nomor) - (nomor_ada or set()))
 
 
 # ============================================================== 2. SumatraPDF & printer
@@ -363,6 +422,7 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
         durasi = time.monotonic() - mulai
         if ok:
             log.info("OK cetak %s (%.1f detik)", f.name, durasi)
+            catat_sudah_dicetak(f)
             berhasil.append(f)
         else:
             log.warning("DILEWATI %s (printer bermasalah, dipilih lewati oleh user)", f.name)
@@ -410,6 +470,8 @@ def main() -> int:
                     help="Tanpa tanya Y/N sebelum mulai cetak (tetap tanya pilih printer; "
                          "tetap tanya juga kalau ada nomor PICK terlompat, lihat "
                          "cari_nomor_terlompat())")
+    ap.add_argument("--cetak-ulang-semua", action="store_true",
+                    help="Cetak juga label yang sudah tercatat tercetak (logs/sudah_dicetak.txt)")
     ap.add_argument("--ulang", type=Path,
                     help="Cetak ULANG hanya file dari daftar gagal sebelumnya "
                          "(logs/gagal_cetak_*.txt), lewati pencarian folder sesi")
@@ -427,18 +489,29 @@ def main() -> int:
             if not file_pdf:
                 log.info("Tidak ada label %s di folder ini.", args.jenis.upper())
                 return 0
+            if not args.cetak_ulang_semua:
+                file_pdf, sudah_tercetak = saring_belum_dicetak(file_pdf, baca_sudah_dicetak())
+                if sudah_tercetak:
+                    log.info("%d label %s dilewati karena sudah tercetak (pakai "
+                             "--cetak-ulang-semua untuk mencetak ulang).",
+                             len(sudah_tercetak), args.jenis.upper())
+                if not file_pdf:
+                    log.info("Semua label %s di folder ini sudah tercetak.", args.jenis.upper())
+                    return 0
             log.info("Ditemukan %d label %s (urut cetak):", len(file_pdf), args.jenis.upper())
             for f in file_pdf:
                 log.info("  %s", f.name)
 
             terlompat = cari_nomor_terlompat(
-                daftar_label(folder, args.jenis, saring_nama=False), args.jenis)
+                daftar_label(folder, args.jenis, saring_nama=False), args.jenis,
+                nomor_pick_sesi(folder))
             if terlompat:
                 log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
                            len(terlompat), ", ".join(str(n) for n in terlompat))
                 print()
                 print(f"!!! PERINGATAN: ada {len(terlompat)} nomor PICK yang terlompat/hilang "
-                     "di antara label SPESIAL folder ini:")
+                     "di antara label folder sesi ini "
+                     "(nomor yang ada di jenis/kurir lain sudah tidak dihitung):")
                 print("    " + ", ".join(str(n) for n in terlompat))
                 print("    Kemungkinan ada label yang belum masuk folder ini (mis. masih dibuat, "
                      "gagal, atau beda folder sesi) - cek dulu sebelum lanjut.")

@@ -18,6 +18,11 @@ sendiri:
 | `spesial` | `cetak-label-spesial.bat` | `SPESIAL`, `JNT_SPESIAL`, `SPX_SPESIAL` — hanya file bertanda `_SPESIAL_` | `--label` (Alur 1, SKU spesial) |
 | `gtl-sicepat` | `cetak-label-gtl-sicepat.bat` | `URGENT` (tanpa varian kurir) — hanya file `GTL-SICEPAT-*` | `--urgent --channel gtl-sicepat` (Alur 2) |
 | `satuan` | `cetak-label-satuan.bat` | `SATUAN`, `JNT_SATUAN`, `SPX_SATUAN` — semua PDF | `--reguler --bagian 1qty` (Alur 3) |
+| `spesial-jnt` / `spesial-spx` | `cetak-label-spesial-jnt.bat` / `-spx.bat` | `JNT_SPESIAL` / `SPX_SPESIAL` saja (TIPE 2 & 3) | `--label --kurir jnt/spx` |
+| `satuan-jnt` / `satuan-spx` | `cetak-label-satuan-jnt.bat` / `-spx.bat` | `JNT_SATUAN` / `SPX_SATUAN` saja | `--reguler --bagian 1qty --kurir jnt/spx` |
+| `kombinasi-jnt` / `kombinasi-spx` | `cetak-label-kombinasi-jnt.bat` / `-spx.bat` | `JNT_KOMBINASI` / `SPX_KOMBINASI` saja | `--reguler --bagian kombinasi --kurir jnt/spx` |
+| `spx-pagi` | `cetak-label-spx-pagi.bat` | `SPX_PAGI` (Shopee Pagi, `SHOPEE-PAGI-LANTAI*`) — sesi lama (sebelum 2026-10-07) masih di root folder sesi, tidak ikut | `--shopee-pagi` |
+| `jnt-siang` | `cetak-label-jnt-siang.bat` | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
 | `kombinasi` | `cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
 Untuk jenis `satuan`/`kombinasi`, nama file labelnya variatif (mis. `1QTY-REGULER-2A`,
@@ -169,3 +174,14 @@ mulai), dan daftar berhasil/gagal (bagian 5) jadi jaring pengaman untuk kasus it
 | `Tidak ada folder sesi (YYYY-MM-DD/N)` | Belum ada label yang dibuat hari itu lewat alur terkait | Jalankan alur yang sesuai (`--label`/`--urgent`/`--reguler --jalankan`) dulu sampai label PDF terbentuk |
 | `Tidak ada label <JENIS> di folder ini.` | Folder sesi ada, tapi tidak ada label jenis itu (mis. tidak ada pesanan urgent hari itu) | Normal, bukan error — cek jenis/folder sesi yang dimaksud sudah benar |
 | Program tidak tahu kertas habis sampai dicek manual | Printer tidak melapor status ke Windows Print Spooler (lihat bagian 4) | Pantau fisik printer saat sesi cetak besar; andalkan daftar gagal (bagian 5) sebagai jaring pengaman |
+
+## Label yang sudah tercetak & nomor PICK terlompat (revisi 2026-10-07)
+
+- **Tidak tercetak dobel**: tiap label yang berhasil dicetak dicatat di `logs/sudah_dicetak.txt`
+  (path absolut). Cetak berikutnya (folder sesi sama dipakai banyak TIPE) melewatinya dan
+  hanya mencetak yang baru. Tambahkan `--cetak-ulang-semua` untuk mencetak ulang semuanya,
+  atau hapus baris/file catatannya untuk mencetak ulang sebagian.
+- **Nomor PICK terlompat** kini hanya menghitung nomor yang tidak ada di MANA PUN di folder
+  sesi (semua subfolder/jenis/kurir). Nomor yang "bolong" karena milik J&T/SPX/jenis lain
+  tidak lagi memicu peringatan palsu.
+- **Shopee Pagi** (`--shopee-pagi`) kini hanya mengambil kurir **SPX** (`KURIR_FILTER_SHOPEE_PAGI`).

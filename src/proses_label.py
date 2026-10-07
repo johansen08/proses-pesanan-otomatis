@@ -133,6 +133,8 @@ TAG_SPESIAL = "SPESIAL"
 SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada & GTL-SiCepat (kedua skenario)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
+SUBFOLDER_SPX_PAGI = "SPX_PAGI"        # Shopee Pagi (SPX <= 12.00), nama file tetap SHOPEE-PAGI-*
+SUBFOLDER_JNT_SIANG = "JNT_SIANG"      # J&T Resi Siang (TikTok Shop <= 15.00), nama file JNT-SIANG-*
 
 
 def _filter_kurir(kurir: str | None, gabungan: list[str]) -> list[str]:
@@ -209,6 +211,9 @@ LANTAI_RAK = ["1", "2", "3"]
 # maksimal jam 12:00 HARI INI, digabung jadi 1 picklist (dipecah kalau > MAKS_PESANAN_PICKLIST).
 JAM_CUTOFF_SHOPEE_PAGI = 12
 LABEL_SHOPEE_PAGI = "SHOPEE-PAGI"
+# Hanya kurir SPX yang ikut (sesuai namanya "SPX Resi Pagi"): pesanan Shopee kurir lain tidak
+# ikut picklist ini - mereka diproses alur reguler biasa (KURIR_FILTER_REGULER).
+KURIR_FILTER_SHOPEE_PAGI = ["spx"]
 WIB = ZoneInfo("Asia/Jakarta")
 
 # Picklist "J&T Resi Siang" (lintas SKU): dijalankan MANUAL, 1x sehari jam 15:00 - bukan
@@ -279,6 +284,19 @@ KOLOM_RIWAYAT = ["Waktu", "SKU", "No Picklist", "Total Pesanan", "Resi Keluar",
 NAMA_DETAIL_SPESIAL = "detail-resi-spesial.xlsx"
 NAMA_DETAIL_BUKAN_SPESIAL = "detail-resi-bukan-spesial.xlsx"
 KOLOM_DETAIL_SPESIAL = ["No Picklist", "SKU", "No Pesanan", "No Resi"]
+
+
+def nama_detail_per_kurir(nama_dasar: str, tag: str | None) -> str:
+    """Nama file detail resi untuk `tag` picklist: kalau --kurir jnt/spx dipakai (tag diawali
+    JNT_/SPX_, lihat _tag_spesial()) disisipi akhiran kurir sebelum ekstensi, mis.
+    detail-resi-spesial.xlsx -> detail-resi-spesial-jnt.xlsx, supaya resi J&T dan SPX
+    (TIPE 2 & 3, kurir dipisah) tidak bercampur di 1 file. Tanpa kurir (TIPE 1 & 4, digabung)
+    nama dasar apa adanya."""
+    for kode in KURIR_LABEL_FILE.values():
+        if tag and tag.startswith(f"{kode}_"):
+            dasar, ekstensi = nama_dasar.rsplit(".", 1)
+            return f"{dasar}-{kode.lower()}.{ekstensi}"
+    return nama_dasar
 
 log = logging.getLogger("sku-spesial")
 
@@ -1197,7 +1215,7 @@ def ambil_pesanan_shopee_pagi(k: Klien, jam: int = JAM_CUTOFF_SHOPEE_PAGI,
     HARI INI. Dipakai untuk picklist yang dijalankan manual 1x sehari jam 13:00 (mis. resi
     yang masuk sebelum jam 12 siang harus sudah masuk picklist ini). `sekarang`: dipakai
     tes, default waktu sungguhan (WIB) saat dipanggil."""
-    pesanan = ambil_pesanan_channel(k, [CHANNEL_ID_SHOPEE])
+    pesanan = ambil_pesanan_channel(k, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI)
     batas = (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
     hasil = []
     for o in pesanan:
@@ -1218,7 +1236,7 @@ def rencana_shopee_pagi(k: Klien) -> None:
     log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
              "per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
     per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
-                                            couriers=None)
+                                            couriers=KURIR_FILTER_SHOPEE_PAGI)
     for lt, sub in per_lt.items():
         batch = bagi_batch([o["salesorder_id"] for o in sub])
         log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
@@ -1234,10 +1252,11 @@ def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_shopee_pagi(k)
     per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
-                                            couriers=None)
+                                            couriers=KURIR_FILTER_SHOPEE_PAGI)
     subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
     return _proses_subkelompok(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, subkelompok,
-                               file_riwayat, folder_label, kurir=None, prefix="")
+                               file_riwayat, folder_label, kurir=None, prefix="",
+                               subfolder=SUBFOLDER_SPX_PAGI)
 
 
 # ==================================================== 1e. picklist J&T Resi Siang
@@ -1289,7 +1308,8 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[d
                                             couriers=["j&t"])
     subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
     return _proses_subkelompok(k, "J&T Resi Siang", LABEL_JNT_SIANG, subkelompok,
-                               file_riwayat, folder_label, kurir=None, prefix="")
+                               file_riwayat, folder_label, kurir=None, prefix="",
+                               subfolder=SUBFOLDER_JNT_SIANG)
 
 
 # ============================================================== 2. picklist
@@ -1903,8 +1923,9 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
         log.info("  Label: %s", file_label)
 
     if tag and tag.endswith(TAG_SPESIAL) and baris_ada_resi:
-        nama_detail = (NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
-                       else NAMA_DETAIL_BUKAN_SPESIAL)
+        nama_detail = nama_detail_per_kurir(
+            NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
+            else NAMA_DETAIL_BUKAN_SPESIAL, tag)
         catat_detail_spesial(folder_label, nama_detail, [
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])

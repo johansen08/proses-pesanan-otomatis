@@ -92,6 +92,8 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
 | `cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `cetak-label-{spesial,satuan,kombinasi}-{jnt,spx}.bat` | Sama, tapi HANYA label 1 kurir (hasil TIPE 2 & 3, kurir dipisah) — `--jenis spesial-jnt` dst |
+| `cetak-label-spx-pagi.bat` / `cetak-label-jnt-siang.bat` | Cetak bulk label Shopee Pagi (subfolder `SPX_PAGI`) / J&T Resi Siang (subfolder `JNT_SIANG`) |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
 | `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) + akun IRESIS (`IRESIS_USERNAME`, `IRESIS_PASSWORD`) |

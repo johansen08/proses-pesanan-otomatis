@@ -359,6 +359,38 @@ def uji_lewati_jika_kurang_dari_3():
     print("  < 3 pesanan: SKU dilewati tanpa membuat picklist")
 
 
+def uji_shopee_pagi_dan_jnt_siang_disimpan_di_subfolder_sendiri():
+    diterima = {}
+    asli = (pl.ambil_pesanan_shopee_pagi, pl.ambil_pesanan_jnt_siang,
+            pl._kelompok_kombinasi_per_lantai, pl._proses_subkelompok)
+    pl.ambil_pesanan_shopee_pagi = lambda k: []
+    pl.ambil_pesanan_jnt_siang = lambda k: []
+    pl._kelompok_kombinasi_per_lantai = lambda *a, **kw: {}
+
+    def stub(k, nama, label, sub, riwayat, folder, **kw):
+        diterima[label] = kw.get("subfolder")
+        return []
+    pl._proses_subkelompok = stub
+    try:
+        pl.proses_shopee_pagi(None, Path("r.xlsx"), Path("f"))
+        pl.proses_jnt_siang(None, Path("r.xlsx"), Path("f"))
+    finally:
+        (pl.ambil_pesanan_shopee_pagi, pl.ambil_pesanan_jnt_siang,
+         pl._kelompok_kombinasi_per_lantai, pl._proses_subkelompok) = asli
+    assert diterima == {pl.LABEL_SHOPEE_PAGI: "SPX_PAGI", pl.LABEL_JNT_SIANG: "JNT_SIANG"}, diterima
+    print("  Shopee Pagi -> subfolder SPX_PAGI, J&T Resi Siang -> subfolder JNT_SIANG")
+
+
+def uji_nama_detail_per_kurir():
+    f = pl.nama_detail_per_kurir
+    assert f(pl.NAMA_DETAIL_SPESIAL, "SPESIAL") == "detail-resi-spesial.xlsx"
+    assert f(pl.NAMA_DETAIL_SPESIAL, "JNT_SPESIAL") == "detail-resi-spesial-jnt.xlsx"
+    assert f(pl.NAMA_DETAIL_SPESIAL, "SPX_SPESIAL") == "detail-resi-spesial-spx.xlsx"
+    assert f(pl.NAMA_DETAIL_BUKAN_SPESIAL, "SPX_SPESIAL") == "detail-resi-bukan-spesial-spx.xlsx"
+    assert f(pl.NAMA_DETAIL_SPESIAL, None) == "detail-resi-spesial.xlsx"
+    print("  nama_detail_per_kurir: gabungan tetap polos, J&T/SPX diberi akhiran -jnt/-spx")
+
+
 def uji_detail_resi_spesial_tercatat():
     j = JubelioPalsu(_html_label())
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
@@ -1357,7 +1389,7 @@ def uji_shopee_pagi_filter_channel_dan_jam_cutoff():
             pesanan = pl.ambil_pesanan_shopee_pagi(k, sekarang=sekarang)
             per_lt = pl._kelompok_kombinasi_per_lantai(k, pesanan,
                                                        channel_ids=[pl.CHANNEL_ID_SHOPEE],
-                                                       couriers=None)
+                                                       couriers=pl.KURIR_FILTER_SHOPEE_PAGI)
             subkelompok = {pl._label_lantai(lt): p for lt, p in per_lt.items()}
             hasil = pl._proses_subkelompok(k, "Shopee Pagi", pl.LABEL_SHOPEE_PAGI, subkelompok,
                                            riwayat, Path(d) / "label", kurir=None, prefix="")
@@ -1889,7 +1921,7 @@ def uji_lanjutkan_nama_subfolder_dan_sesi_sama_dengan_alur_asal():
         pdf = Path(baris["File Label"])
         assert pdf.parent.name == "SPX_SPESIAL", pdf
         assert pdf.name.startswith("PICK-000154839_SPX_SPESIAL_MX-5054-3_"), pdf.name
-        assert (Path(d) / pl.NAMA_DETAIL_BUKAN_SPESIAL).exists(), \
+        assert (Path(d) / "detail-resi-bukan-spesial-spx.xlsx").exists(), \
             "SKU spesial yang dilanjutkan tetap dicatat ke detail resi seperti alur aslinya"
     print("  --lanjut --tag SPX_SPESIAL: format nama & subfolder SKU spesial sama dgn Alur 1")
 

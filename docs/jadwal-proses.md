@@ -241,7 +241,7 @@ tertentu, cuma beda kurir dan beda jam cutoff:
 | | SPX Resi Pagi | J&T Resi Siang |
 |---|---|---|
 | Channel | Shopee | TikTok Shop |
-| Kurir | (tidak difilter) | J&T saja |
+| Kurir | SPX saja (kurir Shopee lain diproses alur reguler) | J&T saja |
 | Jam cutoff (WIB) | ≤ 12.00 | ≤ 15.00 |
 | Dipicu di | TIPE 2, tepat jam 13.00 | TIPE 4, tepat jam 15.00 |
 | CLI | `--shopee-pagi` | `--jnt-siang` |

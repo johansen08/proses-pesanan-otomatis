@@ -175,6 +175,70 @@ def uji_daftar_label_kombinasi_gabung_variasi_kurir():
              "urut nomor PICK naik")
 
 
+def uji_daftar_label_per_kurir_hanya_subfolder_kurir_itu():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        for sub, nama in (("JNT_SPESIAL", "PICK-000155622_JNT_SPESIAL_TRC4_2026-10-01_080320.pdf"),
+                          ("SPX_SPESIAL", "PICK-000155700_SPX_SPESIAL_TRC9_2026-10-01_090000.pdf"),
+                          ("JNT_SATUAN", "PICK-000155800_JNT-1QTY-REGULER-2A_2026-10-01_091500.pdf"),
+                          ("SPX_SATUAN", "PICK-000155801_SPX-1QTY-REGULER-2A_2026-10-01_091600.pdf"),
+                          ("JNT_KOMBINASI", "PICK-000155900_JNT-KOMBINASI-REGULER-LANTAI1_2026-10-01_092000.pdf"),
+                          ("SPX_KOMBINASI", "PICK-000155901_SPX-KOMBINASI-REGULER-LANTAI1_2026-10-01_092100.pdf"),
+                          ("SPX_PAGI", "PICK-000156000_SHOPEE-PAGI-LANTAI1_2026-10-01_130000.pdf"),
+                          ("JNT_SIANG", "PICK-000156100_JNT-SIANG-LANTAI2_2026-10-01_150000.pdf")):
+            (folder / sub).mkdir()
+            _buat(folder / sub, nama)
+        harapan = {
+            "spesial-jnt": ["PICK-000155622_JNT_SPESIAL_TRC4_2026-10-01_080320.pdf"],
+            "spesial-spx": ["PICK-000155700_SPX_SPESIAL_TRC9_2026-10-01_090000.pdf"],
+            "satuan-jnt": ["PICK-000155800_JNT-1QTY-REGULER-2A_2026-10-01_091500.pdf"],
+            "satuan-spx": ["PICK-000155801_SPX-1QTY-REGULER-2A_2026-10-01_091600.pdf"],
+            "kombinasi-jnt": ["PICK-000155900_JNT-KOMBINASI-REGULER-LANTAI1_2026-10-01_092000.pdf"],
+            "kombinasi-spx": ["PICK-000155901_SPX-KOMBINASI-REGULER-LANTAI1_2026-10-01_092100.pdf"],
+            "spx-pagi": ["PICK-000156000_SHOPEE-PAGI-LANTAI1_2026-10-01_130000.pdf"],
+            "jnt-siang": ["PICK-000156100_JNT-SIANG-LANTAI2_2026-10-01_150000.pdf"],
+        }
+        for jenis, nama in harapan.items():
+            hasil = [f.name for f in ps.daftar_label(folder, jenis)]
+            assert hasil == nama, (jenis, hasil)
+        # jenis gabungan tetap menggabung kedua kurir
+        assert len(ps.daftar_label(folder, "spesial")) == 2
+        assert len(ps.daftar_label(folder, "satuan")) == 2
+        assert len(ps.daftar_label(folder, "kombinasi")) == 2
+        print("  daftar_label per kurir/spx-pagi/jnt-siang: hanya subfolder masing-masing; "
+              "jenis gabungan tetap menggabung J&T+SPX")
+
+
+def uji_nomor_terlompat_abaikan_nomor_yang_ada_di_jenis_kurir_lain():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        for sub, nama in (("JNT_SPESIAL", "PICK-000000100_JNT_SPESIAL_A_2026-10-01_080000.pdf"),
+                          ("SPX_SPESIAL", "PICK-000000101_SPX_SPESIAL_B_2026-10-01_080100.pdf"),
+                          ("JNT_SPESIAL", "PICK-000000102_JNT_SPESIAL_C_2026-10-01_080200.pdf"),
+                          ("SATUAN", "PICK-000000103_1QTY_2026-10-01_080300.pdf")):
+            (folder / sub).mkdir(exist_ok=True)
+            _buat(folder / sub, nama)
+        jnt = ps.daftar_label(folder, "spesial-jnt", saring_nama=False)
+        assert ps.cari_nomor_terlompat(jnt, "spesial-jnt") == [101]
+        assert ps.cari_nomor_terlompat(jnt, "spesial-jnt", ps.nomor_pick_sesi(folder)) == []
+        assert ps.cari_nomor_terlompat(jnt, "spesial-jnt", {100, 102}) == [101]
+        print("  cari_nomor_terlompat: nomor yang ada di kurir/jenis lain di sesi sama tidak dihitung hilang")
+
+
+def uji_sudah_dicetak_dilewati_dan_urutan_dipertahankan():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        a, b, c = (folder / n for n in ("PICK-1_a.pdf", "PICK-2_b.pdf", "PICK-3_c.pdf"))
+        _buat(folder, a.name, b.name, c.name)
+        catatan = folder / "logs" / "sudah.txt"
+        assert ps.baca_sudah_dicetak(catatan) == set()
+        ps.catat_sudah_dicetak(b, catatan)
+        sudah = ps.baca_sudah_dicetak(catatan)
+        belum, lewat = ps.saring_belum_dicetak([a, b, c], sudah)
+        assert belum == [a, c] and lewat == [b], (belum, lewat)
+        print("  sudah_dicetak: file tercatat dilewati, sisanya tetap urut")
+
+
 def uji_cari_nomor_terlompat_berurut_sempurna():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
