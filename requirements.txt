@@ -1,7 +1,7 @@
 pandas
 openpyxl
 reportlab
-pypdf        # skala 68% label Lazada (A5 -> kertas 100x150 mm), lihat proses_label.skala_label_lazada
+pypdfium2    # render PDF label Lazada (A5) ke gambar skala 68% untuk dicetak, lihat print_spesial.render_label_lazada
 requests
 tzdata       # database zona waktu utk zoneinfo (Windows tidak punya bawaan) - dipakai picklist Shopee Pagi
 playwright   # hanya untuk sniff/sniff_jubel_v2.py

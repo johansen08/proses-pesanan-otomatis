@@ -81,7 +81,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/jubelio.py` | Login API Jubelio, download Excel laporan, ambil nilai pesanan (tanpa browser) |
 | `src/sku_spesial.py` | Baca Excel, hitung SKU spesial, buat PDF |
 | `src/proses_label.py` | Picklist → picking → resi → label PDF (SKU spesial per SKU, urgent/reguler/Shopee Pagi/J&T Resi Siang per channel), catat riwayat |
-| `src/print_spesial.py` | Cetak bulk label (SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
+| `src/print_spesial.py` | Cetak bulk label (SPESIAL/GTL-SICEPAT/LAZADA/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF (Lazada: lewat driver Windows, lihat `--jenis`) |
 | `src/peringatan_picklist.py` | Deteksi nomor picklist yang terlompat (picklist batal/gagal dibuat karena Jubelio error) |
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
 | `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
@@ -202,8 +202,10 @@ reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
   Pengiriman Lazada"** (program mengirim `isFromLz=true` ke `reports/shipping-label/`, sama
   seperti web) yang berukuran A5 dan disimpan apa adanya. Cetaknya lewat
   `cetak-label-lazada.bat`, yang memperkecil tiap label ke **skala custom 68%** di kertas
-  100x150 mm tepat sebelum mencetak (`skala_label_lazada()`, pakai `pypdf`), sama dengan cetak
-  manual di web. Detailnya di `docs/analisa-alur-cetak-label.md` bagian 6.
+  100x150 mm tepat sebelum mencetak, sama dengan cetak manual di web. Khusus Lazada TIDAK
+  lewat SumatraPDF (skalanya tidak diterapkan): PDF dirender ke gambar 68% (`pypdfium2`) lalu
+  dicetak lewat driver Windows (`src/cetak_gambar.ps1`). Detailnya di
+  `docs/analisa-alur-cetak-label.md` bagian 6.
 - **GTL-SiCepat**: semua pesanan kurir **GTL** atau **SiCepat**, **lintas channel** (TIDAK
   difilter channel). Urgent-nya ditentukan kurir, bukan channel, jadi pesanan Tokopedia
   **asli** (`channel_id=128`) *dan* "Shop | Tokopedia" (`channel_id=131076`, nama lain TikTok

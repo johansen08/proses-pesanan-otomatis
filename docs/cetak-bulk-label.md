@@ -33,11 +33,14 @@ hanya `PICK-..._LAZADA_...`. Pengecekan "nomor PICK terlompat" dihitung dari SEM
 dianggap hilang.
 
 **`lazada` memakai skala custom 68%.** Label Lazada disimpan sebagai A5 (148x210 mm, template
-"Label Pengiriman Lazada"), sedangkan kertas label 100x150 mm. Sebelum dicetak, tiap PDF
-diperkecil ke 68% di file sementara (rata tengah, rata atas; file asli di folder sesi tidak
-diubah), lalu dicetak dengan `noscale` — SumatraPDF tidak punya skala persen di command line.
-Detailnya di `docs/analisa-alur-cetak-label.md` bagian 6. Pastikan kertas printer diset
-100x150 mm. File lama yang sudah 100x150 mm tidak diperkecil lagi.
+"Label Pengiriman Lazada"), sedangkan kertas label 100x150 mm. Jenis ini **tidak memakai
+SumatraPDF** (skalanya tidak diterapkan di printer): tiap PDF dirender ke gambar pada skala
+68% sesuai resolusi printer lalu dicetak lewat driver Windows (`src/cetak_gambar.ps1`) di
+kertas 100x150 mm, rata tengah dan atas; file asli di folder sesi tidak diubah. Karena itu
+SumatraPDF tidak wajib untuk `cetak-label-lazada.bat`, tetapi `pypdfium2` wajib terpasang
+(`pip install -r requirements.txt`). Pilih printer & konfirmasi Y/N tetap muncul seperti
+`.bat` lain. Detailnya di `docs/analisa-alur-cetak-label.md` bagian 6. File lama yang sudah
+100x150 mm tidak diperkecil lagi.
 
 **Program ini TIDAK membuat picklist/label baru.** Fungsinya cuma mencetak ulang
 PDF label yang sudah ada. Picklist & label itu sendiri dibuat lewat alur

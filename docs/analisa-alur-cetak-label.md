@@ -160,12 +160,22 @@ berasal dari Lazada.
 
 Template Lazada berukuran **A5 (148x210 mm)**, bukan 100x150 mm seperti template umum, jadi
 saat dicetak manual di web dipakai skala custom **68%** (100/148 = 67,6%). SumatraPDF tidak
-punya skala persen di command line, jadi `cetak-label-lazada.bat` (`print_spesial.py --jenis
-lazada`) memperkecil tiap halaman lewat `skala_label_lazada()` (pypdf) ke 68% di atas kertas
-100x150 mm (rata tengah, rata atas) di file sementara, lalu mencetaknya `noscale`. PDF di
-folder sesi tetap A5 asli (sama dengan unduhan manual) - jangan diperkecil saat diunduh,
-nanti terkecil dua kali. Halaman yang sudah <= 100x150 mm (file lama) dibiarkan. Kalau pypdf
-tidak ada/PDF tak terbaca, PDF asli dicetak apa adanya dengan peringatan di log.
+punya skala persen di command line (dan skala hasil PDF yang sudah diperkecil pun terbukti
+tidak diterapkan di printer), jadi `cetak-label-lazada.bat` (`print_spesial.py --jenis lazada`)
+TIDAK memakai SumatraPDF:
+
+1. `render_label_lazada()` (pypdfium2) merender tiap halaman PDF ke PNG pada skala 68% dengan
+   resolusi SAMA dengan printer (`dpi_printer()`, mis. 203 dpi untuk Blueprint BP-TD110D) -
+   1 piksel = 1 dot, tanpa antialias lalu dithering hitam-putih supaya garis barcode tajam &
+   logo berwarna tidak hilang.
+2. `src/cetak_gambar.ps1` (PowerShell + System.Drawing) mencetak PNG itu lewat driver Windows
+   pada kertas 100x150 mm (memakai ukuran kertas bawaan printer yang cocok), 1 PDF = 1 print
+   job, ditempel di pojok kiri-atas (rata tengah horizontal) pada ukuran sebenarnya tanpa
+   skala lagi. Hasilnya diuji sama dengan cetak Chrome skala 68 (konten mulai ±1 mm dari kiri,
+   ±4 mm dari atas, lebar 98 mm).
+
+PDF di folder sesi tetap A5 asli (sama dengan unduhan manual) - jangan diperkecil saat
+diunduh, nanti terkecil dua kali. Halaman yang sudah <= 100x150 mm (file lama) dirender 100%.
 
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`
