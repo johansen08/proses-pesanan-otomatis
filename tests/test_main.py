@@ -262,6 +262,23 @@ def uji_upload_iresis_mode_uji_gagal_dan_sukses():
     print("  --upload-iresis: mode uji hanya unduh; gagal -> exit 1 tanpa menghentikan TIPE")
 
 
+def uji_jam_malam_16_sampai_0659():
+    for h, harapan in ((6, True), (7, False), (12, False), (15, False), (16, True), (23, True), (0, True)):
+        assert m.jam_malam(_jam(h, 59)) is harapan, h
+    print("  jam_malam(): True 16.00-06.59, False 07.00-15.59")
+
+
+def uji_urgent_lewati_malam_tidak_membuat_folder_sesi_dan_tidak_memproses():
+    with tempfile.TemporaryDirectory() as tmp,             mock.patch.object(m, "FOLDER_LABEL", Path(tmp)),             mock.patch.object(m, "siapkan_log"), mock.patch.object(m, "muat_env"),             mock.patch.object(m, "urgent_picklist") as urgent:
+        for h, dilewati in ((16, True), (3, True), (10, False)):
+            urgent.reset_mock()
+            with mock.patch.object(sys, "argv", ["main.py", "--urgent", "--lewati-malam"]),                     mock.patch.object(m, "jam_malam", return_value=dilewati):
+                m.main()
+            assert urgent.called is (not dilewati), h
+        assert not list(Path(tmp).iterdir()) or urgent.called
+    print("  --urgent --lewati-malam: dilewati 16.00-06.59 (tanpa folder sesi), jalan 07.00-15.59")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

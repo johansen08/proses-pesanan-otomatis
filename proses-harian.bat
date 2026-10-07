@@ -59,12 +59,12 @@ call :catat_waktu T0_AKHIR
 echo.
 call :catat_waktu T1_AWAL
 echo === 3/9 URGENT LAZADA ===
-".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan --lewati-malam
 call :catat_waktu T1_AKHIR
 echo.
 call :catat_waktu T2_AWAL
 echo === 4/9 URGENT GTL ^& SICEPAT ===
-".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan --lewati-malam
 call :catat_waktu T2_AKHIR
 echo.
 call :catat_waktu T3_AWAL

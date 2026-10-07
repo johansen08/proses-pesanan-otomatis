@@ -207,6 +207,13 @@ def dalam_jam_menu(menu: str) -> bool:
     return any(awal <= sekarang <= akhir for awal, akhir in jendela[menu])
 
 
+def jam_malam(sekarang: datetime | None = None) -> bool:
+    """True kalau jam sekarang 16.00-06.59, yaitu jendela malam TIPE 1 (lihat dalam_jam_menu).
+    Di jendela ini langkah urgent Lazada & GTL-SiCepat dilewati (`--urgent --lewati-malam`)."""
+    jam = (sekarang or datetime.now()).hour
+    return jam >= 16 or jam < 7
+
+
 def muat_env(path: Path) -> None:
     """Baca file .env sederhana (KUNCI=nilai) ke environment."""
     if not path.exists():
@@ -292,6 +299,9 @@ def _main() -> int:
                         "PDF, tanpa proses SKU spesial (tanpa --jalankan = mode uji)")
     ap.add_argument("--channel", choices=["lazada", "gtl-sicepat"],
                     help="dipakai bersama --urgent: batasi ke 1 skenario saja")
+    ap.add_argument("--lewati-malam", action="store_true",
+                    help="dipakai bersama --urgent: lewati (tidak memproses apa pun) kalau "
+                        "jam sekarang 16.00-06.59 (jendela malam TIPE 1)")
     ap.add_argument("--reguler", action="store_true",
                     help="hanya buat picklist sisa reguler (TikTok Shop & Shopee, bukan SKU "
                         "spesial) sampai label PDF, tanpa proses SKU spesial "
@@ -363,6 +373,12 @@ def _main() -> int:
     if args.upload_iresis:
         # bukan proses picklist - jangan buat folder sesi label baru yang kosong
         return upload_faktur_iresis(log, args)
+    if args.urgent and args.lewati_malam and jam_malam():
+        # dicek sebelum folder sesi dibuat supaya tidak ada folder sesi kosong (nomor sesi bergeser)
+        log.info("Urgent DILEWATI: jam %s masuk jendela malam 16.00-07.00 (Lazada & GTL-SiCepat "
+                 "tidak diproses di TIPE 1 sore/malam/dini hari).",
+                 datetime.now().strftime("%H.%M"))
+        return 0
     global FOLDER_LABEL_SESI
     FOLDER_LABEL_SESI = FOLDER_LABEL / args.sesi if args.sesi else folder_label_sesi()
     FOLDER_LABEL_SESI.mkdir(parents=True, exist_ok=True)

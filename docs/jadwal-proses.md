@@ -201,6 +201,12 @@ sudah lewat jam 16.00, batas tunda diabaikan sepenuhnya). Implementasi kode:
 `JAM_CUTOFF_URGENT_LAZADA`/`JAM_CUTOFF_URGENT_GTL_SICEPAT`/`JAM_LANJUT_URGENT` &
 `_saring_jam_urgent()` di `src/proses_label.py`.
 
+**Revisi 2026-10-08**: TIPE 1 yang dijalankan di jendela malam (16.00-06.59) **melewati**
+langkah 3 & 4 (Urgent Lazada, Urgent GTL & SiCepat) lewat `--urgent ... --lewati-malam`
+(`jam_malam()` di `src/main.py`) — sebelumnya pesanan yang ditahan ikut terambil begitu jam 16.00.
+TIPE 1 pagi (07.00-12.00) tetap menjalankan urgent. Pesanan urgent yang tertahan tidak hilang:
+diproses lagi di TIPE 1 pagi / TIPE 2-4 besok, atau manual lewat `jalankan.bat --urgent`.
+
 ### Recheck stok
 
 Dijalankan **PALING PERTAMA di tiap TIPE 1-4** (langkah 1, sebelum picklist sampel) — cek
@@ -313,7 +319,7 @@ jam di luar jam kerja:
 | 13.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **SPX ≤ 12.00 (SPX Resi Pagi)**, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**) | 2 |
 | 13.xx (setelah TIPE 2 selesai) | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**, tanpa SPX Resi Pagi lagi) | 3 |
 | 15.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **J&T ≤ 15.00 (J&T Resi Siang)**, lalu SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung lagi**) | 4 |
-| 16.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
+| 16.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), ~~Urgent Lazada, Urgent GTL/SiCepat~~ (**dilewati** 16.00-06.59, lihat catatan di bawah), SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
 | 16.xx (setelah transfer) | (ulang) | 1 |
 | 18.00, 19.00, 20.00, 21.00, 22.00, 23.00 | (ulang, 1x per jam - tidak ada proses transfer di jam-jam ini) | 1 |
 | 00.00-06.xx (dini hari) | (ulang kalau ada pesanan masuk) | 1 |
