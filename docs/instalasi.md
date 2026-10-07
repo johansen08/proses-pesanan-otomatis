@@ -71,7 +71,7 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 ```
 
-Ini akan menginstall 5 library dari `requirements.txt`:
+Ini akan menginstall 6 library dari `requirements.txt`:
 
 | Library | Kegunaan |
 |---|---|
@@ -154,6 +154,20 @@ python --version
 .venv\Scripts\python -m pip list
 .venv\Scripts\python -c "import pandas, openpyxl, reportlab, requests, tzdata; print('OK: semua library utama terbaca')"
 ```
+
+Lalu jalankan semua uji offline (tanpa internet & tanpa menyentuh Jubelio sungguhan; server Jubelio ditiru di dalam test). Tiap file adalah skrip mandiri dan harus berakhir dengan `SEMUA UJI LULUS`:
+
+```bash
+.venv\Scripts\python tests\test_sku_spesial.py
+.venv\Scripts\python tests\test_main.py
+.venv\Scripts\python tests\test_jubelio.py
+.venv\Scripts\python tests\test_proses_label.py
+.venv\Scripts\python tests\test_print_spesial.py
+.venv\Scripts\python tests\test_rekap_master_excel.py
+.venv\Scripts\python tests\test_bat.py
+```
+
+`test_bat.py` memakai `cmd.exe` sungguhan, jadi hanya jalan di Windows. `test_rekap_master_excel.py` memakai file Excel buatan sendiri, bukan file master tim, sehingga tidak perlu file master ada di PC baru.
 
 Lalu pastikan file `.env` ada dan berisi `JUBELIO_EMAIL` + `JUBELIO_PASSWORD`
 yang benar, baru jalankan `proses-harian-uji.bat` (mode uji) sebagai tes akhir koneksi ke

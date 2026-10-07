@@ -30,7 +30,7 @@ Sumber:
   - T01-BSCT-3 → PICK-000154840, 9 pesanan
 
 Semua request ke `https://open.jubelio.com/core-api/` memakai header
-`authorization: <token login>` (tanpa "Bearer"). Request ke `report-prod.jubelio.com` memakai
+`authorization: <token login>` (tanpa "Bearer"). Request ke server report (`report.jubelio.com` / `report-prod.jubelio.com`) memakai
 cookie `JB_OMNI_ACCESS_TOKEN=<token login>`. Keduanya sudah dipakai di `jubelio.py`.
 
 Semua langkah di bawah ✅ **terlihat langsung di rekaman** (URL, body, dan respons).
@@ -154,7 +154,7 @@ Respons per pesanan: `salesorder_id, shipment_no, tracking_no, shipper, internal
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`
 
-**c.** Telerik REST API di `https://report-prod.jubelio.com/api/reports/`:
+**c.** Telerik REST API di `https://<host report>/api/reports/` (host sama dengan URL halaman label di langkah a/b):
 
 | | Request | Respons |
 |---|---|---|
@@ -183,6 +183,8 @@ dinyatakan TERHENTI. Dulu dokumen macet ditunggu 180 detik lalu dicoba HTML5 180
 client/node yang SAMA (6 menit sia-sia per picklist, menahan langkah urgent/reguler yang
 berurutan — insiden 2026-10-06). Tiap cek status (langkah 5) dibatasi `TUNGGU_INFO_DOKUMEN_S`
 (30 detik) per request.
+
+**Urutan host (revisi 2026-10-07)**: API Jubelio selalu mengembalikan URL di `report-prod.jubelio.com`, tapi host itu sering bermasalah (410/504/dokumen macet), sedangkan `report.jubelio.com` melayani report yang sama dan lebih stabil. `unduh_label()` mengganti host URL dari API (`HOST_REPORT` di `proses_label.py`) dan menjalankan SELURUH alur (halaman → client → dokumen → unduh) di SATU host per percobaan: `report.jubelio.com` dulu; gagal apa pun → ulang dari awal di `report-prod.jubelio.com`; lalu bergantian untuk 410/dokumen macet. `unduh_excel()` di `jubelio.py` memakai urutan host yang sama.
 
 Beda kecil dari rekaman asli: langkah 6 di kode saat ini memakai
 `response-content-disposition=attachment` (bukan `inline` seperti di rekaman) — sama-sama
