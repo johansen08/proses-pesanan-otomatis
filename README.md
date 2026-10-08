@@ -97,10 +97,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
 | `cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
-| `cetak-label-{spesial,satuan,kombinasi}-{jnt,spx}.bat` | Sama, tapi HANYA label 1 kurir (hasil TIPE 2 & 3, kurir dipisah) — `--jenis spesial-jnt` dst |
-| `cetak-label-spx-pagi.bat` / `cetak-label-jnt-siang.bat` | Cetak bulk label Shopee Pagi (subfolder `SPX_PAGI`) / J&T Resi Siang (subfolder `JNT_SIANG`) |
-| `cetak-label-{spesial,satuan,kombinasi}-spx-hemat[-pagi].bat` | Cetak bulk label mode event: SPX Hemat seharian / SPX Hemat Shopee Pagi (subfolder `SPXHEMAT_*` / `SPXHEMATPAGI_*`) |
-| `cetak-label-spx-standard.bat` | Cetak bulk label mode event: SPX Standard per lantai (subfolder `SPX_STANDARD`) |
+| `cetak-label.bat` | **Menu cetak bulk** (klik 2x): HARIAN / EVENT / PER KURIR / satu jenis, termasuk **paket** (mis. SEMUA EVENT) yang mencetak beberapa jenis berurutan dengan printer dipilih sekali — semua jenis lain (per kurir, Shopee Pagi, J&T Resi Siang, SPX Hemat, SPX Standard) hanya lewat menu ini, lihat [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md) |
 | `proses-event.bat` | Menu interaktif SUNGGUHAN mode event (klik 2x): 2 pilihan (sesi biasa / tepat jam 13.00 dengan Shopee Pagi) + Keluar — lihat bagian 7 |
 | `proses-event-uji.bat` | Menu interaktif MODE UJI mode event, langkah identik dengan `proses-event.bat` — tidak ada perubahan di Jubelio |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
@@ -520,9 +517,10 @@ Panduan lengkap (termasuk download & setup SumatraPDF): [docs/cetak-bulk-label.m
 Mencetak ulang label pengiriman yang sudah ada secara **bulk dan berurut** (nomor
 PICK terkecil/paling dulu dibuat, duluan dicetak), tanpa perlu buka file PDF
 satu-satu secara manual. Program ini **tidak** membuat picklist/label baru — cuma
-mencetak ulang PDF yang sudah ada. Ada 4 jenis, masing-masing `.bat` sendiri:
+mencetak ulang PDF yang sudah ada. Pintasan harian untuk 4 jenis utama, sisanya lewat menu `cetak-label.bat`:
 
 ```bash
+cetak-label.bat              # MENU: semua jenis & paket (EVENT, per kurir, Shopee Pagi, ...)
 cetak-label-spesial.bat      # subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1)
 cetak-label-gtl-sicepat.bat  # file GTL-SiCepat di subfolder URGENT (Alur 2)
 cetak-label-satuan.bat       # subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3, 1qty)

@@ -31,6 +31,14 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
   --jenis spx-standard -> subfolder SPX_STANDARD (--spx-standard), SEMUA PDF ikut
                         (SPX-STANDARD-LANTAI*). Versi Shopee Pagi-nya (--spx-standard --pagi)
                         masuk SPX_PAGI, tercetak lewat --jenis spx-pagi.
+Beberapa jenis bisa dicetak dalam SATU sesi (printer dipilih sekali, konfirmasi sekali):
+  --jenis spesial-jnt,satuan-jnt,kombinasi-jnt   (daftar jenis dipisah koma, dicetak berurutan)
+  --paket event-semua   (paket tetap, lihat PAKET: jnt, spx, spx-hemat, spx-hemat-pagi,
+                         spx-standard, event-semua)
+  tanpa --jenis/--paket -> MENU bertingkat (HARIAN / EVENT / PER KURIR / satu jenis), lihat
+                         menu_pilih_jenis() - inilah isi cetak-label.bat.
+Tiap jenis dicetak BERURUT nomor PICK-nya sendiri (jenis berikutnya menyusul setelah jenis
+sebelumnya selesai - sengaja, supaya tumpukan fisik per kelompok tidak tercampur).
 Semua jenis dicetak BERURUT (nomor PICK terkecil dulu, nomor diekstrak dari awal nama
 file - lihat POLA_SPESIAL/POLA_PICK) ke printer pilihan lewat SumatraPDF (-print-to,
 -silent).
@@ -42,9 +50,9 @@ sebelum lanjut cetak, supaya user bisa cek dulu apakah ada label yang belum masu
 (masih dibuat, gagal, atau ketinggalan di folder sesi lain) - pertanyaan ini tetap muncul
 meski pakai --tanpa-konfirmasi.
 
-Pemakaian (lihat juga cetak-label-spesial.bat/cetak-label-gtl-sicepat.bat/
-cetak-label-satuan.bat/cetak-label-kombinasi.bat, masing-masing isinya cuma
-memanggil ini dengan --jenis tetap):
+Pemakaian (lihat juga cetak-label.bat = menu, dan cetak-label-spesial.bat/
+cetak-label-gtl-sicepat.bat/cetak-label-satuan.bat/cetak-label-kombinasi.bat = pintasan
+harian, masing-masing cuma memanggil ini dengan --jenis tetap):
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis spesial
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis gtl-sicepat --folder label-pengiriman/2026-10-01/3
@@ -162,6 +170,52 @@ JENIS_LABEL: dict[str, list[str]] = {
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
 }
 
+# ---------------------------------------------------------------------------------------
+# PAKET = beberapa jenis dicetak berurutan dalam satu sesi cetak (printer dipilih SEKALI,
+# konfirmasi SEKALI). Kunci = nilai --paket; nilai = (judul di menu, daftar jenis berurutan).
+# Urutan di dalam paket = urutan cetak (tumpukan fisik per kelompok tidak tercampur).
+# ---------------------------------------------------------------------------------------
+_JNT = ["spesial-jnt", "satuan-jnt", "kombinasi-jnt"]
+_SPX = ["spesial-spx", "satuan-spx", "kombinasi-spx"]
+_HEMAT = ["spesial-spx-hemat", "satuan-spx-hemat", "kombinasi-spx-hemat"]
+_HEMAT_PAGI = ["spesial-spx-hemat-pagi", "satuan-spx-hemat-pagi", "kombinasi-spx-hemat-pagi"]
+_STANDARD = ["spx-pagi", "spx-standard"]
+PAKET: dict[str, tuple[str, list[str]]] = {
+    "jnt": ("Semua J&T (spesial + satuan + kombinasi)", _JNT),
+    "spx": ("Semua SPX (spesial + satuan + kombinasi, hasil TIPE 2 & 3)", _SPX),
+    "spx-hemat": ("Semua SPX Hemat (spesial + satuan + kombinasi)", _HEMAT),
+    "spx-hemat-pagi": ("Semua SPX Hemat Pagi (spesial + satuan + kombinasi)", _HEMAT_PAGI),
+    "spx-standard": ("SPX Standard (pagi + seharian)", _STANDARD),
+    "event-semua": ("SEMUA EVENT berurutan: J&T -> SPX Hemat Pagi -> SPX Hemat -> SPX Standard",
+                    _JNT + _HEMAT_PAGI + _HEMAT + _STANDARD),
+}
+
+
+def _paket(kode: str) -> tuple[str, list[str]]:
+    return PAKET[kode]
+
+
+# Menu bertingkat cetak-label.bat: (judul grup, [(judul pilihan, [jenis berurutan])]).
+# Grup terakhir memuat SEMUA jenis satu per satu supaya tidak ada jenis yang tak terjangkau
+# dari menu (dijaga tests/test_print_spesial.py).
+MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
+    ("HARIAN", [
+        ("SPESIAL (semua kurir)", ["spesial"]),
+        ("SATUAN / 1 QTY REGULER (semua kurir)", ["satuan"]),
+        ("KOMBINASI (semua kurir)", ["kombinasi"]),
+        ("GTL & SICEPAT", ["gtl-sicepat"]),
+        ("SHOPEE PAGI (SPX s.d. 12.00)", ["spx-pagi"]),
+        ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
+    ]),
+    ("EVENT (J&T / SPX Hemat / SPX Standard dipisah)", [
+        _paket("event-semua"), _paket("jnt"), _paket("spx-hemat-pagi"),
+        _paket("spx-hemat"), _paket("spx-standard"),
+    ]),
+    ("PER KURIR (harian, hasil TIPE 2 & 3)", [_paket("jnt"), _paket("spx")]),
+    ("SATU JENIS (semua pilihan, satu per satu)",
+     [(j, [j]) for j in sorted(JENIS_LABEL)]),
+]
+
 LOKASI_SUMATRA_UMUM = [
     r"%LOCALAPPDATA%\SumatraPDF\SumatraPDF.exe",
     r"C:\Program Files\SumatraPDF\SumatraPDF.exe",
@@ -257,6 +311,38 @@ def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> lis
                     berlabel.append((int(cocok.group(1)), f))
     berlabel.sort(key=lambda x: x[0])
     return [f for _, f in berlabel]
+
+
+def kumpulkan_label(folder_sesi: Path, daftar_jenis: list[str], cetak_ulang_semua: bool = False,
+                    sudah: set[str] | None = None) -> tuple[list[Path], list[dict]]:
+    """Gabungkan label beberapa jenis (urut `daftar_jenis`; di dalam tiap jenis urut nomor PICK)
+    jadi satu daftar cetak. File yang sama di >1 jenis dicetak sekali saja (di jenis pertama).
+    File yang sudah tercatat tercetak dilewati kecuali `cetak_ulang_semua`. `sudah`: dipakai tes,
+    default isi logs/sudah_dicetak.txt. Return (daftar cetak, laporan per jenis: jenis,
+    ditemukan, sudah_tercetak, akan_dicetak)."""
+    if cetak_ulang_semua:
+        sudah = set()
+    elif sudah is None:
+        sudah = baca_sudah_dicetak()
+    hasil, terpakai, laporan = [], set(), []
+    for jenis in daftar_jenis:
+        ada = [f for f in daftar_label(folder_sesi, jenis) if f not in terpakai]
+        belum, lewat = saring_belum_dicetak(ada, sudah)
+        terpakai.update(ada)
+        hasil += belum
+        laporan.append({"jenis": jenis, "ditemukan": len(ada), "sudah_tercetak": len(lewat),
+                        "akan_dicetak": len(belum)})
+    return hasil, laporan
+
+
+def nomor_terlompat_semua(folder_sesi: Path, daftar_jenis: list[str]) -> list[int]:
+    """Gabungan nomor PICK terlompat (lihat cari_nomor_terlompat()) dari semua jenis, urut naik."""
+    nomor_ada = nomor_pick_sesi(folder_sesi)
+    hilang: set[int] = set()
+    for jenis in daftar_jenis:
+        hilang.update(cari_nomor_terlompat(
+            daftar_label(folder_sesi, jenis, saring_nama=False), jenis, nomor_ada))
+    return sorted(hilang)
 
 
 def baca_sudah_dicetak(file_catatan: Path | None = None) -> set[str]:
@@ -507,13 +593,78 @@ def baca_daftar_ulang(file_daftar: Path) -> list[Path]:
     return hasil
 
 
+# ============================================================== menu & pilihan jenis
+def _pilih_angka(baca, tulis, maks: int) -> int:
+    """Minta angka 0..maks; salah ketik diulang; EOF (input habis) dianggap 0."""
+    while True:
+        try:
+            teks = baca("Pilih (0-%d): " % maks).strip()
+        except EOFError:
+            return 0
+        if teks.isdigit() and 0 <= int(teks) <= maks:
+            return int(teks)
+        tulis(f'Pilihan "{teks}" tidak dikenali, coba lagi.')
+
+
+def menu_pilih_jenis(baca=input, tulis=print) -> list[str] | None:
+    """Menu bertingkat (lihat MENU). Return daftar jenis berurutan yang dipilih, atau None kalau
+    user memilih keluar. `baca`/`tulis`: dipakai tes (default input()/print())."""
+    garis = "=" * 66
+    while True:
+        tulis(garis)
+        tulis("  CETAK LABEL (BULK)")
+        tulis(garis)
+        for i, (judul, _) in enumerate(MENU, 1):
+            tulis(f"  {i}. {judul}")
+        tulis("  0. Keluar")
+        tulis(garis)
+        pilih = _pilih_angka(baca, tulis, len(MENU))
+        if pilih == 0:
+            return None
+        judul, pilihan = MENU[pilih - 1]
+        tulis("")
+        tulis(f"--- {judul} ---")
+        for i, (nama, jenis) in enumerate(pilihan, 1):
+            tulis(f"  {i:>2}. {nama}")
+            if len(jenis) > 1:
+                tulis("      -> " + ", ".join(jenis))
+        tulis("   0. Kembali")
+        sub = _pilih_angka(baca, tulis, len(pilihan))
+        if sub:
+            return list(pilihan[sub - 1][1])
+
+
+def parse_jenis(teks: str) -> list[str]:
+    """Nilai --jenis: satu jenis atau daftar dipisah koma (urutan dipertahankan, duplikat dibuang)."""
+    hasil = list(dict.fromkeys(j.strip() for j in teks.split(",") if j.strip()))
+    salah = [j for j in hasil if j not in JENIS_LABEL]
+    if not hasil or salah:
+        raise argparse.ArgumentTypeError(
+            f"jenis tidak dikenal: {', '.join(salah) or teks!r} (pilihan: "
+            f"{', '.join(sorted(JENIS_LABEL))})")
+    return hasil
+
+
+def pilih_jenis(args, baca=input, tulis=print) -> list[str] | None:
+    """Daftar jenis yang dicetak: dari --jenis, --paket, atau (tanpa keduanya) menu."""
+    if args.jenis:
+        return args.jenis
+    if args.paket:
+        return list(PAKET[args.paket][1])
+    return menu_pilih_jenis(baca, tulis)
+
+
 # ============================================================== main
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Cetak bulk label dari folder sesi label-pengiriman terbaru "
-                    "(SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI)")
-    ap.add_argument("--jenis", required=True, choices=sorted(JENIS_LABEL),
-                    help="Jenis label yang dicetak bulk")
+        description="Cetak bulk label dari folder sesi label-pengiriman terbaru. Tanpa "
+                    "--jenis/--paket tampil MENU pilihan jenis (cetak-label.bat).")
+    grup = ap.add_mutually_exclusive_group()
+    grup.add_argument("--jenis", type=parse_jenis, metavar="JENIS[,JENIS...]",
+                      help="Jenis label yang dicetak bulk; boleh beberapa dipisah koma, dicetak "
+                           "berurutan dalam satu sesi. Pilihan: " + ", ".join(sorted(JENIS_LABEL)))
+    grup.add_argument("--paket", choices=sorted(PAKET),
+                      help="Paket jenis yang dicetak berurutan dalam satu sesi (lihat PAKET)")
     ap.add_argument("--folder", type=Path,
                     help="Folder sesi label-pengiriman tertentu (default: paling baru)")
     ap.add_argument("--tanpa-konfirmasi", action="store_true",
@@ -533,28 +684,31 @@ def main() -> int:
             file_pdf = baca_daftar_ulang(args.ulang)
             log.info("Cetak ULANG %d file dari daftar %s", len(file_pdf), args.ulang)
         else:
+            jenis_list = pilih_jenis(args)
+            if jenis_list is None:
+                log.info("Keluar dari menu, tidak ada yang dicetak.")
+                return 0
+            nama_jenis = ", ".join(j.upper() for j in jenis_list)
             folder = args.folder or folder_sesi_terbaru()
             log.info("Folder sesi: %s", folder)
-            file_pdf = daftar_label(folder, args.jenis)
+            log.info("Jenis dicetak (berurutan): %s", nama_jenis)
+            file_pdf, laporan = kumpulkan_label(folder, jenis_list, args.cetak_ulang_semua)
+            for lap in laporan:
+                log.info("%s: ditemukan %d, sudah tercetak %d, akan dicetak %d",
+                         lap["jenis"].upper(), lap["ditemukan"], lap["sudah_tercetak"],
+                         lap["akan_dicetak"])
             if not file_pdf:
-                log.info("Tidak ada label %s di folder ini.", args.jenis.upper())
+                if sum(lap["ditemukan"] for lap in laporan) == 0:
+                    log.info("Tidak ada label %s di folder ini.", nama_jenis)
+                else:
+                    log.info("Semua label %s di folder ini sudah tercetak (pakai "
+                             "--cetak-ulang-semua untuk mencetak ulang).", nama_jenis)
                 return 0
-            if not args.cetak_ulang_semua:
-                file_pdf, sudah_tercetak = saring_belum_dicetak(file_pdf, baca_sudah_dicetak())
-                if sudah_tercetak:
-                    log.info("%d label %s dilewati karena sudah tercetak (pakai "
-                             "--cetak-ulang-semua untuk mencetak ulang).",
-                             len(sudah_tercetak), args.jenis.upper())
-                if not file_pdf:
-                    log.info("Semua label %s di folder ini sudah tercetak.", args.jenis.upper())
-                    return 0
-            log.info("Ditemukan %d label %s (urut cetak):", len(file_pdf), args.jenis.upper())
+            log.info("Ditemukan %d label (urut cetak):", len(file_pdf))
             for f in file_pdf:
                 log.info("  %s", f.name)
 
-            terlompat = cari_nomor_terlompat(
-                daftar_label(folder, args.jenis, saring_nama=False), args.jenis,
-                nomor_pick_sesi(folder))
+            terlompat = nomor_terlompat_semua(folder, jenis_list)
             if terlompat:
                 log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
                            len(terlompat), ", ".join(str(n) for n in terlompat))
@@ -599,7 +753,7 @@ def main() -> int:
             print(f"  {f.name}")
         print(f"Daftar disimpan di: {file_daftar_gagal}")
         print("Rekomendasi: cetak ULANG hanya file yang gagal ini lewat:")
-        print(f'  cetak-label-spesial.bat --ulang "{file_daftar_gagal}"')
+        print(f'  cetak-label.bat --ulang "{file_daftar_gagal}"')
 
         if args.tanpa_konfirmasi:
             return 1
@@ -618,7 +772,7 @@ def main() -> int:
             lagi = input("Coba ulang lagi sekarang? (Y/N): ").strip().lower()
             if lagi != "y":
                 print("Rekomendasi: jalankan ulang berikut setelah masalah diperbaiki:")
-                print(f'  cetak-label-spesial.bat --ulang "{file_daftar_gagal}"')
+                print(f'  cetak-label.bat --ulang "{file_daftar_gagal}"')
                 return 1
         log.info("Semua file berhasil dicetak setelah diulang.")
         print("\nSemua file berhasil dicetak setelah diulang.")

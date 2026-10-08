@@ -74,7 +74,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   tidak ada cetak bulk Lazada.
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
-  membuat picklist/label baru.
+  membuat picklist/label baru. Punya 19 jenis; `cetak-label.bat` = MENU (grup HARIAN/EVENT/
+  PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
+  Hanya `cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
+  `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
+  JANGAN membuat `.bat` per jenis lagi.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga

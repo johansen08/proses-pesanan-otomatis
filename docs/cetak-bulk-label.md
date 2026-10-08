@@ -1,28 +1,34 @@
 # Cetak Bulk Label (SumatraPDF)
 
-Panduan lengkap fitur **cetak bulk label** (`cetak-label-spesial.bat` /
-`cetak-label-gtl-sicepat.bat` / `cetak-label-satuan.bat` / `cetak-label-kombinasi.bat`,
-semuanya menjalankan `src/print_spesial.py --jenis <jenis>`): cara install
-SumatraPDF (syarat wajib fitur ini) dan cara pakai fiturnya sehari-hari.
+Panduan lengkap fitur **cetak bulk label**: cara install SumatraPDF (syarat wajib fitur ini)
+dan cara pakai fiturnya sehari-hari. Semua `.bat` cetak menjalankan `src/print_spesial.py`:
+
+- **`cetak-label.bat`** — **MENU** (HARIAN / EVENT / PER KURIR / satu jenis); pilih jenis atau
+  paket, lalu printer dipilih **sekali** untuk semua yang dicetak. Ini yang dipakai untuk hari
+  event dan untuk semua jenis selain empat pintasan di bawah.
+- **Pintasan harian** `cetak-label-spesial.bat` / `cetak-label-gtl-sicepat.bat` /
+  `cetak-label-satuan.bat` / `cetak-label-kombinasi.bat` — klik 2x langsung mencetak 1 jenis
+  (`--jenis <jenis>`), tanpa menu.
 
 ## 1. Apa fitur ini
 
 Mencetak ulang semua label pengiriman yang sudah ada di subfolder tertentu folder
 sesi `label-pengiriman/<tanggal>/<sesi>/`, secara **bulk dan berurut** (nomor PICK
 terkecil/paling dulu dibuat, duluan dicetak), langsung ke printer pilihan, tanpa
-perlu buka file PDF satu-satu secara manual. Ada 4 jenis, masing-masing `.bat`
-sendiri:
+perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya pintasan
+`.bat` sendiri, semuanya (termasuk sisanya) bisa dipilih lewat menu `cetak-label.bat`
+(kolom `.bat` di tabel di bawah = pintasan, atau "menu" bila hanya lewat menu):
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
 |---|---|---|---|
 | `spesial` | `cetak-label-spesial.bat` | `SPESIAL`, `JNT_SPESIAL`, `SPX_SPESIAL` — hanya file bertanda `_SPESIAL_` | `--label` (Alur 1, SKU spesial) |
 | `gtl-sicepat` | `cetak-label-gtl-sicepat.bat` | `URGENT` (tanpa varian kurir) — hanya file `GTL-SICEPAT-*` | `--urgent --channel gtl-sicepat` (Alur 2) |
 | `satuan` | `cetak-label-satuan.bat` | `SATUAN`, `JNT_SATUAN`, `SPX_SATUAN` — semua PDF | `--reguler --bagian 1qty` (Alur 3) |
-| `spesial-jnt` / `spesial-spx` | `cetak-label-spesial-jnt.bat` / `-spx.bat` | `JNT_SPESIAL` / `SPX_SPESIAL` saja (TIPE 2 & 3) | `--label --kurir jnt/spx` |
-| `satuan-jnt` / `satuan-spx` | `cetak-label-satuan-jnt.bat` / `-spx.bat` | `JNT_SATUAN` / `SPX_SATUAN` saja | `--reguler --bagian 1qty --kurir jnt/spx` |
-| `kombinasi-jnt` / `kombinasi-spx` | `cetak-label-kombinasi-jnt.bat` / `-spx.bat` | `JNT_KOMBINASI` / `SPX_KOMBINASI` saja | `--reguler --bagian kombinasi --kurir jnt/spx` |
-| `spx-pagi` | `cetak-label-spx-pagi.bat` | `SPX_PAGI` (Shopee Pagi, `SHOPEE-PAGI-LANTAI*`) — sesi lama (sebelum 2026-10-07) masih di root folder sesi, tidak ikut | `--shopee-pagi` |
-| `jnt-siang` | `cetak-label-jnt-siang.bat` | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
+| `spesial-jnt` / `spesial-spx` | menu: PER KURIR | `JNT_SPESIAL` / `SPX_SPESIAL` saja (TIPE 2 & 3) | `--label --kurir jnt/spx` |
+| `satuan-jnt` / `satuan-spx` | menu: PER KURIR | `JNT_SATUAN` / `SPX_SATUAN` saja | `--reguler --bagian 1qty --kurir jnt/spx` |
+| `kombinasi-jnt` / `kombinasi-spx` | menu: PER KURIR | `JNT_KOMBINASI` / `SPX_KOMBINASI` saja | `--reguler --bagian kombinasi --kurir jnt/spx` |
+| `spx-pagi` | menu: HARIAN | `SPX_PAGI` (Shopee Pagi, `SHOPEE-PAGI-LANTAI*`) — sesi lama (sebelum 2026-10-07) masih di root folder sesi, tidak ikut | `--shopee-pagi` |
+| `jnt-siang` | menu: HARIAN | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
 | `kombinasi` | `cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
 **Mode event** (`proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst — lihat
@@ -32,13 +38,14 @@ sendiri:
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
 |---|---|---|---|
-| `spesial-spx-hemat` / `satuan-spx-hemat` / `kombinasi-spx-hemat` | `cetak-label-spesial-spx-hemat.bat` dst | `SPXHEMAT_SPESIAL` / `SPXHEMAT_SATUAN` / `SPXHEMAT_KOMBINASI` | `--event --kurir spx-hemat` |
-| `spesial-spx-hemat-pagi` / `satuan-spx-hemat-pagi` / `kombinasi-spx-hemat-pagi` | `cetak-label-spesial-spx-hemat-pagi.bat` dst | `SPXHEMATPAGI_SPESIAL` / `SPXHEMATPAGI_SATUAN` / `SPXHEMATPAGI_KOMBINASI` | `--event --kurir spx-hemat-pagi` (Shopee Pagi, s.d. 12:00) |
-| `spx-standard` | `cetak-label-spx-standard.bat` | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) — semua PDF | `--spx-standard` |
-| `spx-pagi` (sudah ada) | `cetak-label-spx-pagi.bat` | `SPX_PAGI` — di mode event juga berisi `SHOPEE-PAGI-SPX-STANDARD-LANTAI*` | `--spx-standard --pagi` |
+| `spesial-spx-hemat` / `satuan-spx-hemat` / `kombinasi-spx-hemat` | menu: EVENT | `SPXHEMAT_SPESIAL` / `SPXHEMAT_SATUAN` / `SPXHEMAT_KOMBINASI` | `--event --kurir spx-hemat` |
+| `spesial-spx-hemat-pagi` / `satuan-spx-hemat-pagi` / `kombinasi-spx-hemat-pagi` | menu: EVENT | `SPXHEMATPAGI_SPESIAL` / `SPXHEMATPAGI_SATUAN` / `SPXHEMATPAGI_KOMBINASI` | `--event --kurir spx-hemat-pagi` (Shopee Pagi, s.d. 12:00) |
+| `spx-standard` | menu: EVENT | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) — semua PDF | `--spx-standard` |
+| `spx-pagi` (sudah ada) | menu: EVENT | `SPX_PAGI` — di mode event juga berisi `SHOPEE-PAGI-SPX-STANDARD-LANTAI*` | `--spx-standard --pagi` |
 
-`tests/test_print_spesial.py` menjaga agar setiap jenis punya tepat satu `.bat` cetak dan agar
-nama folder yang ditulis `proses_label.py` selalu sama dengan yang dicari `print_spesial.py`.
+`tests/test_print_spesial.py` menjaga agar setiap jenis & paket terjangkau dari menu, daftar `.bat`
+cetak tidak menumpuk lagi (hanya menu + 4 pintasan harian), dan agar nama folder yang ditulis
+`proses_label.py` selalu sama dengan yang dicari `print_spesial.py`.
 
 Untuk jenis `satuan`/`kombinasi`, nama file labelnya variatif (mis. `1QTY-REGULER-2A`,
 `KOMBINASI-REGULER-LANTAI2`) dan TIDAK punya tag unik seperti `_SPESIAL_` — karena
@@ -114,7 +121,46 @@ environment variable baru terbaca.
 
 ## 3. Cara pakai
 
-Pilih `.bat` sesuai jenis label yang mau dicetak (lihat tabel bagian 1):
+### 3.1 Lewat menu (disarankan, wajib untuk hari event)
+
+```bash
+cetak-label.bat
+```
+
+```
+1. HARIAN                   -> SPESIAL / SATUAN / KOMBINASI / GTL & SICEPAT / SHOPEE PAGI / J&T RESI SIANG
+2. EVENT                    -> SEMUA EVENT / J&T / SPX Hemat Pagi / SPX Hemat / SPX Standard
+3. PER KURIR (harian)       -> Semua J&T / Semua SPX (hasil TIPE 2 & 3)
+4. SATU JENIS               -> semua 19 jenis, satu per satu
+0. Keluar
+```
+
+Pilih grup, lalu pilihan (0 = kembali). Pilihan berupa **paket** mencetak beberapa jenis
+**berurutan dalam satu sesi** — printer dipilih **sekali** dan konfirmasi Y/N **sekali**:
+
+| Paket (`--paket`) | Isi, berurutan |
+|---|---|
+| `event-semua` | J&T (spesial, satuan, kombinasi) → SPX Hemat Pagi (3 jenis) → SPX Hemat (3 jenis) → SPX Standard (`spx-pagi`, `spx-standard`) |
+| `jnt` / `spx` | spesial → satuan → kombinasi kurir itu |
+| `spx-hemat` / `spx-hemat-pagi` | spesial → satuan → kombinasi |
+| `spx-standard` | `spx-pagi` → `spx-standard` |
+
+Tiap jenis di dalam paket dicetak berurut nomor PICK-nya sendiri, lalu jenis berikutnya
+menyusul — sengaja, supaya tumpukan fisik per kelompok tidak tercampur. Label yang sudah
+tercatat tercetak (`logs/sudah_dicetak.txt`) dilewati, dan peringatan nomor PICK terlompat
+dihitung gabungan semua jenis yang dipilih.
+
+Tanpa menu (langsung), argumen diteruskan apa adanya:
+
+```bash
+cetak-label.bat --paket event-semua
+cetak-label.bat --jenis spesial-jnt,satuan-jnt,kombinasi-jnt     # beberapa jenis dipisah koma
+cetak-label.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"  # cetak ulang yang gagal
+```
+
+### 3.2 Pintasan harian (tanpa menu)
+
+Klik 2x langsung mencetak satu jenis harian:
 
 ```bash
 cetak-label-spesial.bat
@@ -123,7 +169,7 @@ cetak-label-satuan.bat
 cetak-label-kombinasi.bat
 ```
 
-Urutan kerja program (sama untuk keempat jenis):
+Urutan kerja program (sama untuk semua jenis & paket):
 
 1. Cari folder sesi `label-pengiriman/YYYY-MM-DD/N` **terbaru** secara otomatis
    (dibandingkan dari tanggal lalu nomor urut sesi di nama folder, bukan dari waktu

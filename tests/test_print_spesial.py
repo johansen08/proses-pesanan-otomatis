@@ -453,20 +453,207 @@ def uji_folder_dan_nama_file_buatan_proses_label_terbaca_print_spesial():
           "sama persis dengan yang dicari print_spesial")
 
 
-def uji_setiap_jenis_cetak_punya_bat_dan_bat_hanya_memakai_jenis_valid():
+def uji_bat_cetak_tinggal_menu_dan_empat_pintasan_harian():
+    """Daftar .bat cetak sengaja dikunci: menu + 4 pintasan harian. Menambah .bat cetak baru
+    harus disengaja (ubah daftar ini), bukan menumpuk lagi satu per jenis."""
     import re
 
-    bats = {}
-    for f in ROOT.glob("cetak-label-*.bat"):
-        for jenis in re.findall(r"--jenis\s+(\S+)", f.read_text(encoding="utf-8")):
-            bats.setdefault(jenis, []).append(f.name)
-    tanpa_bat = sorted(set(ps.JENIS_LABEL) - set(bats))
-    assert not tanpa_bat, f"jenis tanpa .bat cetak: {tanpa_bat}"
-    tak_dikenal = sorted(set(bats) - set(ps.JENIS_LABEL))
-    assert not tak_dikenal, f".bat memanggil --jenis yang tidak ada: {tak_dikenal}"
-    assert all(len(v) == 1 for v in bats.values()), f"1 jenis dipakai >1 .bat: {bats}"
-    print(f"  {len(ps.JENIS_LABEL)} jenis cetak <-> {len(bats)} .bat cetak-label-*.bat: sama persis, "
-          "tidak ada yang yatim")
+    ada = sorted(f.name for f in ROOT.glob("cetak-label*.bat"))
+    assert ada == ["cetak-label-gtl-sicepat.bat", "cetak-label-kombinasi.bat",
+                   "cetak-label-satuan.bat", "cetak-label-spesial.bat",
+                   "cetak-label.bat"], ada
+    # 4 pintasan harian memanggil tepat 1 jenis yang valid
+    for nama, jenis in (("cetak-label-spesial.bat", "spesial"),
+                        ("cetak-label-satuan.bat", "satuan"),
+                        ("cetak-label-kombinasi.bat", "kombinasi"),
+                        ("cetak-label-gtl-sicepat.bat", "gtl-sicepat")):
+        panggil = re.findall(r"--jenis\s+(\S+)", (ROOT / nama).read_text(encoding="utf-8"))
+        assert panggil == [jenis] and jenis in ps.JENIS_LABEL, (nama, panggil)
+    # menu: memanggil print_spesial.py tanpa --jenis/--paket (-> menu) dan meneruskan argumen (%*)
+    isi = (ROOT / "cetak-label.bat").read_text(encoding="utf-8")
+    baris = [b for b in isi.splitlines() if b.startswith('".venv')]
+    assert len(baris) == 1 and "print_spesial.py %*" in baris[0], baris
+    assert "--jenis" not in baris[0] and "--paket" not in baris[0], baris
+    print("  .bat cetak: cetak-label.bat (menu, meneruskan argumen) + 4 pintasan harian, "
+          "tidak ada .bat per jenis lagi")
+
+
+def uji_semua_jenis_dan_paket_terjangkau_dari_menu():
+    dari_menu = {j for _, pilihan in ps.MENU for _, jenis in pilihan for j in jenis}
+    assert dari_menu == set(ps.JENIS_LABEL), (set(ps.JENIS_LABEL) - dari_menu,
+                                               dari_menu - set(ps.JENIS_LABEL))
+    for kode, (judul, jenis) in ps.PAKET.items():
+        assert judul and jenis and all(j in ps.JENIS_LABEL for j in jenis), kode
+        assert len(jenis) == len(set(jenis)), f"paket {kode} berisi jenis ganda"
+        assert any(pilihan_jenis == jenis for _, pilihan in ps.MENU
+                   for _, pilihan_jenis in pilihan), f"paket {kode} tidak ada di menu"
+    # SEMUA EVENT = J&T -> Hemat Pagi -> Hemat -> Standard, tanpa jenis harian gabungan
+    semua = ps.PAKET["event-semua"][1]
+    assert semua == (ps.PAKET["jnt"][1] + ps.PAKET["spx-hemat-pagi"][1]
+                     + ps.PAKET["spx-hemat"][1] + ps.PAKET["spx-standard"][1])
+    assert not {"spesial", "satuan", "kombinasi", "gtl-sicepat", "jnt-siang"} & set(semua)
+    print(f"  {len(ps.JENIS_LABEL)} jenis & {len(ps.PAKET)} paket semuanya terjangkau dari menu; "
+          "SEMUA EVENT berurutan J&T -> Hemat Pagi -> Hemat -> Standard")
+
+
+def _menu(masukan):
+    """Jalankan menu_pilih_jenis() dengan ketikan `masukan` (list); kembalikan (hasil, layar)."""
+    antre = list(masukan)
+    layar = []
+
+    def baca(prompt):
+        if not antre:
+            raise EOFError
+        return antre.pop(0)
+    return ps.menu_pilih_jenis(baca, layar.append), "\n".join(layar)
+
+
+def uji_menu_memilih_jenis_paket_keluar_dan_salah_ketik():
+    # grup 1 (HARIAN) pilihan 4 = GTL & SiCepat
+    assert _menu(["1", "4"])[0] == ["gtl-sicepat"]
+    # grup 2 (EVENT) pilihan 1 = SEMUA EVENT
+    hasil, layar = _menu(["2", "1"])
+    assert hasil == ps.PAKET["event-semua"][1]
+    assert "SEMUA EVENT" in layar and "->" in layar
+    # grup 2 pilihan 2 = paket J&T; grup 3 (PER KURIR) pilihan 2 = paket SPX
+    assert _menu(["2", "2"])[0] == ps.PAKET["jnt"][1]
+    assert _menu(["3", "2"])[0] == ps.PAKET["spx"][1]
+    # grup terakhir: satu jenis, mis. pilihan 1 = jenis pertama urut abjad
+    assert _menu([str(len(ps.MENU)), "1"])[0] == [sorted(ps.JENIS_LABEL)[0]]
+    # 0 di menu utama = keluar; 0 di submenu = kembali (lalu keluar); input habis = keluar
+    assert _menu(["0"])[0] is None
+    assert _menu(["1", "0", "0"])[0] is None
+    assert _menu([])[0] is None
+    # salah ketik diulang, tidak meloncat atau menutup
+    hasil, layar = _menu(["x", "9", "1", "99", "abc", "2"])
+    assert hasil == ["satuan"] and layar.count("tidak dikenali") == 4, layar
+    print("  menu: pilih jenis/paket per grup, 0 = kembali/keluar, input habis = keluar, "
+          "salah ketik diulang")
+
+
+def uji_parse_jenis_dan_pilih_jenis():
+    from types import SimpleNamespace
+
+    assert ps.parse_jenis("spesial") == ["spesial"]
+    assert ps.parse_jenis("spesial-jnt, satuan-jnt,spesial-jnt") == ["spesial-jnt", "satuan-jnt"]
+    for salah in ("", "tidak-ada", "spesial,hemat"):
+        try:
+            ps.parse_jenis(salah)
+        except argparse_error():
+            pass
+        else:
+            raise AssertionError(f"parse_jenis({salah!r}) harus ditolak")
+    # urutan prioritas: --jenis, lalu --paket, lalu menu
+    dari_menu = lambda: ["kombinasi"]    # noqa: E731
+    assert ps.pilih_jenis(SimpleNamespace(jenis=["spesial"], paket=None), lambda p: "1") == ["spesial"]
+    assert ps.pilih_jenis(SimpleNamespace(jenis=None, paket="jnt")) == ps.PAKET["jnt"][1]
+    assert ps.pilih_jenis(SimpleNamespace(jenis=None, paket=None), lambda p: "1" if "Pilih" in p
+                          else "", lambda s: None)[0] == "spesial"
+    print("  parse_jenis: daftar dipisah koma (duplikat dibuang, jenis salah ditolak); "
+          "pilih_jenis: --jenis, lalu --paket, lalu menu")
+
+
+def argparse_error():
+    import argparse
+    return argparse.ArgumentTypeError
+
+
+def uji_kumpulkan_label_beberapa_jenis_berurutan_tanpa_duplikat():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        isi = {
+            "JNT_SPESIAL": ["PICK-000300005_JNT_SPESIAL_A_2026-10-10_080000.pdf",
+                            "PICK-000300001_JNT_SPESIAL_B_2026-10-10_080100.pdf"],
+            "JNT_SATUAN": ["PICK-000300003_JNT-1QTY-REGULER-2A_2026-10-10_080200.pdf"],
+            "SPXHEMAT_SATUAN": ["PICK-000300002_SPXHEMAT-1QTY-REGULER-2A_2026-10-10_080300.pdf"],
+        }
+        for sub, nama_file in isi.items():
+            (folder / sub).mkdir()
+            _buat(folder / sub, *nama_file)
+
+        urut, lap = ps.kumpulkan_label(folder, ["spesial-jnt", "satuan-jnt", "satuan-spx-hemat"],
+                                       sudah=set())
+        # tiap jenis urut nomor PICK-nya sendiri; jenis berikutnya menyusul setelahnya
+        assert [f.name[:14] for f in urut] == [
+            "PICK-000300001", "PICK-000300005", "PICK-000300003", "PICK-000300002"], urut
+        assert [(x["jenis"], x["ditemukan"], x["akan_dicetak"]) for x in lap] == [
+            ("spesial-jnt", 2, 2), ("satuan-jnt", 1, 1), ("satuan-spx-hemat", 1, 1)]
+
+        # jenis gabungan + jenis per kurir: file yang sama hanya dicetak sekali (di jenis pertama)
+        urut, lap = ps.kumpulkan_label(folder, ["spesial", "spesial-jnt"], sudah=set())
+        assert len(urut) == 2 and lap[1]["ditemukan"] == 0, (urut, lap)
+
+        # yang sudah tercetak dilewati, kecuali cetak_ulang_semua
+        sudah = {str(urut[0].resolve())}
+        urut2, lap2 = ps.kumpulkan_label(folder, ["spesial-jnt"], sudah=sudah)
+        assert len(urut2) == 1 and lap2[0]["sudah_tercetak"] == 1
+        urut3, _ = ps.kumpulkan_label(folder, ["spesial-jnt"], cetak_ulang_semua=True, sudah=sudah)
+        assert len(urut3) == 2
+
+        # jenis tanpa folder = kosong, bukan error
+        assert ps.kumpulkan_label(folder, ["spx-standard"], sudah=set())[0] == []
+
+        # nomor terlompat dihitung gabungan semua jenis; nomor di jenis lain sesi sama tidak hilang
+        # nomor ...2 & ...3 ada di jenis lain sesi yang sama (bukan hilang); ...4 memang tidak ada
+        assert ps.nomor_terlompat_semua(folder, ["spesial-jnt", "satuan-jnt"]) == [300004]
+        assert ps.nomor_terlompat_semua(folder, ["spesial-jnt"]) == [300004]
+        _buat(folder / "SPXHEMAT_SATUAN", "PICK-000300004_SPXHEMAT-1QTY-REGULER-2A_x.pdf")
+        assert ps.nomor_terlompat_semua(folder, ["spesial-jnt", "satuan-jnt"]) == []
+    print("  kumpulkan_label: beberapa jenis berurutan (tiap jenis urut PICK), file ganda sekali "
+          "cetak, sudah-tercetak dilewati, folder kosong aman")
+
+
+def uji_main_jenis_banyak_pilih_printer_sekali():
+    """Alur main(): 2 jenis -> pilih printer SEKALI, konfirmasi SEKALI, semua file tercetak
+    berurutan (SumatraPDF/printer ditiru)."""
+    import sys
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        folder = label / "2026-10-10" / "1"
+        for sub, nama_file in (("JNT_SPESIAL", "PICK-000400001_JNT_SPESIAL_A_2026-10-10_080000.pdf"),
+                               ("JNT_SATUAN", "PICK-000400002_JNT-1QTY-REGULER-2A_2026-10-10_080100.pdf")):
+            (folder / sub).mkdir(parents=True)
+            _buat(folder / sub, nama_file)
+        log_dir = Path(tmp) / "logs"
+        dicetak = []
+        panggilan = {"printer": 0, "konfirmasi": 0}
+
+        def pilih_printer(daftar):
+            panggilan["printer"] += 1
+            return "PRINTER-X"
+
+        def input_palsu(prompt=""):
+            panggilan["konfirmasi"] += 1
+            return "y"
+
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir), \
+                mock.patch.object(ps, "FILE_SUDAH_DICETAK", log_dir / "sudah_dicetak.txt"), \
+                mock.patch.object(ps, "cari_sumatra", return_value=Path("sumatra.exe")), \
+                mock.patch.object(ps, "daftar_printer", return_value=["PRINTER-X"]), \
+                mock.patch.object(ps, "pilih_printer", side_effect=pilih_printer), \
+                mock.patch.object(ps, "dukungan_pemantauan_job", return_value=False), \
+                mock.patch.object(ps, "cetak", side_effect=lambda s, p, f, pantau: dicetak.append(f.name) or True), \
+                mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0), \
+                mock.patch.object(ps, "siapkan_log"), \
+                mock.patch("builtins.input", input_palsu), \
+                mock.patch.object(sys, "argv", ["print_spesial.py", "--folder", str(folder), "--jenis", "satuan-jnt,spesial-jnt"]):
+            assert ps.main() == 0
+        # urutan = urutan jenis yang diminta (satuan dulu), printer & konfirmasi masing-masing 1x
+        assert dicetak == ["PICK-000400002_JNT-1QTY-REGULER-2A_2026-10-10_080100.pdf",
+                           "PICK-000400001_JNT_SPESIAL_A_2026-10-10_080000.pdf"], dicetak
+        assert panggilan == {"printer": 1, "konfirmasi": 1}, panggilan
+        # dijalankan lagi: semuanya sudah tercatat tercetak -> tidak ada yang dicetak ulang
+        dicetak.clear()
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir), \
+                mock.patch.object(ps, "FILE_SUDAH_DICETAK", log_dir / "sudah_dicetak.txt"), \
+                mock.patch.object(ps, "siapkan_log"), \
+                mock.patch.object(sys, "argv", ["print_spesial.py", "--folder", str(folder), "--paket", "jnt"]):
+            assert ps.main() == 0
+        assert dicetak == []
+    print("  main(): --jenis a,b -> printer & konfirmasi 1x, dicetak berurutan sesuai daftar; "
+          "jalan lagi = sudah tercatat, tidak dicetak ulang")
 
 
 if __name__ == "__main__":

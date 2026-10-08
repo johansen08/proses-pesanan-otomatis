@@ -403,14 +403,19 @@ Tiap kelompok punya subfolder (di dalam folder sesi `label-pengiriman/<tanggal>/
 jenis cetak sendiri. Jenis cetak harian gabungan (`spesial`, `satuan`, `kombinasi`) **tidak**
 ikut mencetak folder event.
 
+**Cara mencetak di hari event: jalankan `cetak-label.bat` → `2. EVENT`.** Di sana ada paket
+**SEMUA EVENT** (berurutan J&T → SPX Hemat Pagi → SPX Hemat → SPX Standard, printer & konfirmasi
+cukup sekali) dan paket per kelompok (J&T / SPX Hemat Pagi / SPX Hemat / SPX Standard). Langsung
+tanpa menu: `cetak-label.bat --paket event-semua`. Kolom terakhir tabel berikut = jenis di menu.
+
 | Hasil | Subfolder | `print_spesial.py --jenis` | `.bat` cetak |
 |---|---|---|---|
-| J&T (event) | `JNT_SPESIAL`, `JNT_SATUAN`, `JNT_KOMBINASI` (sama dengan harian) | `spesial-jnt`, `satuan-jnt`, `kombinasi-jnt` | `cetak-label-{spesial,satuan,kombinasi}-jnt.bat` |
-| SPX Hemat | `SPXHEMAT_SPESIAL`, `SPXHEMAT_SATUAN`, `SPXHEMAT_KOMBINASI` | `spesial-spx-hemat`, dst | `cetak-label-{spesial,satuan,kombinasi}-spx-hemat.bat` |
-| SPX Hemat Pagi | `SPXHEMATPAGI_SPESIAL`, `SPXHEMATPAGI_SATUAN`, `SPXHEMATPAGI_KOMBINASI` | `spesial-spx-hemat-pagi`, dst | `cetak-label-{spesial,satuan,kombinasi}-spx-hemat-pagi.bat` |
-| SPX Standard | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) | `spx-standard` | `cetak-label-spx-standard.bat` |
-| SPX Standard Pagi | `SPX_PAGI` (`SHOPEE-PAGI-SPX-STANDARD-LANTAI*`) | `spx-pagi` | `cetak-label-spx-pagi.bat` |
-| J&T Resi Siang | `JNT_SIANG` | `jnt-siang` | `cetak-label-jnt-siang.bat` |
+| J&T (event) | `JNT_SPESIAL`, `JNT_SATUAN`, `JNT_KOMBINASI` (sama dengan harian) | `spesial-jnt`, `satuan-jnt`, `kombinasi-jnt` | menu EVENT → paket J&T |
+| SPX Hemat | `SPXHEMAT_SPESIAL`, `SPXHEMAT_SATUAN`, `SPXHEMAT_KOMBINASI` | `spesial-spx-hemat`, dst | menu EVENT → paket SPX Hemat |
+| SPX Hemat Pagi | `SPXHEMATPAGI_SPESIAL`, `SPXHEMATPAGI_SATUAN`, `SPXHEMATPAGI_KOMBINASI` | `spesial-spx-hemat-pagi`, dst | menu EVENT → paket SPX Hemat Pagi |
+| SPX Standard | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) | `spx-standard` | menu EVENT → paket SPX Standard |
+| SPX Standard Pagi | `SPX_PAGI` (`SHOPEE-PAGI-SPX-STANDARD-LANTAI*`) | `spx-pagi` | menu EVENT → paket SPX Standard |
+| J&T Resi Siang | `JNT_SIANG` | `jnt-siang` | menu HARIAN → J&T RESI SIANG |
 
 ### Aturan SKU spesial di mode event
 
