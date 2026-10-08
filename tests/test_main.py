@@ -279,6 +279,186 @@ def uji_urgent_lewati_malam_tidak_membuat_folder_sesi_dan_tidak_memproses():
     print("  --urgent --lewati-malam: dilewati 16.00-06.59 (tanpa folder sesi), jalan 07.00-15.59")
 
 
+
+# -------------------------------------------------- mode event (SPX Hemat / SPX Standard)
+def _args(**kw):
+    from types import SimpleNamespace
+    dasar = dict(kurir=None, event=False, label=False, reguler=False, spx_standard=False,
+                 pagi=False, bagian=None, excel=Path("x.xlsx"), tanpa_cek_nilai=True,
+                 jalankan=True, sku=None, tanpa_reguler=False)
+    dasar.update(kw)
+    return SimpleNamespace(**dasar)
+
+
+def uji_mode_event_validasi_kombinasi_flag():
+    salah = m.pesan_salah_mode_event
+    # alur harian: tidak ada yang berubah / ditolak
+    assert salah(_args()) is None
+    assert salah(_args(label=True, kurir="jnt")) is None
+    assert salah(_args(reguler=True, kurir="spx")) is None
+    # SPX Hemat tanpa --event ditolak (jangan diam-diam dihitung digabung)
+    for kurir in ("spx-hemat", "spx-hemat-pagi"):
+        assert "--event" in salah(_args(label=True, kurir=kurir))
+    # --event butuh --label/--reguler dan kurir mode event
+    assert salah(_args(event=True, kurir="jnt")) is not None
+    assert salah(_args(event=True, label=True)) is not None
+    assert salah(_args(event=True, label=True, kurir="spx")) is not None
+    for kurir in ("jnt", "spx-hemat", "spx-hemat-pagi"):
+        assert salah(_args(event=True, label=True, kurir=kurir)) is None
+        assert salah(_args(event=True, reguler=True, kurir=kurir)) is None
+    # --spx-standard berdiri sendiri; --pagi hanya dengan --spx-standard
+    assert salah(_args(spx_standard=True)) is None
+    assert salah(_args(spx_standard=True, pagi=True)) is None
+    assert salah(_args(pagi=True)) is not None
+    assert salah(_args(spx_standard=True, label=True)) is not None
+    print("  validasi flag mode event: spx-hemat tanpa --event ditolak; harian tidak terpengaruh")
+
+
+def uji_mode_event_kurir_hitung_dan_nama_pdf():
+    assert m.kurir_hitung(_args(kurir="jnt")) is None, "harian --kurir jnt tetap menggabung"
+    assert m.kurir_hitung(_args(kurir="spx")) is None
+    assert m.kurir_hitung(_args()) is None
+    assert m.kurir_hitung(_args(event=True, kurir="jnt")) == "jnt"
+    assert m.kurir_hitung(_args(event=True, kurir="spx-hemat-pagi")) == "spx-hemat-pagi"
+    waktu = datetime(2026, 10, 10, 13, 5)
+    assert m.nama_pdf_spesial(waktu, _args(kurir="jnt")) == "SKU_Spesial_2026-10-10_1305.pdf"
+    assert m.nama_pdf_spesial(waktu, _args(event=True, kurir="spx-hemat")) \
+        == "SKU_Spesial_2026-10-10_1305_spx-hemat.pdf"
+    print("  kurir_hitung: hanya --event yang menghitung per kurir; PDF event diberi akhiran kurir")
+
+
+def _df_event():
+    import pandas as pd
+    baris = ([(f"J{i}", "X", 1, "J&T Express Standard") for i in range(3)]
+             + [(f"H{i}", "X", 1, "SPX Hemat") for i in range(3)]
+             + [(f"S{i}", "X", 1, "SPX Standard") for i in range(4)])
+    return pd.DataFrame([list(b) + [None] for b in baris],
+                        columns=["No pesanan", "SKU", "qty", "Kurir", "Rak"])
+
+
+def _jalankan_reguler(args):
+    """Panggil reguler_picklist() dengan semua akses jaringan/Excel ditiru; kembalikan kwargs
+    panggilan proses_reguler/rencana_reguler (positional + keyword)."""
+    import logging
+
+    import proses_label
+    log = logging.getLogger("uji-main")
+    with mock.patch.object(m, "login", return_value="TOK"), \
+            mock.patch.object(m, "baca_excel", return_value=_df_event()), \
+            mock.patch.object(m, "_lengkapi_fallback_bundle", side_effect=lambda k, df, g, l: (g, l)), \
+            mock.patch.object(proses_label, "Klien"), \
+            mock.patch.object(proses_label, "proses_reguler", return_value=[]) as proses, \
+            mock.patch.object(proses_label, "rencana_reguler") as rencana, \
+            mock.patch.object(m, "cetak_bermasalah", return_value=[]):
+        assert m.reguler_picklist(log, args) == 0
+    return (proses if args.jalankan else rencana).call_args
+
+
+def uji_mode_event_reguler_picklist_spesial_per_kurir_dan_batas():
+    harian = _jalankan_reguler(_args(reguler=True, kurir="jnt"))
+    assert harian.args[1] == ({f"{p}{i}" for p in "JH" for i in range(3)}
+                              | {f"S{i}" for i in range(4)}), \
+        "harian: J&T + semua SPX (Hemat & Standard) digabung = 10 resi X, kurir=jnt hanya " \
+        "membatasi picklist"
+    assert harian.kwargs["batas"] is None
+
+    event_jnt = _jalankan_reguler(_args(reguler=True, kurir="jnt", event=True))
+    assert event_jnt.args[1] == {"J0", "J1", "J2"}, event_jnt.args[1]
+    assert event_jnt.kwargs["batas"] is None
+
+    hemat = _jalankan_reguler(_args(reguler=True, kurir="spx-hemat", event=True))
+    assert hemat.args[1] == {"H0", "H1", "H2"}, "SPX Standard (4 resi) tidak ikut spesial Hemat"
+    assert hemat.args[5] == "spx-hemat" and hemat.kwargs["batas"] is None
+
+    pagi = _jalankan_reguler(_args(reguler=True, kurir="spx-hemat-pagi", event=True))
+    assert pagi.args[1] == {"H0", "H1", "H2"}
+    assert pagi.args[5] == "spx-hemat-pagi"
+    b = pagi.kwargs["batas"]
+    assert b is not None and (b.hour, b.minute) == (12, 0), b
+
+    uji = _jalankan_reguler(_args(reguler=True, kurir="spx-hemat-pagi", event=True, jalankan=False))
+    assert uji.kwargs["batas"] is not None and uji.kwargs["batas"].hour == 12, \
+        "mode uji juga membawa batas jam"
+    print("  reguler_picklist: harian digabung & tanpa batas; event J&T/Hemat dihitung per kurir; "
+          "spx-hemat-pagi membawa batas jam 12:00 (juga di mode uji)")
+
+
+def uji_spx_standard_picklist_meneruskan_pagi_dan_mode_uji():
+    import logging
+
+    import proses_label
+    log = logging.getLogger("uji-main")
+    with mock.patch.object(m, "login", return_value="TOK"), \
+            mock.patch.object(proses_label, "Klien"), \
+            mock.patch.object(proses_label, "rencana_spx_standard") as rencana, \
+            mock.patch.object(proses_label, "proses_spx_standard", return_value=[]) as proses, \
+            mock.patch.object(m, "cetak_bermasalah", return_value=[]):
+        assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=False, pagi=True)) == 0
+        rencana.assert_called_once()
+        assert rencana.call_args.args[1] is True
+        proses.assert_not_called()
+        assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=True)) == 0
+        assert proses.call_args.args[3] is False
+        assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=True, pagi=True)) == 0
+        assert proses.call_args.args[3] is True
+    print("  --spx-standard: mode uji tidak memproses; --pagi diteruskan ke proses_label")
+
+
+def uji_main_menolak_spx_hemat_tanpa_event_sebelum_login():
+    with mock.patch.object(sys, "argv", ["main.py", "--label", "--kurir", "spx-hemat"]), \
+            mock.patch.object(m, "login") as login, mock.patch.object(m, "muat_env"), \
+            mock.patch.object(m, "siapkan_log"):
+        try:
+            m._main()
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("harus ditolak argparse")
+        login.assert_not_called()
+    print("  main: --kurir spx-hemat tanpa --event ditolak (exit 2) sebelum login/folder sesi")
+
+
+
+def uji_dalam_jam_menu_event_pilihan_2_setelah_jam_12():
+    with mock.patch.object(m, "datetime") as dt:
+        for jam, mnt, harapan in ((11, 59, False), (12, 0, True), (13, 0, True),
+                                  (15, 59, True), (16, 0, False)):
+            dt.now.return_value = _jam(jam, mnt)
+            assert m.dalam_jam_menu("E2") is harapan, (jam, mnt)
+    print("  menu event pilihan 2 (Shopee Pagi): valid 12.00-15.59, di luar itu diberi peringatan")
+
+
+def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
+    """Setiap baris `main.py ...` di proses-event.bat & proses-event-uji.bat diuji lewat argparse
+    SUNGGUHAN (_main berhenti tepat setelah parse, sebelum muat_env/login): salah ketik flag atau
+    kombinasi yang ditolak pesan_salah_mode_event() ketahuan di sini, bukan di hari event."""
+    import re
+    import shlex
+
+    class Berhenti(Exception):
+        pass
+
+    pola = re.compile(r'^(?:if /i "%JNT_SIANG%"=="Y" )?"\.venv\\Scripts\\python\.exe" '
+                      r'src\\main\.py (.*)$')
+    total = 0
+    for nama in ("proses-event.bat", "proses-event-uji.bat"):
+        for baris in (ROOT / nama).read_text(encoding="utf-8").splitlines():
+            cocok = pola.match(baris)
+            if not cocok:
+                continue
+            args = shlex.split(cocok.group(1), posix=False)
+            with mock.patch.object(sys, "argv", ["main.py", *args]), \
+                    mock.patch.object(m, "muat_env", side_effect=Berhenti):
+                try:
+                    m._main()
+                except Berhenti:
+                    total += 1
+                except SystemExit as e:
+                    raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
+    assert total >= 2 * (14 + 17), total
+    print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

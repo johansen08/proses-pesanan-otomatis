@@ -331,6 +331,107 @@ def uji_baca_daftar_ulang_file_tidak_ada():
     print("  baca_daftar_ulang: CetakError kalau file daftar sendiri tidak ditemukan")
 
 
+
+# -------------------------------------------------- mode event (SPX Hemat / SPX Standard)
+def uji_daftar_label_event_folder_terpisah_dan_tidak_masuk_jenis_gabungan():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        isi = {
+            "JNT_SPESIAL": "PICK-000200001_JNT_SPESIAL_A_2026-10-10_080000.pdf",
+            "SPXHEMAT_SPESIAL": "PICK-000200002_SPXHEMAT_SPESIAL_B_2026-10-10_080100.pdf",
+            "SPXHEMATPAGI_SPESIAL": "PICK-000200003_SPXHEMATPAGI_SPESIAL_C_2026-10-10_080200.pdf",
+            "SPXHEMAT_SATUAN": "PICK-000200004_SPXHEMAT-1QTY-REGULER-2A_2026-10-10_080300.pdf",
+            "SPXHEMATPAGI_SATUAN": "PICK-000200005_SPXHEMATPAGI-1QTY-REGULER-2A_2026-10-10_080400.pdf",
+            "SPXHEMAT_KOMBINASI": "PICK-000200006_SPXHEMAT-KOMBINASI-REGULER-LANTAI1_2026-10-10_080500.pdf",
+            "SPXHEMATPAGI_KOMBINASI": "PICK-000200007_SPXHEMATPAGI-KOMBINASI-REGULER-LANTAI1_2026-10-10_080600.pdf",
+            "SPX_STANDARD": "PICK-000200008_SPX-STANDARD-LANTAI1_2026-10-10_080700.pdf",
+            "SPX_PAGI": "PICK-000200009_SHOPEE-PAGI-SPX-STANDARD-LANTAI1_2026-10-10_080800.pdf",
+        }
+        for sub, nama in isi.items():
+            (folder / sub).mkdir()
+            _buat(folder / sub, nama)
+        harapan = {
+            "spesial-spx-hemat": "SPXHEMAT_SPESIAL", "spesial-spx-hemat-pagi": "SPXHEMATPAGI_SPESIAL",
+            "satuan-spx-hemat": "SPXHEMAT_SATUAN", "satuan-spx-hemat-pagi": "SPXHEMATPAGI_SATUAN",
+            "kombinasi-spx-hemat": "SPXHEMAT_KOMBINASI",
+            "kombinasi-spx-hemat-pagi": "SPXHEMATPAGI_KOMBINASI",
+            "spx-standard": "SPX_STANDARD", "spx-pagi": "SPX_PAGI",
+            "spesial-jnt": "JNT_SPESIAL",     # J&T mode event = folder & jenis yang sama dgn harian
+        }
+        for jenis, sub in harapan.items():
+            assert [f.name for f in ps.daftar_label(folder, jenis)] == [isi[sub]], jenis
+        # jenis gabungan harian TIDAK berubah: hanya folder harian, event tidak ikut
+        assert [f.name for f in ps.daftar_label(folder, "spesial")] == [isi["JNT_SPESIAL"]]
+        assert ps.daftar_label(folder, "satuan") == []
+        assert ps.daftar_label(folder, "kombinasi") == []
+        print("  jenis event: tiap folder (SPXHEMAT_*, SPXHEMATPAGI_*, SPX_STANDARD) punya jenis "
+              "sendiri; jenis gabungan harian tidak ikut mencetak label event")
+
+
+def uji_pola_spesial_mengenali_awalan_kurir_event():
+    cocok = {
+        "PICK-000000001_SPESIAL_X_2026-10-10_080000.pdf": 1,
+        "PICK-000000002_JNT_SPESIAL_X_2026-10-10_080000.pdf": 2,
+        "PICK-000000003_SPX_SPESIAL_X_2026-10-10_080000.pdf": 3,
+        "PICK-000000004_SPXHEMAT_SPESIAL_X_2026-10-10_080000.pdf": 4,
+        "PICK-000000005_SPXHEMATPAGI_SPESIAL_X_2026-10-10_080000.pdf": 5,
+    }
+    for nama, nomor in cocok.items():
+        m = ps.POLA_SPESIAL.match(nama)
+        assert m and int(m.group(1)) == nomor, nama
+    assert not ps.POLA_SPESIAL.match("PICK-000000007_SPXHEMAT-1QTY-REGULER-2A_2026-10-10.pdf")
+    print("  POLA_SPESIAL: mengenali awalan SPXHEMAT_/SPXHEMATPAGI_ selain JNT_/SPX_")
+
+
+def uji_nomor_terlompat_event_tidak_menghitung_jenis_event_lain():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        for sub, nama in (("SPXHEMAT_SPESIAL", "PICK-000000100_SPXHEMAT_SPESIAL_A_2026-10-10_080000.pdf"),
+                          ("SPXHEMATPAGI_SPESIAL", "PICK-000000101_SPXHEMATPAGI_SPESIAL_B_2026-10-10_080100.pdf"),
+                          ("SPXHEMAT_SPESIAL", "PICK-000000102_SPXHEMAT_SPESIAL_C_2026-10-10_080200.pdf"),
+                          ("SPX_STANDARD", "PICK-000000103_SPX-STANDARD-LANTAI1_2026-10-10_080300.pdf")):
+            (folder / sub).mkdir(exist_ok=True)
+            _buat(folder / sub, nama)
+        hemat = ps.daftar_label(folder, "spesial-spx-hemat", saring_nama=False)
+        assert ps.cari_nomor_terlompat(hemat, "spesial-spx-hemat") == [101]
+        assert ps.cari_nomor_terlompat(hemat, "spesial-spx-hemat", ps.nomor_pick_sesi(folder)) == [], \
+            "101 ada di folder Shopee Pagi (jenis lain) -> bukan nomor hilang"
+        print("  cari_nomor_terlompat: nomor di folder event lain (Pagi/Standard) tidak dihitung hilang")
+
+
+def uji_folder_dan_nama_file_buatan_proses_label_terbaca_print_spesial():
+    import proses_label as pl
+
+    for kurir in ("spx-hemat", "spx-hemat-pagi"):
+        assert ps.JENIS_LABEL[f"spesial-{kurir}"] == [pl._tag_spesial(kurir)], kurir
+        assert ps.JENIS_LABEL[f"satuan-{kurir}"] == [pl._gabung_kurir(pl.SUBFOLDER_SATUAN, kurir)]
+        assert ps.JENIS_LABEL[f"kombinasi-{kurir}"] == \
+            [pl._gabung_kurir(pl.SUBFOLDER_KOMBINASI, kurir)]
+        # nama file PDF spesial yang dibuat lanjutkan_picklist(): f"{picklist_no}_{tag}_{sku}_..."
+        nama = f"PICK-000200123_{pl._tag_spesial(kurir)}_TRC1_2026-10-10_080000.pdf"
+        assert ps.POLA_SPESIAL.match(nama), nama
+    assert ps.JENIS_LABEL["spx-standard"] == [pl.SUBFOLDER_SPX_STANDARD]
+    assert ps.JENIS_LABEL["spx-pagi"] == [pl.SUBFOLDER_SPX_PAGI]
+    print("  folder/tag buatan proses_label (SPXHEMAT*, SPXHEMATPAGI*, SPX_STANDARD, SPX_PAGI) "
+          "sama persis dengan yang dicari print_spesial")
+
+
+def uji_setiap_jenis_cetak_punya_bat_dan_bat_hanya_memakai_jenis_valid():
+    import re
+
+    bats = {}
+    for f in ROOT.glob("cetak-label-*.bat"):
+        for jenis in re.findall(r"--jenis\s+(\S+)", f.read_text(encoding="utf-8")):
+            bats.setdefault(jenis, []).append(f.name)
+    tanpa_bat = sorted(set(ps.JENIS_LABEL) - set(bats))
+    assert not tanpa_bat, f"jenis tanpa .bat cetak: {tanpa_bat}"
+    tak_dikenal = sorted(set(bats) - set(ps.JENIS_LABEL))
+    assert not tak_dikenal, f".bat memanggil --jenis yang tidak ada: {tak_dikenal}"
+    assert all(len(v) == 1 for v in bats.values()), f"1 jenis dipakai >1 .bat: {bats}"
+    print(f"  {len(ps.JENIS_LABEL)} jenis cetak <-> {len(bats)} .bat cetak-label-*.bat: sama persis, "
+          "tidak ada yang yatim")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

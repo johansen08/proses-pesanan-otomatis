@@ -33,7 +33,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MENU_BAT = ("proses-harian.bat", "proses-harian-uji.bat")
-POLA_PANGGIL_MAIN = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
+MENU_EVENT = ("proses-event.bat", "proses-event-uji.bat")
+# Langkah J&T Resi Siang di proses-event.bat dijalankan bersyarat (jawaban Y/N di awal):
+# barisnya diawali `if /i "%JNT_SIANG%"=="Y" ` - awalan itu dibuang saat mengekstrak argumen.
+POLA_PANGGIL_MAIN = re.compile(
+    r'^(?:if /i "%JNT_SIANG%"=="Y" )?"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
 
 # main.py & rekap_waktu.py palsu untuk simulasi: cuma mencatat argumen, tanpa Jubelio.
 MAIN_PALSU = '''import sys
@@ -76,9 +80,14 @@ def bisa_simulasi_cmd():
 
 def langkah_tipe(nama_bat, tipe):
     """Argumen main.py tiap langkah TIPE `tipe`, urut sesuai isi blok :tipeN di file .bat."""
+    return langkah_blok(nama_bat, f"tipe{tipe}")
+
+
+def langkah_blok(nama_bat, label):
+    """Argumen main.py tiap langkah di blok `:label` file .bat (sampai label berikutnya)."""
     baris = (ROOT / nama_bat).read_text(encoding="utf-8").splitlines()
     hasil = []
-    for b in baris[baris.index(f":tipe{tipe}") + 1:]:
+    for b in baris[baris.index(f":{label}") + 1:]:
         if b.startswith(":"):
             break
         cocok = POLA_PANGGIL_MAIN.match(b)
@@ -158,6 +167,85 @@ def uji_simulasi_menu_0_keluar_tanpa_menjalankan_apa_pun():
         assert keluar_sendiri and not panggilan and rekap is None, (
             nama, keluar_sendiri, panggilan, rekap)
     print("  menu 0: cmd langsung keluar, tidak ada main.py yang dijalankan")
+
+
+def uji_simulasi_menu_event_menjalankan_langkah_sesuai_urutan_file():
+    """proses-event.bat: pilihan 1 & 2 menjalankan tepat langkah di bloknya (J&T Resi Siang
+    hanya kalau dijawab Y); versi uji menjalankan semua langkah tanpa pertanyaan apa pun."""
+    if not bisa_simulasi_cmd():
+        return
+    for nama in MENU_EVENT:
+        uji = nama.endswith("-uji.bat")
+        for pilihan, label, judul in (("1", "event1", "EVENT - SESI BIASA"),
+                                      ("2", "event2", "EVENT - TEPAT JAM 13.00")):
+            semua = langkah_blok(nama, label)
+            assert semua, (nama, label)
+            siang = [a for a in semua if a.startswith("--jnt-siang")]
+            assert len(siang) == (1 if pilihan == "1" else 0), (nama, label, siang)
+            if uji:
+                jawaban = {"": f"{pilihan}\r\n"}
+            elif pilihan == "1":
+                jawaban = {"N": "1\r\nY\r\nN\r\n", "Y": "1\r\nY\r\nY\r\n",
+                           "kosong": "1\r\nY\r\n\r\n"}
+            else:
+                jawaban = {"": "2\r\nY\r\n"}
+            for kunci, masukan in jawaban.items():
+                panggilan, rekap, _ = simulasikan_menu(nama, masukan)
+                harapan = [a for a in semua if uji or kunci == "Y" or a not in siang]
+                assert panggilan == harapan, (
+                    f"{nama} pilihan {pilihan} (jawaban J&T Siang: {kunci!r}) salah langkah",
+                    "harapan:", harapan, "kenyataan:", panggilan)
+                assert rekap == judul, (nama, pilihan, rekap)
+    print("  proses-event.bat & versi uji: pilihan 1-2 menjalankan tepat langkah di bloknya, "
+          "berurutan; J&T Resi Siang hanya kalau dijawab Y (bawaan tidak), versi uji semua langkah")
+
+
+def uji_simulasi_menu_event_batal_dan_keluar_tidak_menjalankan_apa_pun():
+    if not bisa_simulasi_cmd():
+        return
+    for nama in MENU_EVENT:
+        panggilan, rekap, keluar_sendiri = simulasikan_menu(nama, "0\r\n", batas_detik=20)
+        assert keluar_sendiri and not panggilan and rekap is None, (nama, panggilan, rekap)
+    # jawab N di konfirmasi: kembali ke menu, tidak menjalankan apa pun (lalu 0 = keluar)
+    panggilan, rekap, keluar_sendiri = simulasikan_menu(
+        "proses-event.bat", "1\r\nN\r\n0\r\n", batas_detik=30)
+    assert keluar_sendiri and not panggilan and rekap is None, (panggilan, rekap)
+    print("  proses-event.bat: menu 0 langsung keluar; jawab N di konfirmasi tidak menjalankan "
+          "apa pun")
+
+
+def uji_bat_event_uji_sama_dengan_sungguhan_tanpa_jalankan():
+    """Versi uji harus menjalankan PERSIS langkah yang sama dengan versi sungguhan (hanya tanpa
+    --jalankan): mencegah keduanya menyimpang diam-diam saat salah satu diedit."""
+    for label in ("event1", "event2"):
+        asli = langkah_blok("proses-event.bat", label)
+        uji = langkah_blok("proses-event-uji.bat", label)
+        assert all(a.endswith(" --jalankan") for a in asli), asli
+        assert not any("--jalankan" in a for a in uji), uji
+        assert [a[:-len(" --jalankan")] for a in asli] == uji, (label, asli, uji)
+    print("  proses-event.bat vs proses-event-uji.bat: langkah identik, uji tanpa --jalankan")
+
+
+def uji_bat_event_urutan_pagi_dan_pemisahan_kurir():
+    """Aturan bisnis yang tidak boleh bergeser diam-diam: Shopee Pagi SEBELUM langkah seharian,
+    J&T/SPX Hemat selalu dengan --event, tidak ada langkah harian (digabung) di .bat event."""
+    sesi1 = langkah_blok("proses-event.bat", "event1")
+    sesi2 = langkah_blok("proses-event.bat", "event2")
+    for sesi in (sesi1, sesi2):
+        for a in sesi:
+            if "--label" in a or "--reguler" in a:
+                assert "--event" in a and ("--kurir jnt" in a or "--kurir spx-hemat" in a), a
+        assert sesi[0].startswith("--recheck-stok") and sesi[1].startswith("--sampel")
+        assert sesi[-2].startswith("--tulis-excel") and sesi[-1].startswith("--upload-iresis")
+    assert not any("--pagi" in a or "spx-hemat-pagi" in a for a in sesi1)
+    pagi = [i for i, a in enumerate(sesi2) if "--pagi" in a or "spx-hemat-pagi" in a]
+    harian = [i for i, a in enumerate(sesi2)
+              if ("--kurir jnt" in a or "--kurir spx-hemat " in a + " " or a.startswith("--spx-standard --j"))
+              and i not in pagi]
+    assert len(pagi) == 4 and pagi == list(range(pagi[0], pagi[0] + 4)), pagi
+    assert harian and min(harian) > max(pagi), "Shopee Pagi harus selesai sebelum langkah seharian"
+    print("  .bat event: Shopee Pagi (4 langkah) mendahului langkah seharian; semua --label/"
+          "--reguler memakai --event")
 
 
 def uji_pendeteksi_mengenali_pola_salah_dan_benar():
