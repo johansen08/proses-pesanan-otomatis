@@ -76,6 +76,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
   membuat picklist/label baru. Punya 19 jenis; `cetak-label.bat` = MENU (grup HARIAN/EVENT/
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
+  Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
+  mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,
+  nomor terlompat dicek per sesi.
   Hanya `cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.

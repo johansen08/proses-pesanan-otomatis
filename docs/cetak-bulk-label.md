@@ -180,6 +180,30 @@ Urutan kerja program (sama untuk semua jenis & paket):
 4. Konfirmasi (Y/N) sebelum mulai cetak.
 5. Cetak satu per satu secara **berurut** (nomor PICK terkecil dulu).
 
+### 3.3 Sesi menumpuk (mis. malam sampai pagi): `--semua-sesi`
+
+Secara default program hanya mengambil **satu** folder sesi, yang terbaru. Kalau sesi malam
+(mis. `2026-10-07/5`, `/6`) belum sempat dicetak lalu pagi ada sesi baru (`2026-10-08/1`), sesi
+malam tidak ikut tercetak. Gunakan `--semua-sesi`:
+
+```bash
+cetak-label.bat --paket jnt --semua-sesi            # sesi kemarin + hari ini
+cetak-label.bat --paket jnt --semua-sesi --hari 3   # 3 hari terakhir
+```
+
+Dari menu `cetak-label.bat`, setelah memilih jenis/paket muncul pertanyaan **"Cetak dari sesi
+mana?"**: `1` = sesi terbaru saja (default, Enter), `2` = semua sesi 2 hari terakhir. Pintasan
+harian (`cetak-label-spesial.bat` dst) tidak bertanya; tambahkan `--semua-sesi` di belakangnya.
+
+- Urutan cetak: sesi **terlama → terbaru** (tanggal lalu nomor sesi sebagai angka), di dalam
+  tiap sesi mengikuti urutan jenis. Printer dan konfirmasi Y/N tetap **sekali** untuk semuanya.
+- Label yang sudah tercatat di `logs/sudah_dicetak.txt` dilewati, jadi aman dijalankan
+  berulang tanpa cetak dobel.
+- Peringatan nomor PICK terlompat dihitung **per sesi** (nomor PICK sesi malam dan pagi
+  berbeda rentang), dan pesannya menyebut sesi yang bersangkutan.
+- Tidak bisa digabung dengan `--folder` atau `--ulang`.
+- `--hari N` = N hari terakhir termasuk hari ini (`1` = hari ini saja).
+
 ### Pilihan tambahan
 
 Berlaku sama untuk keempat `.bat` (contoh pakai `cetak-label-gtl-sicepat.bat`, ganti
@@ -188,6 +212,7 @@ nama `.bat`-nya sesuai jenis yang mau dicetak):
 | Perintah | Kegunaan |
 |---|---|
 | `cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` | Pakai folder sesi tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya) |
+| `cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` | Cetak dari **semua** sesi N hari terakhir (default 2), bukan hanya yang terbaru — lihat bagian 3.3 |
 | `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` | Lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer) |
 | `cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` | Cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian 4), tanpa mencari ulang folder sesi |
 

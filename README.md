@@ -538,6 +538,11 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
 
 - `cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder
   sesi tertentu, bukan yang terbaru.
+- `cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` — cetak dari **semua** sesi N hari
+  terakhir (default 2: kemarin + hari ini), terlama dulu, bukan hanya yang terbaru. Untuk sesi
+  malam yang menumpuk sampai pagi; label yang sudah tercetak dilewati (aman diulang). Dari menu
+  `cetak-label.bat` ditanya otomatis. Detail: bagian 3.3 di
+  [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md).
 - `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
   (tetap tanya pilih printer).
 - `cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
