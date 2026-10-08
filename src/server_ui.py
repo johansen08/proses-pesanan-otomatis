@@ -120,6 +120,12 @@ def _baca_keluaran(proses: subprocess.Popen, job: dict) -> None:
     job["status"] = "selesai" if job["kode"] == 0 else "gagal"
 
 
+class Server(ThreadingHTTPServer):
+    # Windows: dengan SO_REUSEADDR, server kedua BISA bind ke port yang sudah dipakai (bukan error) -
+    # matikan supaya klik dua kali tombol buka app terdeteksi lewat OSError di main().
+    allow_reuse_address = False
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "UIcetak"
 
@@ -193,13 +199,23 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Server lokal UI desktop (menu Cetak).")
+    ap = argparse.ArgumentParser(description="Server lokal UI desktop (menu Harian & Cetak).")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--buka", action="store_true", help="Buka UI di browser setelah server jalan")
+    ap.add_argument("--menu", choices=["harian", "cetak"], default="harian",
+                    help="Menu yang dibuka pertama oleh --buka (default harian)")
     args = ap.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    url = f"http://127.0.0.1:{args.port}/"
-    print(f"UI cetak berjalan di {url}  (Ctrl+C untuk berhenti)")
+    url = f"http://127.0.0.1:{args.port}/#{args.menu}"
+    try:
+        server = Server(("127.0.0.1", args.port), Handler)
+    except OSError:
+        # port terpakai -> anggap server UI sudah berjalan (tombol buka app diklik dua kali):
+        # cukup buka tampilannya, jangan jalankan server kedua.
+        print(f"UI sudah berjalan di {url}")
+        if args.buka:
+            webbrowser.open(url)
+        return 0
+    print(f"UI berjalan di {url}  (Ctrl+C atau tutup jendela ini untuk berhenti)")
     if args.buka:
         webbrowser.open(url)
     try:

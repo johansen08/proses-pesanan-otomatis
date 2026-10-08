@@ -624,6 +624,7 @@ async function initHarianAPI(){
  }catch(e){toast('Server UI error: '+e.message);}
 }
 render();drawPeringatan();initCetak();initHarianAPI();
+if(location.hash==='#cetak')go('cetak');   // dari server_ui.py --menu cetak
 </script>
 </body>
 </html>

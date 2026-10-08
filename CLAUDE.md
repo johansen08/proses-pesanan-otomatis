@@ -94,7 +94,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
   server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
   satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
-  Tes: `tests/test_server_ui.py`.
+  Peluncurnya `buka-app.bat` (`--buka --menu harian`; `--menu cetak` membuka Cetak dulu); server kedua
+  dicegah (`Server.allow_reuse_address = False` — di Windows SO_REUSEADDR membolehkan bind ganda ke
+  port yang sama), klik kedua hanya membuka tampilan. Tes: `tests/test_server_ui.py`.
 - `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
   Jubelio): tiap langkah di `KATALOG` = satu proses `main.py <flag> --jalankan` berurutan (BUKAN
   memanggil fungsi langsung), lalu `rekap_waktu.py`. Meniru `.bat`: `LABEL_SESI_DIR` dihitung sekali

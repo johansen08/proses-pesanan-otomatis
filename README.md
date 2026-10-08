@@ -562,6 +562,10 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
   label sekali per hari, `--lewati-malam` hanya TIPE 1, rekap waktu di akhir). Ada log langsung, tombol
   Hentikan, peringatan kalau di luar jam TIPE, dan panel peringatan hari ini (picklist terlompat/tanpa
   resi/gagal). `.bat` tetap bisa dipakai seperti biasa.
+  **Tombol buka app**: klik dua kali `buka-app.bat` (menjalankan `server_ui.py --buka --menu harian`,
+  browser langsung di menu Harian). Jendela hitamnya harus tetap terbuka selama app dipakai — menutupnya
+  menghentikan app (proses menu Harian yang sedang berjalan ikut terhenti). Klik lagi saat app sudah
+  berjalan = hanya membuka tampilannya. `--menu cetak` membuka menu Cetak lebih dulu.
 - `cetak-label-gtl-sicepat.bat --printer "NAMA PRINTER"` — nama printer persis seperti di Windows;
   melewati tanya pilih printer (dipakai UI desktop).
 - `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak

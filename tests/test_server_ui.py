@@ -167,6 +167,21 @@ def uji_server_ui_endpoint_harian():
     print("  server_ui harian: info, validasi 400/404/403, jalankan -> job selesai, lines bertahap, hentikan tanpa job")
 
 
+def uji_server_ui_port_terpakai_tidak_menjalankan_server_kedua():
+    """Tombol buka app diklik dua kali: port sudah dipakai -> main() cukup membuka tampilan
+    (mock webbrowser) dan keluar 0, bukan error/ server kedua."""
+    server = su.Server(("127.0.0.1", 0), su.Handler)
+    port = server.server_address[1]
+    dibuka = []
+    try:
+        with mock.patch.object(su.webbrowser, "open", dibuka.append),                 mock.patch.object(sys, "argv", ["server_ui.py", "--port", str(port), "--buka", "--menu", "cetak"]):
+            assert su.main() == 0
+    finally:
+        server.server_close()
+    assert dibuka == [f"http://127.0.0.1:{port}/#cetak"], dibuka
+    print("  server_ui: port terpakai -> hanya membuka tampilan (#menu), tanpa server kedua")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):
