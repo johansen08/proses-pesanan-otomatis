@@ -169,7 +169,19 @@ LOKASI_SUMATRA_UMUM = [
 ]
 
 JEDA_ANTAR_CETAK_S = 0.5   # jeda antar print job, supaya spooler tidak kebanjiran
-TIMEOUT_SUMATRA_S = 120    # batas tunggu SumatraPDF mengirim 1 dokumen ke spooler
+
+
+def _timeout_sumatra() -> int:
+    """Batas tunggu SumatraPDF mengirim 1 dokumen ke spooler (detik). Bisa dinaikkan di PC
+    yang lemah lewat environment variable SUMATRA_TIMEOUT_S; nilai tidak valid -> 120."""
+    try:
+        nilai = int(os.environ.get("SUMATRA_TIMEOUT_S", "120"))
+    except ValueError:
+        return 120
+    return nilai if nilai > 0 else 120
+
+
+TIMEOUT_SUMATRA_S = _timeout_sumatra()
 TIMEOUT_POWERSHELL_S = 20
 
 # Status job (Get-PrintJob -> JobStatus, dari PrintManagement module) yang dianggap
@@ -406,15 +418,32 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             return False
 
 
+def _matikan_sumatra(sumatra: Path) -> None:
+    """Bunuh sisa proses SumatraPDF yang menggantung supaya tidak memblokir file berikutnya.
+    subprocess.run hanya mematikan proses induknya sendiri saat timeout."""
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", Path(sumatra).name],
+                       capture_output=True, text=True, timeout=TIMEOUT_POWERSHELL_S)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Gagal mematikan sisa proses %s: %s", Path(sumatra).name, e)
+
+
 def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
     """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
     manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
     Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
     valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih."""
     sebelum = _job_ids(printer) if pantau else set()
-    r = subprocess.run(
-        [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
-        capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
+    try:
+        r = subprocess.run(
+            [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
+            capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
+    except subprocess.TimeoutExpired:
+        _matikan_sumatra(sumatra)
+        raise CetakError(
+            f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
+            "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
+            "kalau PC lambat.") from None
     if r.returncode != 0:
         raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
                          f"{r.stderr.strip() or r.stdout.strip()}")

@@ -331,6 +331,43 @@ def uji_baca_daftar_ulang_file_tidak_ada():
     print("  baca_daftar_ulang: CetakError kalau file daftar sendiri tidak ditemukan")
 
 
+def uji_cetak_timeout_jadi_cetak_error_dan_batch_lanjut():
+    import subprocess
+    from unittest import mock
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        a, b = folder / "a.pdf", folder / "b.pdf"
+        a.write_bytes(b"%PDF-1.4")
+        b.write_bytes(b"%PDF-1.4")
+        panggilan = []
+
+        def palsu(cmd, **kw):
+            panggilan.append(cmd)
+            if cmd[0] == "taskkill":
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            if str(a) in cmd:
+                raise subprocess.TimeoutExpired(cmd, 1)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        dicatat = []
+        with mock.patch.object(ps.subprocess, "run", palsu),                 mock.patch.object(ps, "catat_sudah_dicetak", dicatat.append),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0):
+            berhasil, gagal = ps.cetak_semua(Path("SumatraPDF.exe"), "P", [a, b], False)
+        assert gagal == [a] and berhasil == [b], (berhasil, gagal)
+        assert any(c[0] == "taskkill" for c in panggilan), "sisa SumatraPDF harus dimatikan"
+        print("  cetak: timeout SumatraPDF -> file masuk gagal, taskkill, batch lanjut")
+
+
+def uji_timeout_sumatra_dari_env():
+    import os
+    from unittest import mock
+    for nilai, harapan in (("300", 300), ("abc", 120), ("-5", 120), ("0", 120)):
+        with mock.patch.dict(os.environ, {"SUMATRA_TIMEOUT_S": nilai}):
+            assert ps._timeout_sumatra() == harapan, (nilai, ps._timeout_sumatra())
+    with mock.patch.dict(os.environ, clear=False):
+        os.environ.pop("SUMATRA_TIMEOUT_S", None)
+        assert ps._timeout_sumatra() == 120
+    print("  _timeout_sumatra: env SUMATRA_TIMEOUT_S dipakai, tidak valid -> 120")
+
 
 # -------------------------------------------------- mode event (SPX Hemat / SPX Standard)
 def uji_daftar_label_event_folder_terpisah_dan_tidak_masuk_jenis_gabungan():
