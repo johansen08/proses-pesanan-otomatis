@@ -182,6 +182,65 @@ def uji_server_ui_port_terpakai_tidak_menjalankan_server_kedua():
     print("  server_ui: port terpakai -> hanya membuka tampilan (#menu), tanpa server kedua")
 
 
+def uji_server_ui_dua_printer_berbeda_bersamaan():
+    """Printer BERBEDA boleh mencetak bersamaan; printer yang sama antre (409); file yang sama
+    tidak boleh dicetak dua printer sekaligus (409)."""
+    hari_ini = date.today().isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        log_dir = Path(tmp) / "logs"
+        log_dir.mkdir()
+        nama = ["PICK-000000001_SPESIAL_A_x.pdf", "PICK-000000002_SPESIAL_B_x.pdf", "PICK-000000003_SPESIAL_C_x.pdf"]
+        _buat(label / hari_ini / "1" / "SPESIAL", *nama)
+        rel = [f"{hari_ini}/1/SPESIAL/{n}" for n in nama]
+        popen_asli = subprocess.Popen
+        diluncurkan = []
+
+        def popen_palsu(perintah, **kw):    # tiap job menggantung ~1,5 detik supaya tumpang tindih
+            diluncurkan.append(perintah)
+            return popen_asli([sys.executable, "-c", "import time; print('[1/1] Mencetak x', flush=True); time.sleep(1.5)"],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+        su._jobs.clear()
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir),                 mock.patch.object(su.subprocess, "Popen", popen_palsu):
+            server = su.Server(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                assert _panggil(port, "/api/cetak", {"files": [rel[0]], "printer": "PRINTER-A"})[0] == 200
+                # printer berbeda, file berbeda -> boleh bersamaan
+                assert _panggil(port, "/api/cetak", {"files": [rel[1]], "printer": "PRINTER-B"})[0] == 200
+                # printer yang sama masih mencetak -> 409
+                kode, e = _panggil(port, "/api/cetak", {"files": [rel[2]], "printer": "PRINTER-A"})
+                assert kode == 409 and "PRINTER-A" in e["error"], (kode, e)
+                # file yang sedang dicetak printer A tidak boleh dikirim ke printer C
+                kode, e = _panggil(port, "/api/cetak", {"files": [rel[0], rel[2]], "printer": "PRINTER-C"})
+                assert kode == 409 and "PRINTER-A" in e["error"], (kode, e)
+                assert len(diluncurkan) == 2
+                # status terpisah per printer
+                kode, ja = _panggil(port, "/api/job?printer=PRINTER-A")
+                kode, jb = _panggil(port, "/api/job?printer=PRINTER-B")
+                assert ja["printer"] == "PRINTER-A" and jb["printer"] == "PRINTER-B" and ja["id"] != jb["id"]
+                assert ja["status"] == "jalan" and jb["status"] == "jalan"
+                assert {n: v["status"] for n, v in _panggil(port, "/api/jobs")[1]["jobs"].items()} ==                     {"PRINTER-A": "jalan", "PRINTER-B": "jalan"}
+                assert _panggil(port, "/api/job?printer=TIDAK-ADA")[1]["status"] == "kosong"
+                for _ in range(60):
+                    sj = [_panggil(port, f"/api/job?printer={n}")[1]["status"] for n in ("PRINTER-A", "PRINTER-B")]
+                    if sj == ["selesai", "selesai"]:
+                        break
+                    time.sleep(0.1)
+                assert sj == ["selesai", "selesai"], sj
+                # setelah A selesai, A boleh dipakai lagi
+                assert _panggil(port, "/api/cetak", {"files": [rel[2]], "printer": "PRINTER-A"})[0] == 200
+                # nama file daftar pilihan unik per job (tidak saling menimpa)
+                assert len({c[c.index("--file-dari") + 1] for c in diluncurkan}) == len(diluncurkan)
+            finally:
+                time.sleep(1.8)          # biarkan job terakhir selesai sebelum folder sementara dihapus
+                server.shutdown()
+                su._jobs.clear()
+    print("  server_ui: printer berbeda mencetak bersamaan, printer sama/file sama ditolak 409, status per printer")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

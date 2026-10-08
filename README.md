@@ -566,6 +566,11 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
   browser langsung di menu Harian). Jendela hitamnya harus tetap terbuka selama app dipakai — menutupnya
   menghentikan app (proses menu Harian yang sedang berjalan ikut terhenti). Klik lagi saat app sudah
   berjalan = hanya membuka tampilannya. `--menu cetak` membuka menu Cetak lebih dulu.
+  **Cetak ke 2 printer bersamaan**: di menu Cetak, pilih file + printer pertama, Cetak, lalu
+  *Sembunyikan* jendela progres (cetak jalan terus); pilih file lain + printer BERBEDA, Cetak lagi.
+  Satu chip per printer di bilah bawah menunjukkan progres (klik untuk catatannya). Printer yang
+  sama tidak bisa dipakai dua job sekaligus (tombol Cetak nonaktif), dan file yang sedang dicetak
+  satu printer tidak bisa dikirim ke printer lain.
 - `cetak-label-gtl-sicepat.bat --printer "NAMA PRINTER"` — nama printer persis seperti di Windows;
   melewati tanya pilih printer (dipakai UI desktop).
 - `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak

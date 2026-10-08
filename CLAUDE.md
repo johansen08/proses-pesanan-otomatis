@@ -96,7 +96,12 @@ project secara umum, root tidak boleh berisi file `.py`):
   satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
   Peluncurnya `buka-app.bat` (`--buka --menu harian`; `--menu cetak` membuka Cetak dulu); server kedua
   dicegah (`Server.allow_reuse_address = False` — di Windows SO_REUSEADDR membolehkan bind ganda ke
-  port yang sama), klik kedua hanya membuka tampilan. Tes: `tests/test_server_ui.py`.
+  port yang sama), klik kedua hanya membuka tampilan. Job cetak dikunci PER PRINTER (`_jobs[printer]`):
+  printer berbeda boleh mencetak bersamaan, printer sama/file sama yang sedang dicetak -> 409. Supaya
+  aman paralel, `print_spesial.py` TIDAK boleh memakai `taskkill /IM SumatraPDF.exe` (mematikan cetak
+  printer lain; `_matikan_sumatra()` hanya mematikan proses yang command line-nya memuat path file
+  itu), `catat_sudah_dicetak()` memakai kunci file (`_kunci_catatan`), dan nama file daftar
+  gagal/pilihan unik per proses (PID/uuid). Tes: `tests/test_server_ui.py`.
 - `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
   Jubelio): tiap langkah di `KATALOG` = satu proses `main.py <flag> --jalankan` berurutan (BUKAN
   memanggil fungsi langsung), lalu `rekap_waktu.py`. Meniru `.bat`: `LABEL_SESI_DIR` dihitung sekali

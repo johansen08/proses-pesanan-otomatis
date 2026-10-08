@@ -101,6 +101,7 @@ belakangan lewat --ulang.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
 import os
 import re
@@ -391,10 +392,39 @@ def baca_sudah_dicetak(file_catatan: Path | None = None) -> set[str]:
     return {b.strip() for b in file_catatan.read_text(encoding="utf-8").splitlines() if b.strip()}
 
 
+@contextlib.contextmanager
+def _kunci_catatan(file_catatan: Path, tunggu_s: float = 10.0):
+    """Kunci antar-proses (file `<catatan>.lock`, dibuat atomik) supaya dua proses cetak yang
+    jalan BERSAMAAN (printer berbeda, lihat server_ui.py) tidak saling menimpa catatan. Kunci
+    basi (>30 detik, proses mati) dibuang; kalau tak kunjung dapat dalam `tunggu_s` detik, tetap
+    lanjut tanpa kunci - kehilangan 1 baris catatan lebih murah daripada menggantung cetak."""
+    kunci = file_catatan.with_name(file_catatan.name + ".lock")
+    mulai, dipegang = time.monotonic(), False
+    while not dipegang:
+        try:
+            os.close(os.open(kunci, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            dipegang = True
+        except FileExistsError:
+            try:
+                if time.time() - kunci.stat().st_mtime > 30:
+                    kunci.unlink(missing_ok=True)
+                    continue
+            except OSError:
+                pass
+            if time.monotonic() - mulai > tunggu_s:
+                break
+            time.sleep(0.02)
+    try:
+        yield
+    finally:
+        if dipegang:
+            kunci.unlink(missing_ok=True)
+
+
 def catat_sudah_dicetak(file: Path, file_catatan: Path | None = None) -> None:
     file_catatan = file_catatan or FILE_SUDAH_DICETAK
     file_catatan.parent.mkdir(exist_ok=True)
-    with open(file_catatan, "a", encoding="utf-8") as f:
+    with _kunci_catatan(file_catatan), open(file_catatan, "a", encoding="utf-8") as f:
         f.write(str(file.resolve()) + "\n")
 
 
@@ -545,14 +575,18 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             return False
 
 
-def _matikan_sumatra(sumatra: Path) -> None:
+def _matikan_sumatra(sumatra: Path, file: Path) -> None:
     """Bunuh sisa proses SumatraPDF yang menggantung supaya tidak memblokir file berikutnya.
-    subprocess.run hanya mematikan proses induknya sendiri saat timeout."""
+    subprocess.run hanya mematikan proses induknya sendiri saat timeout. Yang dimatikan HANYA
+    proses yang command line-nya memuat path `file` ini - JANGAN pakai `taskkill /IM`, itu
+    mematikan SumatraPDF milik cetak lain yang berjalan bersamaan (printer berbeda)."""
+    nama = Path(sumatra).name
     try:
-        subprocess.run(["taskkill", "/F", "/IM", Path(sumatra).name],
-                       capture_output=True, text=True, timeout=TIMEOUT_POWERSHELL_S)
+        _ps(f"Get-CimInstance Win32_Process -Filter \"Name='{_esc_ps(nama)}'\" | "
+            "Where-Object { $_.CommandLine -and $_.CommandLine.Contains('" + _esc_ps(str(file)) + "') } | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }")
     except (OSError, subprocess.SubprocessError) as e:
-        log.warning("Gagal mematikan sisa proses %s: %s", Path(sumatra).name, e)
+        log.warning("Gagal mematikan sisa proses %s untuk %s: %s", nama, Path(file).name, e)
 
 
 def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
@@ -566,7 +600,7 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
             [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
             capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
     except subprocess.TimeoutExpired:
-        _matikan_sumatra(sumatra)
+        _matikan_sumatra(sumatra, file)
         raise CetakError(
             f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
             "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
@@ -611,7 +645,8 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
 # ============================================================== 4. daftar gagal (resume)
 def simpan_daftar_gagal(gagal: list[Path]) -> Path:
     FOLDER_LOG.mkdir(exist_ok=True)
-    tujuan = FOLDER_LOG / f"gagal_cetak_{datetime.now():%Y-%m-%d_%H%M%S}.txt"
+    # + PID: dua proses cetak bersamaan yang gagal di detik yang sama tidak saling menimpa
+    tujuan = FOLDER_LOG / f"gagal_cetak_{datetime.now():%Y-%m-%d_%H%M%S}_p{os.getpid()}.txt"
     tujuan.write_text("\n".join(str(f.resolve()) for f in gagal) + "\n", encoding="utf-8")
     return tujuan
 

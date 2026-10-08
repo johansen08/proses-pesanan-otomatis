@@ -13,7 +13,9 @@ API (JSON):
   GET  /api/printer  nama printer yang terhubung
   POST /api/cetak    {"files": ["2026-10-07/1/SPESIAL/PICK-....pdf", ...], "printer": "...",
                       "ulang": false} -> {"job": id}; satu job sekaligus (409 kalau masih jalan)
-  GET  /api/job      status & baris log job terakhir
+  GET  /api/job?printer=NAMA   status & baris log job printer itu (tanpa parameter: job terakhir)
+  GET  /api/jobs               ringkasan job semua printer
+  (printer BERBEDA boleh mencetak bersamaan; printer yang sama antre -> 409)
   GET  /api/harian/info          jam cocok per TIPE, peringatan hari ini, apakah ada job berjalan
   POST /api/harian/jalankan      {"langkah": [nama...], "judul": "TIPE 1"} -> {"job": id}
                                  (SUNGGUHAN: lihat jalankan_harian.py; 409 kalau masih berjalan)
@@ -30,6 +32,7 @@ import os
 import subprocess
 import sys
 import threading
+import uuid
 import webbrowser
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -46,7 +49,8 @@ JENIS_UI = [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombina
             ("GTL-SiCepat", "gtl-sicepat")]
 BARIS_LOG_MAKS = 400
 
-_job: dict | None = None
+_jobs: dict[str, dict] = {}      # kunci = nama printer: printer BERBEDA boleh mencetak bersamaan
+_terakhir: str | None = None
 _kunci = threading.Lock()
 
 
@@ -86,16 +90,22 @@ def data_sesi(hari_ini: date | None = None) -> dict:
 
 def mulai_cetak(files: list[str], printer: str, ulang: bool = False) -> str:
     """Validasi pilihan lalu jalankan print_spesial.py --file-dari di proses terpisah.
-    Melempar ps.CetakError (pilihan tidak valid) atau RuntimeError (job lain masih jalan)."""
-    global _job
+    Melempar ps.CetakError (pilihan tidak valid) atau RuntimeError (printer itu masih mencetak /
+    file yang sama sedang dicetak printer lain). Printer BERBEDA boleh jalan bersamaan."""
+    global _terakhir
     ps.pilih_file_spesifik(files)            # tolak lebih awal: di luar folder, bukan PDF, hilang
     if not printer:
         raise ps.CetakError("Printer belum dipilih")
     with _kunci:
-        if _job and _job["status"] == "jalan":
-            raise RuntimeError("Masih ada cetak yang berjalan")
+        j = _jobs.get(printer)
+        if j and j["status"] == "jalan":
+            raise RuntimeError(f'Printer "{printer}" masih mencetak')
+        baru = {str(f) for f in ps.pilih_file_spesifik(files)}
+        for lain, jl in _jobs.items():
+            if jl["status"] == "jalan" and baru & jl["files"]:
+                raise RuntimeError(f'Ada file pilihan yang sedang dicetak printer "{lain}"')
         ps.FOLDER_LOG.mkdir(exist_ok=True)
-        daftar = ps.FOLDER_LOG / f"pilihan_ui_{datetime.now():%Y-%m-%d_%H%M%S}.txt"
+        daftar = ps.FOLDER_LOG / f"pilihan_ui_{datetime.now():%Y-%m-%d_%H%M%S}_{uuid.uuid4().hex[:6]}.txt"
         daftar.write_text("\n".join(files) + "\n", encoding="utf-8")
         perintah = [sys.executable, str(Path(__file__).with_name("print_spesial.py")),
                     "--file-dari", str(daftar), "--printer", printer, "--tanpa-konfirmasi"]
@@ -106,10 +116,19 @@ def mulai_cetak(files: list[str], printer: str, ulang: bool = False) -> str:
             perintah, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", env=env, cwd=str(ROOT),
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        _job = {"id": datetime.now().strftime("%H%M%S"), "status": "jalan", "kode": None,
-                "lines": [], "total": len(files)}
-        threading.Thread(target=_baca_keluaran, args=(proses, _job), daemon=True).start()
-        return _job["id"]
+        job = {"id": uuid.uuid4().hex[:8], "printer": printer, "status": "jalan", "kode": None,
+               "lines": [], "total": len(files), "files": baru}
+        _jobs[printer] = job
+        _terakhir = printer
+        threading.Thread(target=_baca_keluaran, args=(proses, job), daemon=True).start()
+        return job["id"]
+
+
+def _publik(job: dict | None) -> dict:
+    """Job tanpa daftar path internal (untuk JSON)."""
+    if not job:
+        return {"status": "kosong", "lines": []}
+    return {k: v for k, v in job.items() if k != "files"}
 
 
 def _baca_keluaran(proses: subprocess.Popen, job: dict) -> None:
@@ -158,7 +177,11 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/printer":
                 return self._kirim(200, {"printer": ps.daftar_printer()})
             if url.path == "/api/job":
-                return self._kirim(200, _job or {"status": "kosong", "lines": []})
+                nama = parse_qs(url.query).get("printer", [_terakhir])[0]
+                return self._kirim(200, _publik(_jobs.get(nama)))
+            if url.path == "/api/jobs":     # ringkasan semua printer (UI memulihkan status setelah refresh)
+                return self._kirim(200, {"jobs": {n: {"status": j["status"], "total": j["total"],
+                                                      "id": j["id"]} for n, j in _jobs.items()}})
             if url.path == "/api/harian/info":
                 return self._kirim(200, jh.info())
             if url.path == "/api/harian/job":

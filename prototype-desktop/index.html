@@ -284,6 +284,7 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
     <div id="sesiList"></div>
     <div class="dock">
       <span id="cInfo" style="font-weight:600">Belum ada yang dipilih</span>
+      <span id="cJobs" style="display:flex;gap:6px;flex-wrap:wrap"></span>
       <div class="grow"></div>
       <select id="cPrinter"><option>Printer Thermal 100x150 (Ruang Resi)</option><option>Printer Thermal 2 (Lantai 2)</option><option>Simpan sebagai PDF</option></select>
       <button class="btn" id="cCetak" disabled><svg style="width:16px"><use href="#print"/></svg>Cetak</button>
@@ -494,7 +495,7 @@ function drawCetak(){
  $('#ckAll .b').className='b '+(all&&pilAll===all?'on':pilAll?'mix':'');
  $('#cTot').textContent=pilAll+' dari '+all+' file dipilih';$('#cTot').className='pill '+(pilAll?'acc':'');
  $('#cInfo').textContent=pilAll?`${sesiSet} sesi · ${jenisSet.size} jenis · ${nFile} file${lb(total)}`:'Belum ada yang dipilih';
- $('#cCetak').disabled=!pilAll;
+ updateCetakBtn();
 }
 $('#sesiList').onclick=e=>{
  const fr=e.target.closest('.fr'),jg=e.target.closest('.jgrp'),se=e.target.closest('.sesi');if(!se)return;
@@ -545,30 +546,65 @@ async function initCetak(){
  if(location.protocol.startsWith('http')){
   try{const dd=await muatData();tglAktif=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0);
    const p=await api('/api/printer');$('#cPrinter').innerHTML=p.printer.map(x=>`<option>${x}</option>`).join('');
+   try{const jj=(await api('/api/jobs')).jobs;Object.keys(jj).forEach(n=>{if(jj[n].status==='jalan')lacak(n,jj[n].total)});}catch(e){}
    $('#modeInfo').textContent='Tersambung ke printer & label sungguhan';$('#modeInfo').className='pill ok';
   }catch(e){toast('Server UI error: '+e.message);}
  }else{$('#modeInfo').textContent='Mode contoh (data tiruan) — jalankan src/server_ui.py untuk data sungguhan';$('#modeInfo').className='pill warn';}
  drawCetak();
 }
+const cetakJobs={};let modalPrinter=null;
+function updateCetakBtn(){
+ const p=$('#cPrinter').value,j=cetakJobs[p],sibuk=!!(j&&j.status==='jalan');
+ $('#cCetak').disabled=!pilihC.size||sibuk;$('#cCetak').title=sibuk?'Printer ini sedang mencetak — pilih printer lain':'';
+}
+$('#cPrinter').onchange=updateCetakBtn;
+function drawJobs(){
+ $('#cJobs').innerHTML=Object.keys(cetakJobs).map(p=>{const j=cetakJobs[p],run=j.status==='jalan';
+  return `<button class="pill ${run?'acc':j.status==='selesai'?'ok':'bad'}" data-p="${esc(p)}" style="cursor:pointer" title="Lihat catatan cetak">${run?'':(j.status==='selesai'?'✓ ':'! ')}${esc(p)} · ${run?j.maju+'/'+j.total:j.status}</button>`}).join('');
+ $$('#cJobs button').forEach(b=>b.onclick=()=>tampilJob(b.dataset.p));
+ updateCetakBtn();
+}
+function tampilJob(p){
+ modalPrinter=p;
+ konfirmasi(`<h2 id="jT"></h2><div class="bar"><i id="jBar"></i></div>
+  <pre id="jLog" class="log" style="max-height:260px;min-height:120px;white-space:pre-wrap"></pre>
+  <div class="acts"><button class="btn sec2" id="jSemb">Sembunyikan</button><button class="btn" id="jTutup">Tutup</button></div>`);
+ $('#jSemb').onclick=()=>{modalPrinter=null;tutup();};
+ $('#jTutup').onclick=()=>{const j=cetakJobs[p];if(j&&j.status!=='jalan')delete cetakJobs[p];modalPrinter=null;tutup();drawJobs();};
+ renderModal();
+}
+function renderModal(){
+ const p=modalPrinter,j=p&&cetakJobs[p];if(!j||!$('#jT'))return;
+ const run=j.status==='jalan';
+ $('#jT').textContent=run?`Mencetak ke ${p} — ${j.maju}/${j.total}`:(j.status==='selesai'?`Selesai ✓ — ${p}`:`Selesai dengan masalah — ${p}`);
+ $('#jBar').style.width=Math.round((run?j.maju:j.total)/Math.max(1,j.total)*100)+'%';
+ $('#jLog').textContent=j.lines.slice(-60).join('\n');$('#jLog').scrollTop=1e6;
+ $('#jTutup').disabled=run;$('#jTutup').title=run?'Masih mencetak — pakai Sembunyikan untuk menutup tanpa menghentikan':'';
+}
+function lacak(p,total){
+ if(cetakJobs[p])clearInterval(cetakJobs[p].iv);
+ const c=cetakJobs[p]={status:'jalan',total,maju:0,lines:[],iv:null};
+ c.iv=setInterval(()=>tickCetak(p),1000);drawJobs();
+}
+async function tickCetak(p){
+ const c=cetakJobs[p];if(!c)return;
+ try{const j=await api('/api/job?printer='+encodeURIComponent(p));
+  c.lines=j.lines||[];c.total=j.total||c.total;
+  const m=[...c.lines].reverse().map(x=>x.match(/\[(\d+)\/(\d+)\] Mencetak/)).find(Boolean);if(m)c.maju=+m[1]-1;
+  if(j.status!=='jalan'){clearInterval(c.iv);c.status=j.status;c.maju=c.total;
+   await muatData();drawCetak();const ada=new Set(ssAktif.flatMap(keysS));[...pilihC].forEach(k=>{if(!ada.has(k))pilihC.delete(k)});drawCetak();
+   toast(j.status==='selesai'?`${p}: selesai dicetak ✓`:`${p}: selesai dengan masalah`);}
+ }catch(e){clearInterval(c.iv);c.status='gagal';c.lines.push('Koneksi ke server terputus: '+e.message);}
+ drawJobs();renderModal();
+}
 async function kirimCetak(){
  const files=[];ssAktif.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
+ const printer=$('#cPrinter').value;
  tutup();
- try{await api('/api/cetak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({files,printer:$('#cPrinter').value})});}
+ try{await api('/api/cetak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({files,printer})});}
  catch(e){return toast('Gagal mulai: '+e.message);}
- konfirmasi(`<h2 id="jT">Mencetak ${files.length} file…</h2><div class="bar"><i id="jBar"></i></div>
-  <pre id="jLog" class="log" style="max-height:260px;min-height:120px;white-space:pre-wrap"></pre>
-  <div class="acts"><button class="btn sec2" id="jTutup" disabled>Tutup</button></div>`);
- $('#jTutup').onclick=tutup;
- const iv=setInterval(async()=>{
-  try{const j=await api('/api/job');
-   const L=j.lines||[];$('#jLog').textContent=L.slice(-60).join('\n');$('#jLog').scrollTop=1e6;
-   const m=[...L].reverse().map(x=>x.match(/\[(\d+)\/(\d+)\] Mencetak/)).find(Boolean);
-   if(m)$('#jBar').style.width=Math.round((m[1]-1)/m[2]*100)+'%';
-   if(j.status!=='jalan'){clearInterval(iv);$('#jBar').style.width='100%';
-    $('#jT').textContent=j.status==='selesai'?'Selesai ✓':'Selesai dengan masalah — lihat catatan';$('#jTutup').disabled=false;
-    pilihC.clear();await muatData();drawCetak();}
-  }catch(e){clearInterval(iv);$('#jLog').textContent+='\n'+e.message;$('#jTutup').disabled=false;}
- },1000);
+ pilihC.clear();drawCetak();      // pilihan dikosongkan: bisa langsung memilih file lain untuk printer lain
+ lacak(printer,files.length);tampilJob(printer);
 }
 
 /* ---------- sambungan ke jalankan_harian.py (main.py --jalankan, SUNGGUHAN) ---------- */

@@ -343,7 +343,7 @@ def uji_cetak_timeout_jadi_cetak_error_dan_batch_lanjut():
 
         def palsu(cmd, **kw):
             panggilan.append(cmd)
-            if cmd[0] == "taskkill":
+            if cmd[0] == "powershell":      # _matikan_sumatra() lewat PowerShell
                 return subprocess.CompletedProcess(cmd, 0, "", "")
             if str(a) in cmd:
                 raise subprocess.TimeoutExpired(cmd, 1)
@@ -353,8 +353,10 @@ def uji_cetak_timeout_jadi_cetak_error_dan_batch_lanjut():
         with mock.patch.object(ps.subprocess, "run", palsu),                 mock.patch.object(ps, "catat_sudah_dicetak", dicatat.append),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0):
             berhasil, gagal = ps.cetak_semua(Path("SumatraPDF.exe"), "P", [a, b], False)
         assert gagal == [a] and berhasil == [b], (berhasil, gagal)
-        assert any(c[0] == "taskkill" for c in panggilan), "sisa SumatraPDF harus dimatikan"
-        print("  cetak: timeout SumatraPDF -> file masuk gagal, taskkill, batch lanjut")
+        assert not any(c[0] == "taskkill" for c in panggilan), "taskkill /IM mematikan cetak printer lain"
+        mati = [c for c in panggilan if c[0] == "powershell" and "Stop-Process" in c[-1]]
+        assert len(mati) == 1 and str(a) in mati[0][-1] and str(b) not in mati[0][-1], mati
+        print("  cetak: timeout SumatraPDF -> file masuk gagal, hanya proses milik file itu dimatikan, batch lanjut")
 
 
 def uji_timeout_sumatra_dari_env():
@@ -831,6 +833,36 @@ def uji_main_file_cetak_hanya_pilihan_dan_lewati_yang_sudah_tercetak():
             raise AssertionError("--file + --jenis harus ditolak")
     print("  main(--file): hanya file pilihan, urutan pilihan, yang sudah tercetak dilewati, "
           "path buruk ditolak, tidak bisa digabung --jenis")
+
+
+def uji_catat_sudah_dicetak_aman_dicetak_bersamaan():
+    """Dua+ proses cetak bersamaan (printer berbeda) menulis catatan yang sama: tidak ada baris
+    hilang/rusak, dan kunci dilepas. Kunci basi (proses mati) dibuang."""
+    import os
+    import threading
+    import time
+    with tempfile.TemporaryDirectory() as tmp:
+        catatan = Path(tmp) / "sudah_dicetak.txt"
+        file_pdf = []
+        for i in range(60):
+            f = Path(tmp) / f"f{i}.pdf"
+            f.write_bytes(b"%PDF-1.4")
+            file_pdf.append(f)
+        ts = [threading.Thread(target=lambda sub=file_pdf[k::4]: [ps.catat_sudah_dicetak(f, catatan) for f in sub])
+              for k in range(4)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        baris = catatan.read_text(encoding="utf-8").splitlines()
+        assert sorted(baris) == sorted(str(f.resolve()) for f in file_pdf), len(baris)
+        assert not (Path(tmp) / "sudah_dicetak.txt.lock").exists(), "kunci harus dilepas"
+        # kunci basi dari proses yang mati -> dibuang, bukan menggantung
+        kunci = Path(tmp) / "sudah_dicetak.txt.lock"
+        kunci.write_text("")
+        lama = time.time() - 120
+        os.utime(kunci, (lama, lama))
+        ps.catat_sudah_dicetak(file_pdf[0], catatan)
+        assert not kunci.exists()
+    print("  catat_sudah_dicetak: 4 penulis bersamaan tidak kehilangan baris, kunci dilepas, kunci basi dibuang")
 
 
 if __name__ == "__main__":
