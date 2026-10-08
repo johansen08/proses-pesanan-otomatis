@@ -764,6 +764,71 @@ def uji_main_semua_sesi_malam_dan_pagi_sekali_jalan():
           "ulang = tidak dobel, --hari melebarkan, tanpa flag = sesi terbaru")
 
 
+def uji_pilih_file_spesifik_validasi_dan_urutan():
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        folder = label / "2026-10-07" / "1" / "SPESIAL"
+        folder.mkdir(parents=True)
+        _buat(folder, "PICK-000000002_SPESIAL_B_x.pdf", "PICK-000000001_SPESIAL_A_x.pdf")
+        (folder / "catatan.txt").write_text("x")
+        luar = Path(tmp) / "luar.pdf"
+        luar.write_bytes(b"%PDF-1.4")
+        rel_b = "2026-10-07/1/SPESIAL/PICK-000000002_SPESIAL_B_x.pdf"
+        abs_a = str(folder / "PICK-000000001_SPESIAL_A_x.pdf")
+        hasil = ps.pilih_file_spesifik([rel_b, abs_a, rel_b], label)   # relatif+absolut, duplikat
+        assert [f.name for f in hasil] == ["PICK-000000002_SPESIAL_B_x.pdf",
+                                           "PICK-000000001_SPESIAL_A_x.pdf"], hasil  # urutan pilihan
+        for buruk in ([str(luar)], ["../../luar.pdf"], ["2026-10-07/1/SPESIAL/catatan.txt"],
+                      ["2026-10-07/1/SPESIAL/tidak-ada.pdf"], [], ["  "]):
+            try:
+                ps.pilih_file_spesifik(buruk, label)
+            except ps.CetakError:
+                pass
+            else:
+                raise AssertionError(f"harus ditolak: {buruk}")
+        daftar = Path(tmp) / "pilihan.txt"
+        daftar.write_text(rel_b + "\n\n" + abs_a + "\n", encoding="utf-8")
+        assert len(ps.pilih_file_spesifik(ps.baca_file_dari(daftar), label)) == 2
+    print("  pilih_file_spesifik: urutan pilihan, duplikat dibuang, di luar folder/non-PDF/hilang ditolak")
+
+
+def uji_main_file_cetak_hanya_pilihan_dan_lewati_yang_sudah_tercetak():
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        folder = label / "2026-10-07" / "1" / "SPESIAL"
+        folder.mkdir(parents=True)
+        _buat(folder, "PICK-000000001_SPESIAL_A_x.pdf", "PICK-000000002_SPESIAL_B_x.pdf",
+              "PICK-000000003_SPESIAL_C_x.pdf")
+        log_dir = Path(tmp) / "logs"
+        dicetak = []
+
+        def jalankan(*argumen):
+            dicetak.clear()
+            with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir),                     mock.patch.object(ps, "FILE_SUDAH_DICETAK", log_dir / "sudah_dicetak.txt"),                     mock.patch.object(ps, "cari_sumatra", return_value=Path("sumatra.exe")),                     mock.patch.object(ps, "daftar_printer", return_value=["PRINTER-X"]),                     mock.patch.object(ps, "pilih_printer", return_value="PRINTER-X"),                     mock.patch.object(ps, "dukungan_pemantauan_job", return_value=False),                     mock.patch.object(ps, "cetak", side_effect=lambda s, p, f, pantau: dicetak.append(f.name) or True),                     mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0),                     mock.patch.object(ps, "siapkan_log"),                     mock.patch("builtins.input", lambda prompt="": "y"),                     mock.patch.object(sys, "argv", ["print_spesial.py", *argumen]):
+                return ps.main()
+
+        c, a = "2026-10-07/1/SPESIAL/PICK-000000003_SPESIAL_C_x.pdf", "2026-10-07/1/SPESIAL/PICK-000000001_SPESIAL_A_x.pdf"
+        assert jalankan("--file", c, "--file", a) == 0
+        assert dicetak == ["PICK-000000003_SPESIAL_C_x.pdf", "PICK-000000001_SPESIAL_A_x.pdf"], dicetak
+        # file yang sama lagi: sudah tercatat -> tidak dicetak dobel; B tidak pernah ikut
+        assert jalankan("--file", c, "--file", "2026-10-07/1/SPESIAL/PICK-000000002_SPESIAL_B_x.pdf") == 0
+        assert dicetak == ["PICK-000000002_SPESIAL_B_x.pdf"], dicetak
+        assert jalankan("--file", c) == 0 and dicetak == []
+        assert jalankan("--file", c, "--cetak-ulang-semua") == 0 and dicetak == ["PICK-000000003_SPESIAL_C_x.pdf"]
+        # path buruk -> error (exit 1) dan tidak ada yang dicetak; gabung --jenis ditolak
+        assert jalankan("--file", "2026-10-07/1/SPESIAL/tidak-ada.pdf") == 1 and dicetak == []
+        try:
+            jalankan("--file", c, "--jenis", "spesial")
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("--file + --jenis harus ditolak")
+    print("  main(--file): hanya file pilihan, urutan pilihan, yang sudah tercetak dilewati, "
+          "path buruk ditolak, tidak bisa digabung --jenis")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

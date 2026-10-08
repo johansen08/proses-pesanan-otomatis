@@ -66,6 +66,13 @@ harian, masing-masing cuma memanggil ini dengan --jenis tetap):
         # lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis kombinasi --ulang logs\\gagal_cetak_2026-10-01_153000.txt
         # cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "gagal" di bawah)
+    .venv\\Scripts\\python.exe src\\print_spesial.py --file 2026-10-07/1/SPESIAL/PICK-000157494_SPESIAL_TRC1_2026-10-07_073930.pdf --file ...
+    .venv\\Scripts\\python.exe src\\print_spesial.py --file-dari pilihan.txt
+        # cetak file PDF TERTENTU saja (path relatif terhadap label-pengiriman, atau absolut),
+        # urutan cetak = urutan pilihan; --file-dari membaca satu path per baris. File harus ada,
+        # berekstensi .pdf & di dalam label-pengiriman (kalau tidak: error, tidak ada yang
+        # dicetak). Yang sudah tercatat tercetak dilewati (--cetak-ulang-semua untuk memaksa).
+        # Tidak bisa digabung --jenis/--paket/--folder/--semua-sesi/--ulang. Dipakai UI desktop.
 
 Perlu SumatraPDF terinstall (gratis, https://www.sumatrapdfreader.org/) - lokasi
 SumatraPDF.exe dicari otomatis di PATH & lokasi install umum (lihat cari_sumatra()),
@@ -702,6 +709,41 @@ def pilih_jenis(args, baca=input, tulis=print) -> list[str] | None:
         return list(PAKET[args.paket][1])
     return menu_pilih_jenis(baca, tulis)
 
+def pilih_file_spesifik(daftar: list[str], folder_label: Path | None = None) -> list[Path]:
+    """Ubah daftar path pilihan user (`--file`/`--file-dari`) jadi list file PDF yang valid.
+    Path boleh absolut atau relatif terhadap `folder_label` (mis.
+    `2026-10-07/1/SPESIAL/PICK-000157494_SPESIAL_TRC1_....pdf`). Urutan sesuai pilihan, duplikat
+    dibuang. Berbeda dengan baca_daftar_ulang(), file yang tidak ada = CetakError (user memilih
+    file ini secara eksplisit, jangan diam-diam dilewati), dan file harus berada DI DALAM
+    `folder_label` & berekstensi .pdf supaya program tidak bisa dipakai mencetak file sembarang."""
+    folder_label = (folder_label or FOLDER_LABEL).resolve()
+    hasil, terlihat = [], set()
+    for teks in daftar:
+        teks = teks.strip().strip('"')
+        if not teks:
+            continue
+        p = Path(teks)
+        p = (p if p.is_absolute() else folder_label / p).resolve()
+        if folder_label not in p.parents:
+            raise CetakError(f"File di luar folder label-pengiriman: {teks}")
+        if p.suffix.lower() != ".pdf":
+            raise CetakError(f"Bukan file PDF: {teks}")
+        if not p.is_file():
+            raise CetakError(f"File tidak ditemukan: {teks}")
+        if p not in terlihat:
+            terlihat.add(p)
+            hasil.append(p)
+    if not hasil:
+        raise CetakError("Tidak ada file yang dipilih")
+    return hasil
+
+
+def baca_file_dari(file_daftar: Path) -> list[str]:
+    """Baris-baris path dari `--file-dari` (satu path per baris, baris kosong diabaikan)."""
+    if not file_daftar.is_file():
+        raise CetakError(f"File daftar tidak ditemukan: {file_daftar}")
+    return file_daftar.read_text(encoding="utf-8").splitlines()
+
 
 # ============================================================== main
 def main() -> int:
@@ -731,7 +773,18 @@ def main() -> int:
     ap.add_argument("--ulang", type=Path,
                     help="Cetak ULANG hanya file dari daftar gagal sebelumnya "
                          "(logs/gagal_cetak_*.txt), lewati pencarian folder sesi")
+    ap.add_argument("--file", action="append", metavar="PDF",
+                    help="Cetak file PDF TERTENTU saja (path absolut, atau relatif terhadap "
+                         "label-pengiriman); boleh diulang. Urutan cetak = urutan penulisan. "
+                         "Yang sudah tercatat tercetak dilewati kecuali --cetak-ulang-semua")
+    ap.add_argument("--file-dari", type=Path, metavar="DAFTAR.txt",
+                    help="Seperti --file, tapi daftar path dibaca dari file teks (satu path per "
+                         "baris) - dipakai kalau pilihan terlalu banyak untuk baris perintah")
     args = ap.parse_args()
+    per_file = bool(args.file or args.file_dari)
+    if per_file and (args.jenis or args.paket or args.folder or args.semua_sesi or args.ulang):
+        ap.error("--file/--file-dari tidak bisa digabung dengan --jenis, --paket, --folder, "
+                 "--semua-sesi, atau --ulang")
     if args.semua_sesi and (args.folder or args.ulang):
         ap.error("--semua-sesi tidak bisa digabung dengan --folder atau --ulang")
     if args.hari < 1:
@@ -742,6 +795,22 @@ def main() -> int:
         if args.ulang:
             file_pdf = baca_daftar_ulang(args.ulang)
             log.info("Cetak ULANG %d file dari daftar %s", len(file_pdf), args.ulang)
+        elif per_file:
+            pilihan = list(args.file or [])
+            if args.file_dari:
+                pilihan += baca_file_dari(args.file_dari)
+            dipilih = pilih_file_spesifik(pilihan)
+            sudah = set() if args.cetak_ulang_semua else baca_sudah_dicetak()
+            file_pdf, lewat = saring_belum_dicetak(dipilih, sudah)
+            for f in lewat:
+                log.info("Dilewati (sudah tercetak, pakai --cetak-ulang-semua untuk mencetak "
+                         "ulang): %s", f.name)
+            if not file_pdf:
+                log.info("Semua %d file pilihan sudah tercetak.", len(dipilih))
+                return 0
+            log.info("Cetak %d file pilihan (urutan sesuai pilihan):", len(file_pdf))
+            for f in file_pdf:
+                log.info("  %s", f.name)
         else:
             jenis_list = pilih_jenis(args)
             if jenis_list is None:

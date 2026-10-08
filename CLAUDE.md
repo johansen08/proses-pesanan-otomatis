@@ -78,7 +78,10 @@ project secara umum, root tidak boleh berisi file `.py`):
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
   Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
   mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,
-  nomor terlompat dicek per sesi.
+  nomor terlompat dicek per sesi. `--file PDF` (diulang) / `--file-dari DAFTAR.txt` mencetak file
+  PDF TERTENTU saja (untuk UI pilih-per-file): path harus ada, `.pdf`, dan di dalam
+  `label-pengiriman` (kalau tidak, error sebelum cetak apa pun); dedupe sama; tidak bisa digabung
+  `--jenis`/`--paket`/`--folder`/`--semua-sesi`/`--ulang`.
   Hanya `cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.

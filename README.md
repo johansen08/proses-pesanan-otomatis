@@ -543,6 +543,12 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
   malam yang menumpuk sampai pagi; label yang sudah tercetak dilewati (aman diulang). Dari menu
   `cetak-label.bat` ditanya otomatis. Detail: bagian 3.3 di
   [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md).
+- `cetak-label-gtl-sicepat.bat --file "2026-10-07\SPESIAL\PICK-000157494_SPESIAL_TRC1_2026-10-07_073930.pdf" --file ...`
+  (atau `--file-dari pilihan.txt`, satu path per baris) — cetak file PDF **tertentu** saja, urutan
+  cetak = urutan pilihan. Path boleh absolut atau relatif terhadap `label-pengiriman`; file harus
+  ada, `.pdf`, dan di dalam `label-pengiriman` (kalau tidak: error, tidak ada yang dicetak). Yang
+  sudah tercatat tercetak dilewati (`--cetak-ulang-semua` untuk memaksa). Tidak bisa digabung
+  `--jenis`/`--paket`/`--folder`/`--semua-sesi`/`--ulang`.
 - `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
   (tetap tanya pilih printer).
 - `cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
