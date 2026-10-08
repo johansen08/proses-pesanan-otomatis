@@ -554,8 +554,14 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
   memilih tanggal (hari ini, kemarin, 2 hari lalu) → sesi → jenis → file PDF dari `label-pengiriman`
   sungguhan, lalu mencetak pilihan lewat `print_spesial.py --file-dari ... --printer ...` (aturan
   cetak, dedupe `sudah_dicetak.txt`, dan pantau printer sama dengan CLI). Hanya jenis spesial/satuan/
-  kombinasi/gtl-sicepat yang tampil; jenis lain tetap lewat `cetak-label.bat`. Menu Harian masih
-  simulasi. Kalau `index.html` dibuka langsung sebagai file, tampil data contoh.
+  kombinasi/gtl-sicepat yang tampil; jenis lain tetap lewat `cetak-label.bat`. Kalau `index.html`
+  dibuka langsung sebagai file, tampil data contoh.
+  Menu **Harian** di UI yang sama menjalankan langkah **SUNGGUHAN** (mengubah data di Jubelio): pilih
+  preset TIPE 1-4/Malam atau centang langkah sendiri, konfirmasi, lalu tiap langkah dijalankan sebagai
+  `main.py <flag> --jalankan` berurutan (setara `proses-harian.bat`/`proses-malam.bat`, termasuk sesi
+  label sekali per hari, `--lewati-malam` hanya TIPE 1, rekap waktu di akhir). Ada log langsung, tombol
+  Hentikan, peringatan kalau di luar jam TIPE, dan panel peringatan hari ini (picklist terlompat/tanpa
+  resi/gagal). `.bat` tetap bisa dipakai seperti biasa.
 - `cetak-label-gtl-sicepat.bat --printer "NAMA PRINTER"` — nama printer persis seperti di Windows;
   melewati tanya pilih printer (dipakai UI desktop).
 - `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak

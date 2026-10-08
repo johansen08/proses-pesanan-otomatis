@@ -14,6 +14,11 @@ API (JSON):
   POST /api/cetak    {"files": ["2026-10-07/1/SPESIAL/PICK-....pdf", ...], "printer": "...",
                       "ulang": false} -> {"job": id}; satu job sekaligus (409 kalau masih jalan)
   GET  /api/job      status & baris log job terakhir
+  GET  /api/harian/info          jam cocok per TIPE, peringatan hari ini, apakah ada job berjalan
+  POST /api/harian/jalankan      {"langkah": [nama...], "judul": "TIPE 1"} -> {"job": id}
+                                 (SUNGGUHAN: lihat jalankan_harian.py; 409 kalau masih berjalan)
+  GET  /api/harian/job?dari=N    status per langkah + baris log ke-N dst
+  POST /api/harian/hentikan      matikan langkah berjalan & batalkan sisanya
 Jenis yang ditampilkan: spesial, satuan, kombinasi, gtl-sicepat (JENIS_UI). Jenis lain
 (spx-pagi, jnt-siang, event, dst) tetap lewat cetak-label.bat.
 """
@@ -29,7 +34,9 @@ import webbrowser
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+import jalankan_harian as jh
 import print_spesial as ps
 
 ROOT = ps.ROOT
@@ -137,14 +144,20 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._kirim(403, {"error": "host ditolak"})
         try:
-            if self.path in ("/", "/index.html"):
+            url = urlparse(self.path)
+            if url.path in ("/", "/index.html"):
                 return self._kirim(200, HTML_UI.read_bytes(), "text/html; charset=utf-8")
-            if self.path == "/api/sesi":
+            if url.path == "/api/sesi":
                 return self._kirim(200, data_sesi())
-            if self.path == "/api/printer":
+            if url.path == "/api/printer":
                 return self._kirim(200, {"printer": ps.daftar_printer()})
-            if self.path == "/api/job":
+            if url.path == "/api/job":
                 return self._kirim(200, _job or {"status": "kosong", "lines": []})
+            if url.path == "/api/harian/info":
+                return self._kirim(200, jh.info())
+            if url.path == "/api/harian/job":
+                dari = parse_qs(url.query).get("dari", ["0"])[0]
+                return self._kirim(200, jh.keadaan(int(dari) if dari.isdigit() else 0))
         except ps.CetakError as e:
             return self._kirim(500, {"error": str(e)})
         self._kirim(404, {"error": "tidak ada"})
@@ -154,10 +167,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._kirim(403, {"error": "host ditolak"})
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
-        if self.path != "/api/cetak" or "application/json" not in (self.headers.get("Content-Type") or ""):
+        if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan")                 or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
             data = json.loads(corpus or b"{}")
+            if self.path == "/api/harian/hentikan":
+                return self._kirim(200, {"dihentikan": jh.hentikan()})
+            if self.path == "/api/harian/jalankan":
+                return self._kirim(200, {"job": jh.mulai(data.get("langkah"), data.get("judul"))})
             files, printer = data.get("files"), data.get("printer")
             if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
                 return self._kirim(400, {"error": "files harus daftar path"})
@@ -168,6 +185,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._kirim(400, {"error": str(e)})
         except RuntimeError as e:
             return self._kirim(409, {"error": str(e)})
+        except jh.HarianError as e:
+            return self._kirim(409 if "berjalan" in str(e) else 400, {"error": str(e)})
         except (ValueError, json.JSONDecodeError):
             return self._kirim(400, {"error": "JSON tidak valid"})
         self._kirim(200, {"job": job})

@@ -36,6 +36,7 @@ jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_main.py
 .venv\Scripts\python tests\test_rekap_master_excel.py
 .venv\Scripts\python tests\test_server_ui.py
+.venv\Scripts\python tests\test_jalankan_harian.py
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
 
@@ -92,7 +93,16 @@ project secara umum, root tidak boleh berisi file `.py`):
   `/api/printer`, `/api/cetak`, `/api/job`. Cetak SELALU lewat proses terpisah
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
   server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
-  satu job sekaligus. Menu Harian di UI masih simulasi. Tes: `tests/test_server_ui.py`.
+  satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
+  Tes: `tests/test_server_ui.py`.
+- `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
+  Jubelio): tiap langkah di `KATALOG` = satu proses `main.py <flag> --jalankan` berurutan (BUKAN
+  memanggil fungsi langsung), lalu `rekap_waktu.py`. Meniru `.bat`: `LABEL_SESI_DIR` dihitung sekali
+  per hari, langkah gagal tidak menghentikan berikutnya, `--lewati-malam` hanya judul TIPE 1/KUSTOM.
+  `KATALOG` HARUS tetap sama dengan perintah di `proses-harian.bat`/`proses-malam.bat` (dikunci
+  `tests/test_jalankan_harian.py`: tiap flag diterima argparse `main.py` & punya padanan di `.bat`) —
+  ubah langkah/flag di `.bat` berarti ubah `KATALOG` juga (dan nama langkah di UI). Jangan pernah
+  menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga

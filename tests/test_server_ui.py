@@ -125,6 +125,48 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
     print("  server_ui: sesi 3 hari + status tercetak, penjagaan host/JSON/path, argumen print_spesial benar")
 
 
+def uji_server_ui_endpoint_harian():
+    import jalankan_harian as jh
+
+    jh._job = None
+    panggilan = []
+
+    def luncur_palsu(argumen, env):
+        panggilan.append(argumen)
+        return subprocess.Popen([sys.executable, "-c", "print('ok palsu')"], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+    with mock.patch.object(jh, "_luncurkan", luncur_palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"),             mock.patch.object(jh, "info", return_value={"jam_ok": {"TIPE 1": True}, "peringatan": {}, "berjalan": False}):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), su.Handler)
+        port = server.server_address[1]
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            assert _panggil(port, "/api/harian/info")[1]["jam_ok"] == {"TIPE 1": True}
+            # tidak valid -> 400, tidak ada proses dijalankan
+            assert _panggil(port, "/api/harian/jalankan", {"langkah": ["ngawur"], "judul": "TIPE 1"})[0] == 400
+            assert _panggil(port, "/api/harian/jalankan", {"langkah": [], "judul": "TIPE 1"})[0] == 400
+            assert _panggil(port, "/api/harian/jalankan", {"langkah": ["Recheck stok"], "judul": "X"})[0] == 400
+            assert _panggil(port, "/api/harian/jalankan", data="x", tipe="text/plain")[0] == 404
+            assert _panggil(port, "/api/harian/info", host="evil.example.com")[0] == 403
+            assert panggilan == []
+            # valid
+            kode, h = _panggil(port, "/api/harian/jalankan", {"langkah": ["Recheck stok"], "judul": "TIPE 1"})
+            assert kode == 200 and h["job"], h
+            for _ in range(100):
+                kode, j = _panggil(port, "/api/harian/job?dari=0")
+                if j["status"] != "jalan":
+                    break
+                time.sleep(0.1)
+            assert j["status"] == "selesai" and j["langkah"][0]["status"] == "selesai", j
+            kode, j2 = _panggil(port, f"/api/harian/job?dari={j['total']}")
+            assert j2["lines"] == [] and j2["total"] == j["total"]
+            assert _panggil(port, "/api/harian/hentikan", {}) == (200, {"dihentikan": False})
+        finally:
+            server.shutdown()
+            jh._job = None
+    print("  server_ui harian: info, validasi 400/404/403, jalankan -> job selesai, lines bertahap, hentikan tanpa job")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

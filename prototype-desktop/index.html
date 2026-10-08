@@ -369,7 +369,7 @@ const GRUP=[
 ];
 const SEMUA=GRUP.flatMap(g=>g[1]);
 const PRESET=[...TIPE.slice(0,4).map(t=>({id:t.id,nama:t.nama,sub:t.jam,steps:tipeSteps(t)})),
- {id:5,nama:'MALAM',sub:'Urgent + SPX-J&T',steps:['Urgent Lazada','Urgent GTL & SiCepat','SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi']}];
+ {id:5,nama:'MALAM',sub:'Urgent + SPX-J&T',steps:['Urgent Lazada','Urgent GTL & SiCepat','SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi','Tulis PICKLIST.xlsx']}];
 let pilih=new Set(),presetAktif=null;
 function setPreset(p){presetAktif=p?p.id:null;pilih=new Set(p?p.steps:[]);drawHarian();}
 function initHarian(rec){window._rec=rec;const p=PRESET.find(x=>x.id===rec);if(!presetAktif&&!pilih.size&&p){presetAktif=p.id;pilih=new Set(p.steps);}drawHarian();}
@@ -389,9 +389,9 @@ function drawHarian(){
 $('#dKosong').onclick=()=>setPreset(null);
 $('#dJalan').onclick=()=>{if(running){toast('Masih ada proses berjalan');return go('runner');}
  const list=SEMUA.filter(x=>pilih.has(x));const nm=presetAktif?PRESET.find(p=>p.id===presetAktif).nama:'Kustom';
- konfirmasi(`<h2>Jalankan ${nm}?</h2><p>${list.length} langkah berurutan. Picklist, resi, dan label akan dibuat di Jubelio.</p><div class="chips">${list.map((x,i)=>`<span class="chip">${i+1}. ${x}</span>`).join('')}</div>
+ konfirmasi(`<h2>Jalankan ${nm}?</h2><p>${list.length} langkah berurutan. Picklist, resi, dan label akan dibuat di Jubelio.</p>${peringatanJam(nm)}<div class="chips">${list.map((x,i)=>`<span class="chip">${i+1}. ${x}</span>`).join('')}</div>
  <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" id="yaJalan">Ya, jalankan</button></div>`);
- $('#yaJalan').onclick=()=>{tutup();bukaRunner({id:'h',nama:nm,steps:null,custom:list},'harian');jalan();};};
+ $('#yaJalan').onclick=()=>{tutup();if(HAPI)return jalankanAPI(list,nm);bukaRunner({id:'h',nama:nm,steps:null,custom:list},'harian');jalan();};};
 
 /* ---------- runner ---------- */
 let cur,running=false,timer,idx=0,stat=[];
@@ -415,7 +415,7 @@ $('#rMulai').onclick=()=>{
  konfirmasi(`<h2>Jalankan ${cur.nama}?</h2><p>${cur.list.length} langkah berurutan. Picklist, resi, dan label akan dibuat di Jubelio.</p>
   <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" onclick="tutup();jalan()">Ya, jalankan</button></div>`);
 };
-$('#rStop').onclick=()=>{clearTimeout(timer);running=false;stat[idx]='err';log('Dihentikan oleh pengguna','w');drawSteps();selesaiUI(true);};
+$('#rStop').onclick=()=>{if(apiJob)return hentikanAPI();clearTimeout(timer);running=false;stat[idx]='err';log('Dihentikan oleh pengguna','w');drawSteps();selesaiUI(true);};
 function jalan(){running=true;idx=0;stat=cur.list.map(()=>'');
  $('#rMulai').style.display='none';$('#rStop').style.display='';
  $('#rLog').innerHTML='';log(`Mulai ${cur.nama}`,'m');langkah();}
@@ -524,6 +524,7 @@ $('#cCetak').onclick=()=>{
   setTimeout(()=>{toast('Selesai dicetak ✓');pilihC.clear();drawCetak();},1800);};};
 
 /* ---------- peringatan ---------- */
+let jumP=4;function kurangiP(){jumP=Math.max(0,jumP-1);$('#pJum').textContent=jumP;$('#dotP').style.display=jumP>0?'':'none';$('#dotP').textContent=jumP;}
 function drawPeringatan(){
  $('#pTerlompat').innerHTML=[['PICK-000104821','Terlompat setelah 000104820 · 07.42'],['PICK-000104833','Terlompat setelah 000104832 · 11.15']].map(r=>`<div class="row"><span class="mono" style="font-weight:700">${r[0]}</span><span class="tx"><small>${r[1]}</small></span><button class="btn sec2" onclick="this.closest('.row').remove();kurangiP();toast('Ditandai sudah dicek')">Sudah dicek</button></div>`).join('');
  $('#pResi').innerHTML=`<div class="row"><span class="mono" style="font-weight:700">SPX-2610-88231</span><span class="tx"><small>Shopee · belum dapat resi 40 menit · kemungkinan cancel</small></span><button class="btn sec2" onclick="navigator.clipboard&&navigator.clipboard.writeText('SPX-2610-88231');toast('Nomor disalin')">Salin nomor</button></div>`;
@@ -569,7 +570,60 @@ async function kirimCetak(){
   }catch(e){clearInterval(iv);$('#jLog').textContent+='\n'+e.message;$('#jTutup').disabled=false;}
  },1000);
 }
-render();drawPeringatan();initCetak();
+
+/* ---------- sambungan ke jalankan_harian.py (main.py --jalankan, SUNGGUHAN) ---------- */
+let HAPI=false,HINFO=null,apiJob=false,poll=null,off=0,gagalPoll=0;
+const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function peringatanJam(nm){
+ if(!(HAPI&&HINFO&&HINFO.jam_ok&&HINFO.jam_ok[nm]===false))return '';
+ const p=PRESET.find(x=>x.nama===nm);
+ return `<p style="color:var(--warn);font-weight:600">⚠ Sekarang di luar jam ${nm} (${p?p.sub:''}). Pastikan tidak salah memilih.</p>`;
+}
+function isiPeringatan(el,daftar,jenis){
+ $(el).innerHTML=daftar.length?daftar.map(m=>`<div class="row"><span class="pill ${jenis}">${jenis==='bad'?'Gagal':'Info'}</span><span class="tx"><small style="color:var(--ink)">${esc(m)}</small></span><button class="btn sec2" onclick="this.closest('.row').remove();kurangiP()">Sembunyikan</button></div>`).join(''):'<div class="emp" style="padding:8px">Tidak ada</div>';
+}
+async function muatPeringatan(){
+ const d=await api('/api/harian/info');HINFO=d;const P=d.peringatan;
+ isiPeringatan('#pTerlompat',P.picklist,'warn');isiPeringatan('#pResi',P.resi,'warn');isiPeringatan('#pMasalah',P.gagal,'bad');
+ jumP=P.picklist.length+P.resi.length+P.gagal.length+1;kurangiP();   // set badge
+ return d;
+}
+function logApi(t){const l=$('#rLog');const c=/ERROR|GAGAL|Traceback/i.test(t)?'e':/WARNING|PERHATIAN|!!!|DILEWATI|DIHENTIKAN/i.test(t)?'w':/^===/.test(t)?'ok':'';
+ l.insertAdjacentHTML('beforeend',`<div class="${c}">${esc(t)||'&nbsp;'}</div>`);}
+async function jalankanAPI(list,nm){
+ try{await api('/api/harian/jalankan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({langkah:list,judul:nm.toUpperCase()})});}
+ catch(e){return toast('Gagal mulai: '+e.message);}
+ apiJob=true;bukaRunner({id:'h',nama:nm,steps:null,custom:list},'harian');mulaiPoll();
+}
+function mulaiPoll(){
+ off=0;gagalPoll=0;running=true;$('#rLog').innerHTML='';$('#rMulai').style.display='none';$('#rStop').style.display='';
+ clearInterval(poll);poll=setInterval(tickAPI,1000);tickAPI();
+}
+async function tickAPI(){
+ try{const j=await api('/api/harian/job?dari='+off);gagalPoll=0;
+  j.lines.forEach(logApi);off=j.total;const l=$('#rLog');l.scrollTop=l.scrollHeight;
+  const map={antri:'',jalan:'run',selesai:'done',gagal:'err'};
+  cur.list=j.langkah.map(x=>x.nama);stat=j.langkah.map(x=>map[x.status]);drawSteps();
+  const sel=j.langkah.filter(x=>x.status==='selesai'||x.status==='gagal').length,pct=Math.round(sel/Math.max(1,j.langkah.length)*100);
+  $('#rBar').style.width=pct+'%';$('#rPct').textContent=pct+'%';
+  if(j.status!=='jalan'){clearInterval(poll);running=false;apiJob=false;$('#rStop').style.display='none';$('#rMulai').style.display='none';
+   toast(j.status==='selesai'?'Proses selesai ✓':j.status==='dihentikan'?'Proses dihentikan':'Selesai — ada langkah gagal, cek aktivitas');
+   muatPeringatan().catch(()=>{});}
+ }catch(e){if(++gagalPoll>=5){clearInterval(poll);running=false;apiJob=false;logApi('Koneksi ke server terputus: '+e.message);$('#rStop').style.display='none';}}
+}
+function hentikanAPI(){
+ konfirmasi(`<h2>Hentikan proses?</h2><p>Langkah yang sedang berjalan dimatikan dan sisanya dibatalkan. Picklist yang sedang dibuat bisa tidak lengkap — cek di Jubelio.</p>
+ <div class="acts"><button class="btn sec2" onclick="tutup()">Lanjutkan</button><button class="btn bad" id="yaStop">Ya, hentikan</button></div>`);
+ $('#yaStop').onclick=async()=>{tutup();try{await api('/api/harian/hentikan',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});}catch(e){toast(e.message);}};
+}
+async function initHarianAPI(){
+ if(!location.protocol.startsWith('http'))return;
+ try{const d=await muatPeringatan();HAPI=true;drawHarian();
+  if(d.berjalan){const j=await api('/api/harian/job?dari=0');apiJob=true;
+   bukaRunner({id:'h',nama:j.judul,steps:null,custom:j.langkah.map(x=>x.nama)},'harian');mulaiPoll();go('runner');}
+ }catch(e){toast('Server UI error: '+e.message);}
+}
+render();drawPeringatan();initCetak();initHarianAPI();
 </script>
 </body>
 </html>
