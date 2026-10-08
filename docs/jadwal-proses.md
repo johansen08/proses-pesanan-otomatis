@@ -22,10 +22,9 @@ klik + 1 konfirmasi Y/N** per tipe. TIPE 1 & TIPE 4 menggabung J&T+SPX;
 TIPE 2 & TIPE 3 memisahnya (`--kurir jnt`/`--kurir spx`). TIPE 2 (tepat jam
 13.00) menghabiskan wajib keluar Shopee (SPX Resi Pagi, ≤ 12.00); TIPE 4
 (tepat jam 15.00) menghabiskan wajib keluar TikTok Shop (J&T Resi Siang,
-≤ 15.00). **TIPE 1 sekarang melingkupi sore/malam/dini hari juga**
-(16.00–07.00 keesokan harinya) — jadwal malam yang dulu dokumentasinya
-terpisah sekarang menyatu di sini, dan dulu dipisah J&T/SPX (TIPE 3), kini
-digabung (TIPE 1). Penentuan SKU mana yang "spesial" (dari Excel) **tidak
+≤ 15.00). **TIPE 1 juga dipakai di sore hari, 16.00–17.00** — dulu
+jendelanya terus sampai 07.00 keesokan harinya, kini dibatasi sampai 17.00;
+setelah itu malam/dini hari memakai `proses-malam.bat` (Urgent + SPX-J&T). Penentuan SKU mana yang "spesial" (dari Excel) **tidak
 berubah** di semua tipe, tetap menggabung J&T+SPX; `--kurir` cuma
 membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 
@@ -52,7 +51,7 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 ## proses-harian.bat — 4 TIPE
 
 ```
-1. TIPE 1 - GABUNG J&T+SPX              (07.00-12.00 / 16.00-07.00)
+1. TIPE 1 - GABUNG J&T+SPX              (07.00-12.00 / 16.00-17.00)
 2. TIPE 2 - DIPISAH + SPX RESI PAGI     (TEPAT JAM 13.00)
 3. TIPE 3 - DIPISAH                     (13.00-15.00)
 4. TIPE 4 - GABUNG LAGI + J&T RESI SIANG (TEPAT JAM 15.00)
@@ -68,7 +67,7 @@ ikut setelahnya — tidak ada lagi cara memicunya sendirian lewat menu (masih
 bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 ...`/`jalankan.bat --urgent ...` kalau perlu).
 
-### TIPE 1 — gabung J&T+SPX (07.00-12.00, dan 16.00-07.00 keesokan harinya)
+### TIPE 1 — gabung J&T+SPX (07.00-12.00, dan 16.00-17.00)
 
 1. RECHECK STOK
 2. SAMPEL TIKTOK (NILAI 0)
@@ -81,11 +80,10 @@ bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 9. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
-sore/malam/dini hari **16.00 sampai 07.00 keesokan harinya** — begitu TIPE 4
-selesai (jam 15.00-an), TIPE 1 menggantikannya terus sampai TIPE 1 lagi
-besok pagi jam 07.00. Ini sekaligus **menggantikan jadwal malam** yang dulu
-didokumentasikan terpisah pakai TIPE 3 (dipisah) — sekarang malam hari
-**digabung** (TIPE 1), bukan dipisah lagi.
+sore **16.00-17.00** — begitu TIPE 4 selesai (jam 15.00-an), TIPE 1
+menggantikannya sampai jam 17.00. Setelah 17.00 sampai TIPE 1 lagi besok
+pagi jam 07.00 (malam/dini hari), pakai `proses-malam.bat` (lihat di
+bawah), bukan TIPE 1.
 
 ### TIPE 2 — dipisah + SPX Resi Pagi (TEPAT jam 13.00)
 
@@ -126,8 +124,8 @@ jadwal.
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
-dipakai lagi** di luar rentang ini (malam hari sekarang pakai TIPE 1, lihat
-di atas).
+dipakai lagi** di luar rentang ini (malam hari pakai `proses-malam.bat`, lihat
+di bawah).
 
 ### TIPE 4 — gabung lagi + J&T Resi Siang (TEPAT jam 15.00)
 
@@ -148,7 +146,7 @@ cukup **1x sehari** — jangan diulang di TIPE 1 berikutnya). Mulai langkah 5,
 kurir **tidak** dipisah lagi — langsung memakai pola gabungan TIPE 1, karena
 setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
-atas) sampai jam 07.00 besok.
+atas) sampai jam 17.00.
 
 ### proses-malam.bat (tanpa menu)
 
@@ -293,7 +291,7 @@ di luar jendela jam yang wajar untuknya (`cek_jam` di `proses-harian.bat`,
 
 | TIPE | Jendela | Catatan |
 |---|---|---|
-| 1 | 00.00-12.00 **dan** 16.00-23.59 | Gabungan "07.00-12.00" + ekor malam "16.00-07.00" (dicek sebagai jam-dalam-sehari, berulang tiap hari) |
+| 1 | 07.00-11.59 **dan** 16.00-16.59 | Pagi "07.00-12.00" + sore "16.00-17.00" (dicek sebagai jam-dalam-sehari, berulang tiap hari). |
 | 2 | 13.00-13.59 | Jam istirahat 12.00-13.00 sengaja TIDAK masuk jendela tipe mana pun |
 | 3 | 13.00-14.59 | Mulai dari 13.00 juga (bukan 13.01) supaya TIPE 3 yang dijalankan segera setelah TIPE 2 selesai (bisa saja masih "jam 13.00-an") tidak salah kena peringatan |
 | 4 | 15.00-15.59 | |
@@ -469,9 +467,8 @@ jam di luar jam kerja:
 | 13.xx (setelah TIPE 2 selesai) | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, J&T spesial, J&T 1 qty reguler, J&T kombinasi, SPX spesial, SPX 1 qty reguler, SPX kombinasi (**dipisah**, tanpa SPX Resi Pagi lagi) | 3 |
 | 15.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **J&T ≤ 15.00 (J&T Resi Siang)**, lalu SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung lagi**) | 4 |
 | 16.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), ~~Urgent Lazada, Urgent GTL/SiCepat~~ (**dilewati** 16.00-06.59, lihat catatan di bawah), SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
-| 16.xx (setelah transfer) | (ulang) | 1 |
-| 18.00, 19.00, 20.00, 21.00, 22.00, 23.00 | (ulang, 1x per jam - tidak ada proses transfer di jam-jam ini) | 1 |
-| 00.00-06.xx (dini hari) | (ulang kalau ada pesanan masuk) | 1 |
+| 16.xx (setelah transfer, sebelum 17.00) | (ulang) | 1 |
+| 17.00-06.xx (malam & dini hari) | Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T (**digabung**), 1x per jam bila ada pesanan masuk | `proses-malam.bat` |
 
 **Catatan jam 13.00**: hanya siklus ini yang menyertakan SPX Resi Pagi
 (langkah 5 di TIPE 2 — channel Shopee, jam pesan WIB maksimal 12.00 siang
@@ -480,15 +477,13 @@ hari itu). Setelah jam 13.00, siklus berikutnya (13.xx dst, sebelum jam
 
 **Catatan jam 15.00**: hanya siklus ini yang menyertakan J&T Resi Siang
 (channel TikTok Shop, jam pesan WIB maksimal 15.00 siang hari itu). Setelah
-jam 15.00, siklus berikutnya (16.00 dst, sampai 07.00 besok) **kembali**
+jam 15.00, siklus berikutnya (16.00-17.00) **kembali**
 pakai TIPE 1 (gabung) — bukan TIPE 3 (dipisah) lagi, karena alasan bisnis
 pemisahan J&T/SPX (TIPE 2 & TIPE 3) sudah tidak berlaku setelah J&T Resi
 Siang selesai.
 
-**Jadwal malam & dini hari (16.00-07.00) sudah menyatu di tabel di atas**
-(dulu didokumentasikan terpisah sebagai "Jadwal malam", dipisah J&T/SPX)
-— sekarang bagian dari siklus TIPE 1 yang sama dengan pagi hari, digabung
-J&T/SPX. Kalau belum pernah dicoba pakai program di luar jam kerja normal
+**Jadwal malam & dini hari (17.00-07.00)** memakai `proses-malam.bat`
+(lihat bagian "proses-malam.bat" di atas), bukan lagi siklus TIPE 1. Kalau belum pernah dicoba pakai program di luar jam kerja normal
 (mis. tengah malam), jalankan dulu manual dan cek hasilnya di Jubelio
 (jumlah picklist, resi, label PDF) sebelum mempercayakannya tanpa
 pengawasan.

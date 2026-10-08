@@ -20,15 +20,13 @@ def _jam(h, mnt=0):
     return datetime(2026, 9, 29, h, mnt)
 
 
-def uji_dalam_jam_menu_tipe1_melingkupi_tengah_malam():
+def uji_dalam_jam_menu_tipe1_pagi_dan_sore():
     with mock.patch.object(m, "datetime") as dt:
-        dt.now.return_value = _jam(23, 30)
-        assert m.dalam_jam_menu("1") is True
-        dt.now.return_value = _jam(6, 59)
-        assert m.dalam_jam_menu("1") is True
-        dt.now.return_value = _jam(13, 0)
-        assert m.dalam_jam_menu("1") is False
-    print("  TIPE 1: valid 16.00-24.00 dan 00.00-12.00 (melingkupi tengah malam), tidak di jam 13.00")
+        for jam, mnt, harapan in [(7, 0, True), (11, 59, True), (16, 0, True), (16, 59, True),
+                                  (6, 59, False), (13, 0, False), (17, 0, False), (23, 30, False)]:
+            dt.now.return_value = _jam(jam, mnt)
+            assert m.dalam_jam_menu("1") is harapan, (jam, mnt)
+    print("  TIPE 1: valid 07.00-11.59 dan 16.00-16.59, tidak di malam/dini hari maupun jam 13.00")
 
 
 def uji_dalam_jam_menu_tipe2_dan_tipe3_tumpang_tindih_sengaja():

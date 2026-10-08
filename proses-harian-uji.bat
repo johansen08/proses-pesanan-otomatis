@@ -7,7 +7,7 @@ cls
 echo ==================================================================
 echo   PROSES PESANAN OTOMATIS (NON EVENT) - MODE UJI (tidak ada perubahan di Jubelio)
 echo ==================================================================
-echo   1. Uji GABUNG JNT+SPX                           (07.00-12.00 / 16.00-07.00)
+echo   1. Uji GABUNG JNT+SPX                           (07.00-12.00 / 16.00-17.00)
 echo   2. Uji DIPISAH + SPX RESI ^<= 12.00              (TEPAT JAM 13.00)
 echo   3. Uji DIPISAH, TANPA SPX RESI PAGI             (13.00-15.00)
 echo   4. Uji GABUNG JNT+SPX LAGI + JNT RESI ^<= 15.00  (TEPAT JAM 15.00)

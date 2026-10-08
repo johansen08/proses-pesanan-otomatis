@@ -12,7 +12,7 @@ cls
 echo ==================================================================
 echo   PROSES PESANAN OTOMATIS (NON EVENT)
 echo ==================================================================
-echo   1. GABUNG JNT+SPX                           (07.00-12.00 / 16.00-07.00)
+echo   1. GABUNG JNT+SPX                           (07.00-12.00 / 16.00-17.00)
 echo   2. DIPISAH + SPX RESI ^<= 12.00              (TEPAT JAM 13.00)
 echo   3. DIPISAH, TANPA SPX RESI PAGI             (13.00-15.00)
 echo   4. GABUNG JNT+SPX LAGI + JNT RESI ^<= 15.00  (TEPAT JAM 15.00)
@@ -34,12 +34,12 @@ goto menu
 
 rem ============================================================
 rem TIPE 1: J&T dan SPX DIGABUNG (seperti semula). Dipakai siklus
-rem pagi 07.00-11.xx DAN siklus sore/malam/dini hari 16.00-07.00
+rem pagi 07.00-11.xx DAN siklus sore 16.00-17.00 (malam/dini hari: proses-malam.bat)
 rem keesokan harinya (setelah TIPE 4 selesai sampai TIPE 1 besok
 rem pagi) - lihat docs/jadwal-proses.md
 rem ============================================================
 :tipe1
-call :cek_jam 1 "TIPE 1 (07.00-12.00 / 16.00-07.00)"
+call :cek_jam 1 "TIPE 1 (07.00-12.00 / 16.00-17.00)"
 if errorlevel 1 goto menu
 echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio.

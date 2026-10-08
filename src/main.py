@@ -199,19 +199,19 @@ def dalam_jam_menu(menu: str) -> bool:
     cuma SANITY CHECK (soft warning via konfirmasi Y/N, bukan blokir) - tim tetap yang
     menentukan urutan kerja sebenarnya. 4 tipe (lihat docs/jadwal-proses.md untuk urutan
     langkah & alasan bisnis tiap tipe):
-      "1"=TIPE 1, gabung J&T+SPX (07.00-12.00 pagi, DAN 16.00-07.00 keesokan harinya -
-          dipakai lagi sore/malam/dini hari setelah TIPE 4 selesai sampai TIPE 1 besok pagi)
+      "1"=TIPE 1, gabung J&T+SPX (07.00-12.00 pagi, DAN 16.00-17.00 sore setelah TIPE 4
+          selesai; malam/dini hari 17.00-07.00 pakai proses-malam.bat, bukan menu ini)
       "2"=TIPE 2, dipisah + SPX Resi Pagi, dipicu TEPAT jam 13.00 (12.00-13.00 sengaja
           dikosongkan dari jendela menu mana pun = jam istirahat, bukan celah)
       "3"=TIPE 3, dipisah tanpa SPX Resi Pagi (13.00-15.00, setelah TIPE 2 & sebelum TIPE 4)
       "4"=TIPE 4, gabung lagi + J&T Resi Siang, dipicu TEPAT jam 15.00 (15.00-16.00)
     Jendela menu 2/3 (13.00-13.59 vs 13.00-14.59) SENGAJA tumpang tindih - di rentang itu
     dua tipe sama-sama valid dipilih tim, tergantung mana yang sudah/belum dijalankan hari
-    itu. TIPE 1 (menu "1") melingkupi tengah malam (16.00 hari ini - 07.00 esok), dicek
-    dengan membandingkan jam-dalam-sehari saja (berulang tiap hari, tidak peduli tanggal)."""
+    itu. TIPE 1 (menu "1") punya 2 jendela (pagi & sore), dicek dengan membandingkan
+    jam-dalam-sehari saja (berulang tiap hari, tidak peduli tanggal)."""
     sekarang = datetime.now().hour * 60 + datetime.now().minute
     jendela = {
-        "1": [(0, 12 * 60), (16 * 60, 24 * 60 - 1)],
+        "1": [(7 * 60, 12 * 60 - 1), (16 * 60, 17 * 60 - 1)],
         "2": [(13 * 60, 13 * 60 + 59)],
         "3": [(13 * 60, 14 * 60 + 59)],
         "4": [(15 * 60, 15 * 60 + 59)],
