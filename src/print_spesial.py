@@ -21,6 +21,16 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         (JNT_SPESIAL, SPX_SATUAN, dst - hasil --kurir jnt/spx, TIPE 2 & 3).
   --jenis spx-pagi   -> subfolder SPX_PAGI (--shopee-pagi), SEMUA PDF ikut (SHOPEE-PAGI-LANTAI*).
   --jenis jnt-siang  -> subfolder JNT_SIANG (--jnt-siang), SEMUA PDF ikut (JNT-SIANG-LANTAI*).
+  Mode EVENT (proses-event.bat, lihat docs/jadwal-proses.md) - jenis TERPISAH, tidak ikut
+  jenis gabungan di atas (spesial/satuan/kombinasi tetap hanya folder harian):
+  --jenis spesial-spx-hemat / satuan-spx-hemat / kombinasi-spx-hemat -> subfolder
+                        SPXHEMAT_SPESIAL / SPXHEMAT_SATUAN / SPXHEMAT_KOMBINASI (--event --kurir
+                        spx-hemat). J&T mode event memakai jenis yang SUDAH ada (spesial-jnt dst).
+  --jenis spesial-spx-hemat-pagi / satuan-spx-hemat-pagi / kombinasi-spx-hemat-pagi -> subfolder
+                        SPXHEMATPAGI_* (--event --kurir spx-hemat-pagi, Shopee Pagi s.d. 12:00).
+  --jenis spx-standard -> subfolder SPX_STANDARD (--spx-standard), SEMUA PDF ikut
+                        (SPX-STANDARD-LANTAI*). Versi Shopee Pagi-nya (--spx-standard --pagi)
+                        masuk SPX_PAGI, tercetak lewat --jenis spx-pagi.
 Semua jenis dicetak BERURUT (nomor PICK terkecil dulu, nomor diekstrak dari awal nama
 file - lihat POLA_SPESIAL/POLA_PICK) ke printer pilihan lewat SumatraPDF (-print-to,
 -silent).
@@ -81,8 +91,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from proses_label import (KURIR_LABEL_FILE, SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI,
-                           SUBFOLDER_SATUAN, SUBFOLDER_SPX_PAGI, SUBFOLDER_URGENT,
+from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
+                           SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
+                           SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
                            TAG_SPESIAL)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
@@ -98,8 +109,11 @@ POLA_TANGGAL_SESI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # alur SKU spesial yang menyisipkannya di nama file, jadi cukup cari pola ini saja. Kalau
 # --kurir jnt/spx dipakai saat proses, tag-nya disisipi awalan JNT_/SPX_ (lihat
 # _tag_spesial()) - pola ini menerima dengan atau tanpa awalan itu.
+# Awalan kurir mode event (SPXHEMAT_/SPXHEMATPAGI_) ikut dikenali; dicoba dari yang terpanjang
+# supaya "SPX" tidak menelan awal "SPXHEMAT".
+_KODE_KURIR_POLA = "|".join(sorted(KURIR_KODE_FILE_SEMUA.values(), key=len, reverse=True))
 POLA_SPESIAL = re.compile(
-    rf"^PICK-0*(\d+)_(?:(?:{'|'.join(KURIR_LABEL_FILE.values())})_)?SPESIAL_.*\.pdf$",
+    rf"^PICK-0*(\d+)_(?:(?:{_KODE_KURIR_POLA})_)?SPESIAL_.*\.pdf$",
     re.IGNORECASE)
 # Subfolder tempat label SPESIAL disimpan: tanpa --kurir di folder `SPESIAL`, dengan
 # --kurir jnt/spx di folder `JNT_SPESIAL`/`SPX_SPESIAL` (lihat _tag_spesial()) - dicari
@@ -137,6 +151,13 @@ JENIS_LABEL: dict[str, list[str]] = {
        for dasar, sub in (("spesial", TAG_SPESIAL), ("satuan", SUBFOLDER_SATUAN),
                           ("kombinasi", SUBFOLDER_KOMBINASI))
        for kode in KURIR_LABEL_FILE},
+    # Mode event: SPX Hemat (seharian) & SPX Hemat Shopee Pagi masing-masing punya jenis sendiri,
+    # SENGAJA tidak masuk jenis gabungan di atas. J&T mode event = jenis "-jnt" di atas.
+    **{f"{dasar}-{kode}": [f"{KURIR_LABEL_FILE_EVENT[kode]}_{sub}"]
+       for dasar, sub in (("spesial", TAG_SPESIAL), ("satuan", SUBFOLDER_SATUAN),
+                          ("kombinasi", SUBFOLDER_KOMBINASI))
+       for kode in ("spx-hemat", "spx-hemat-pagi")},
+    "spx-standard": [SUBFOLDER_SPX_STANDARD],   # SPX Standard seharian (--spx-standard)
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
 }

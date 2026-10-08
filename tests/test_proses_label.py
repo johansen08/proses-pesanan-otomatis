@@ -1960,6 +1960,256 @@ def uji_label_lazada_pakai_isfromlz():
     print("  label Lazada: shipping-label/ diminta dengan isFromLz=true, channel lain tidak")
 
 
+
+# ----------------------------------------------------------------------------------------
+# Mode event (SPX Hemat / SPX Standard dipisah) - lihat proses_label.KURIR_PILIHAN
+# ----------------------------------------------------------------------------------------
+def uji_kurir_event_penamaan_tidak_bentrok_dengan_spx_biasa():
+    assert pl.KURIR_PILIHAN["spx-hemat"] == "spx hemat"
+    assert pl.KURIR_PILIHAN["spx-standard"] == "spx standard"
+    assert pl._tag_spesial("spx-hemat") == "SPXHEMAT_SPESIAL"
+    assert pl._gabung_kurir(pl.SUBFOLDER_SATUAN, "spx-hemat") == "SPXHEMAT_SATUAN"
+    assert pl._gabung_kurir(pl.SUBFOLDER_KOMBINASI, "spx-hemat") == "SPXHEMAT_KOMBINASI"
+    assert pl._label_kurir_file("1QTY-REGULER-2A", "spx-hemat") == "SPXHEMAT-1QTY-REGULER-2A"
+    assert pl._nama_kurir("1 Qty Reguler 2A", "spx-hemat") == "SPX-HEMAT 1 Qty Reguler 2A"
+    # awalan SPX_ biasa tidak boleh tertukar dengan SPXHEMAT_ (dan sebaliknya)
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "SPX_SPESIAL") \
+        == "detail-resi-spesial-spx.xlsx"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "SPXHEMAT_SPESIAL") \
+        == "detail-resi-spesial-spxhemat.xlsx"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "JNT_SPESIAL") \
+        == "detail-resi-spesial-jnt.xlsx"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", pl.TAG_SPESIAL) \
+        == "detail-resi-spesial.xlsx"
+    # print_spesial.py menurunkan jenis cetak harian dari KURIR_LABEL_FILE: varian event
+    # SENGAJA tidak masuk ke sana (cetak harian tidak boleh berubah)
+    assert set(pl.KURIR_LABEL_FILE) == {"jnt", "spx"}
+    print("  kurir event: tag/subfolder/label SPXHEMAT_*, tidak bentrok dengan SPX_*, "
+          "KURIR_LABEL_FILE harian tidak berubah")
+
+
+class _SesiRekam:
+    """Sesi tiruan minimal: catat params GET, kembalikan data tetap."""
+
+    def __init__(self, data):
+        self.data = data
+        self.params = []
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        self.params.append(params)
+        return Resp(data={"data": self.data, "totalCount": len(self.data)})
+
+
+def uji_cari_pesanan_dan_saring_untuk_spx_hemat_dan_standard():
+    data = [{"salesorder_no": "A", "shipper": "SPX Hemat", "grand_total": "1000", "total_qty": "1"},
+            {"salesorder_no": "B", "shipper": "SPX Standard", "grand_total": "1000", "total_qty": "1"},
+            {"salesorder_no": "C", "shipper": "J&T Express Hemat", "grand_total": "1000", "total_qty": "1"}]
+    for kurir, nilai, lolos in (("spx-hemat", "spx hemat", {"A"}),
+                                ("spx-standard", "spx standard", {"B"})):
+        sesi = _SesiRekam(data)
+        k = pl.Klien("TKN", sesi=sesi, tidur=lambda s: None)
+        hasil = pl.cari_pesanan(k, "X", kurir)
+        assert sesi.params[0]["couriers[0]"] == nilai and "couriers[1]" not in sesi.params[0]
+        pakai, buang = pl.saring(hasil, {"A", "B", "C"}, kurir)
+        assert {o["salesorder_no"] for o in pakai} == lolos, (kurir, pakai)
+        assert len(buang) == 2 and all(a.startswith("kurir ") for _, a in buang), buang
+    print("  cari_pesanan/saring: spx-hemat -> couriers[0]='spx hemat' & hanya SPX Hemat lolos "
+          "(SPX Standard & J&T Hemat dibuang); spx-standard sebaliknya")
+
+
+def uji_filter_tipe_pesanan_juga_untuk_varian_spx():
+    # pesanan SPX "pengiriman kilat" tidak boleh ikut: filter order_type dulu hanya aktif untuk
+    # couriers == "spx" persis -> "spx hemat"/"spx standard" harus ikut kena filter itu
+    for nilai in ("spx", "spx hemat", "spx standard"):
+        sesi = _SesiRekam([])
+        k = pl.Klien("TKN", sesi=sesi, tidur=lambda s: None)
+        pl._ambil_pesanan_channel_mentah(k, None, [nilai])
+        assert [sesi.params[0][f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
+            == pl.TIPE_PESANAN_FILTER, nilai
+    sesi = _SesiRekam([])
+    k = pl.Klien("TKN", sesi=sesi, tidur=lambda s: None)
+    pl._ambil_pesanan_channel_mentah(k, None, ["j&t"])
+    assert "order_type[0]" not in sesi.params[0], "J&T tanpa channel Shopee: tidak difilter"
+    print("  filter order_type (tanpa pesanan kilat) berlaku untuk spx, spx hemat, spx standard")
+
+
+def uji_saring_sampai_batas_jam():
+    import datetime as dt
+
+    batas = pl.batas_jam_hari_ini(12, dt.datetime(2026, 9, 29, 13, 0, tzinfo=pl.WIB))
+    assert batas == dt.datetime(2026, 9, 29, 12, 0, tzinfo=pl.WIB)
+    data = [{"id": 1, "transaction_date": "2026-09-29T05:00:00.000Z"},    # 12:00:00 WIB -> ikut
+            {"id": 2, "transaction_date": "2026-09-29T05:00:01.000Z"},    # 12:00:01 -> tidak
+            {"id": 3, "transaction_date": None},                          # tanpa tanggal -> buang
+            {"id": 4, "transaction_date": "2026-09-29T02:00:00.000Z"}]
+    assert [o["id"] for o in pl.saring_sampai_batas(data, batas)] == [1, 4]
+    assert pl.saring_sampai_batas(data, None) is data, "batas None = tidak menyaring sama sekali"
+    k = pl.Klien("TKN", sesi=_SesiRekam([
+        {"salesorder_no": "A", "shipper": "SPX Hemat", **d} for d in data]),
+        tidur=lambda s: None)
+    assert [o["id"] for o in pl.cari_pesanan(k, "X", "spx-hemat", batas)] == [1, 4]
+    assert len(pl.cari_pesanan(k, "X", "spx-hemat")) == 4, "tanpa batas: perilaku lama"
+    print("  saring_sampai_batas: <= batas ikut (12:00:00 pas ikut), tanpa tanggal dibuang, "
+          "batas None = lama; cari_pesanan meneruskan batas")
+
+
+class JubelioPalsuSpxStandard(JubelioPalsuShopeePagi):
+    """Seperti JubelioPalsuShopeePagi, tapi TANPA mengunci channel (SPX Standard seharian pakai
+    CHANNEL_IDS_REGULER) dan mengharuskan couriers[0]='spx standard' di semua query."""
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        if url.endswith("ready-to-process/"):
+            self.log.append(("GET", url, params))
+            assert params.get("couriers[0]") == "spx standard", params
+            assert "couriers[1]" not in params
+            assert [params[f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
+                == pl.TIPE_PESANAN_FILTER
+            combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+            if combos:
+                cocok = [so for so, c in self.rak.items() if c in combos]
+                return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
+                                  "totalCount": len(cocok)})
+            return Resp(data={"data": self.pesanan, "totalCount": len(self.pesanan)})
+        return super().get(url, params, headers, timeout, cookies)
+
+
+def _jalankan_spx_standard(pagi: bool):
+    import datetime as dt
+
+    j = JubelioPalsuSpxStandard()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    sekarang = dt.datetime(2026, 9, 29, 13, 0, 0, tzinfo=pl.WIB)
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((sku, jumlah, subfolder))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            pl.rencana_spx_standard(k, pagi, sekarang)       # mode uji: tidak boleh POST
+            assert not [x for x in j.log if x[0] == "POST"], "mode uji tidak boleh POST"
+            pl.proses_spx_standard(k, Path(d) / "riwayat.xlsx", Path(d) / "label", pagi, sekarang)
+    finally:
+        pl.lanjutkan_picklist = asli
+    return {sku: (jumlah, sub) for sku, jumlah, sub in panggilan}
+
+
+def uji_spx_standard_seharian_hanya_per_lantai():
+    hasil = _jalankan_spx_standard(pagi=False)
+    # id 1-5 Shopee (Lazada id 6 dibuang), semua jam ikut; id 1,2 -> lantai 1; id 3,4,5 -> LAINNYA
+    assert hasil == {"SPX-STANDARD-LANTAI1": (2, pl.SUBFOLDER_SPX_STANDARD),
+                     "SPX-STANDARD-LAINNYA": (3, pl.SUBFOLDER_SPX_STANDARD)}, hasil
+    print("  SPX Standard seharian: tanpa batas jam, hanya per lantai (LANTAI1/LAINNYA), "
+          "subfolder SPX_STANDARD, tidak ada pecahan spesial/satuan/kombinasi")
+
+
+def uji_spx_standard_shopee_pagi_dibatasi_jam_12():
+    hasil = _jalankan_spx_standard(pagi=True)
+    assert hasil == {
+        "SHOPEE-PAGI-SPX-STANDARD-LANTAI1": (2, pl.SUBFOLDER_SPX_PAGI),
+        "SHOPEE-PAGI-SPX-STANDARD-LAINNYA": (1, pl.SUBFOLDER_SPX_PAGI)}, hasil
+    print("  Shopee Pagi SPX Standard: hanya jam pesan <= 12:00 (id 1-3), per lantai, "
+          "subfolder SPX_PAGI")
+
+
+
+class JubelioPalsuRegulerHemat(JubelioPalsuReguler):
+    """Seperti JubelioPalsuReguler tapi untuk kurir="spx-hemat": filter kurir harus tepat
+    couriers[0]='spx hemat'. SO-4 dipesan 13:00 WIB (lewat batas 12:00), sisanya 09:00 WIB."""
+
+    def __init__(self):
+        super().__init__()
+        for o in self.pesanan:
+            o["transaction_date"] = ("2026-09-29T06:00:00.000Z" if o["salesorder_id"] == 4
+                                     else "2026-09-29T02:00:00.000Z")
+
+    def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+        if url.endswith("ready-to-process/") and not any(
+                kk.startswith("combination[") for kk in params):
+            self.log.append(("GET", url, params))
+            assert params.get("couriers[0]") == "spx hemat" and "couriers[1]" not in params, params
+            assert [params[f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
+                == pl.TIPE_PESANAN_FILTER, "SPX hemat -> pesanan kilat harus difilter"
+            return Resp(data={"data": self.pesanan, "totalCount": len(self.pesanan)})
+        return super().get(url, params, headers, timeout, cookies)
+
+
+def uji_reguler_spx_hemat_nama_label_subfolder_dan_batas_jam():
+    import datetime as dt
+
+    j = JubelioPalsuRegulerHemat()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    spesial = {"SO-1", "SO-2"}
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((sku, nama_file, subfolder))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": f"{pno}_{sku}_x.pdf", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            pl.rencana_reguler(k, spesial, kurir="spx-hemat")      # mode uji tidak boleh POST
+            assert not [x for x in j.log if x[0] == "POST"]
+            pl.proses_reguler(k, spesial, Path(d) / "r.xlsx", Path(d) / "label", kurir="spx-hemat")
+            penuh = list(panggilan)
+            panggilan.clear()
+            batas = pl.batas_jam_hari_ini(12, dt.datetime(2026, 9, 29, 13, 0, tzinfo=pl.WIB))
+            pl.proses_reguler(k, spesial, Path(d) / "r2.xlsx", Path(d) / "label2",
+                              kurir="spx-hemat", batas=batas)
+            dibatasi = list(panggilan)
+    finally:
+        pl.lanjutkan_picklist = asli
+
+    assert [s for s, _, _ in penuh] == [
+        "SPX-HEMAT-1QTY-REGULER-2A", "SPX-HEMAT-1QTY-REGULER-3A", "SPX-HEMAT-1QTY-REGULER-2B",
+        "SPX-HEMAT-1QTY-REGULER-LAINNYA", "SPX-HEMAT-KOMBINASI-REGULER-LANTAI1",
+        "SPX-HEMAT-KOMBINASI-REGULER-LAINNYA"], penuh
+    for sku, nama_file, subfolder in penuh:
+        assert nama_file == sku.replace("SPX-HEMAT-", "SPXHEMAT-"), (sku, nama_file)
+        assert subfolder == ("SPXHEMAT_SATUAN" if "1QTY" in sku else "SPXHEMAT_KOMBINASI"), sku
+    print("  reguler spx-hemat: label SPX-HEMAT-*, nama file SPXHEMAT-*, subfolder "
+          "SPXHEMAT_SATUAN/SPXHEMAT_KOMBINASI, filter couriers[0]='spx hemat'")
+
+    # SO-4 (satu-satunya 1qty rak 3A) dipesan 13:00 WIB -> lewat batas 12:00 -> grup 3A hilang
+    assert "SPX-HEMAT-1QTY-REGULER-3A" not in [s for s, _, _ in dibatasi], dibatasi
+    assert len(dibatasi) == len(penuh) - 1, dibatasi
+    print("  reguler spx-hemat dengan batas jam 12:00: pesanan 13:00 tidak ikut, sisanya sama")
+
+
+
+def uji_spx_hemat_pagi_folder_terpisah_dan_batas_jam_otomatis():
+    import datetime as dt
+
+    # folder/tag/label SPX Hemat Shopee Pagi TERPISAH dari SPX Hemat sisa hari
+    assert pl._tag_spesial("spx-hemat-pagi") == "SPXHEMATPAGI_SPESIAL"
+    assert pl._gabung_kurir(pl.SUBFOLDER_SATUAN, "spx-hemat-pagi") == "SPXHEMATPAGI_SATUAN"
+    assert pl._gabung_kurir(pl.SUBFOLDER_KOMBINASI, "spx-hemat-pagi") == "SPXHEMATPAGI_KOMBINASI"
+    assert pl._label_kurir("1QTY-REGULER-2A", "spx-hemat-pagi") == "SPX-HEMAT-PAGI-1QTY-REGULER-2A"
+    assert pl._label_kurir_file("1QTY-REGULER-2A", "spx-hemat-pagi") \
+        == "SPXHEMATPAGI-1QTY-REGULER-2A"
+    assert len({pl._tag_spesial(k) for k in ("spx", "spx-hemat", "spx-hemat-pagi")}) == 3
+    # filter kurir ke Jubelio SAMA dengan spx-hemat (hanya folder/label yang dipisah)
+    assert pl.KURIR_PILIHAN["spx-hemat-pagi"] == pl.KURIR_PILIHAN["spx-hemat"] == "spx hemat"
+    # file detail resi juga terpisah, dan awalan SPXHEMAT_ tidak menangkap SPXHEMATPAGI_
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "SPXHEMATPAGI_SPESIAL") \
+        == "detail-resi-spesial-spxhematpagi.xlsx"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "SPXHEMAT_SPESIAL") \
+        == "detail-resi-spesial-spxhemat.xlsx"
+    # batas jam otomatis hanya untuk spx-hemat-pagi
+    sekarang = dt.datetime(2026, 10, 10, 13, 0, tzinfo=pl.WIB)
+    assert pl.batas_untuk_kurir("spx-hemat-pagi", sekarang) == dt.datetime(
+        2026, 10, 10, 12, 0, tzinfo=pl.WIB)
+    for kurir in (None, "jnt", "spx", "spx-hemat", "spx-standard"):
+        assert pl.batas_untuk_kurir(kurir, sekarang) is None, kurir
+    print("  spx-hemat-pagi: tag/subfolder/label/detail resi SPXHEMATPAGI_* terpisah; filter "
+          "kurir sama dgn spx-hemat; batas jam 12:00 otomatis hanya untuknya")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":

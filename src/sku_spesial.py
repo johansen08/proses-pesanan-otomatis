@@ -26,6 +26,16 @@ KOLOM_WAJIB = ["No pesanan", "SKU", "qty", "Kurir"]
 KURIR_DIIZINKAN = ("J&T", "SPX")   # dicocokkan dengan awalan teks kolom Kurir
 MIN_RESI = 3                       # minimal resi per SKU (J&T + SPX digabung)
 
+# Mode EVENT (proses-event.bat, lihat docs/jadwal-proses.md): penentuan SKU spesial dihitung
+# PER KURIR, bukan digabung - J&T dan SPX Hemat masing-masing punya ambang MIN_RESI sendiri dan
+# daftar resi spesial sendiri; SPX Standard tidak punya jalur spesial sama sekali (volumenya
+# kecil, hanya dipecah per lantai - lihat proses_label.proses_spx_standard()). Kunci = nilai
+# --kurir CLI (sama dengan proses_label.KURIR_PILIHAN), nilai = awalan teks kolom Kurir Excel
+# (huruf besar). Hanya dipakai kalau `kurir_hitung` diisi; default None = J&T+SPX digabung
+# seperti semula (alur harian TIDAK berubah).
+KURIR_AWALAN_HITUNG = {"jnt": "J&T", "spx": "SPX", "spx-hemat": "SPX HEMAT",
+                       "spx-hemat-pagi": "SPX HEMAT", "spx-standard": "SPX STANDARD"}
+
 # Awalan SKU yang SENGAJA tidak pernah dihitung spesial walau jumlah resinya >= MIN_RESI -
 # dicocokkan dengan awalan teks SKU (bukan exact match), jadi semua varian seperti
 # "C225-UB11-1"/"C225-UB11-2"/"C225-UB10-1" ikut dikecualikan. Resinya tetap mengalir ke jalur
@@ -81,10 +91,22 @@ def _tandai(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def resi_kandidat(df: pd.DataFrame) -> set[str]:
-    """No pesanan yang lolos R1-R3; hanya ini yang perlu dicek nilainya ke API."""
+def _lolos_kurir(df: pd.DataFrame, kurir_hitung: str | None = None) -> pd.Series:
+    """Baris yang kurirnya ikut dihitung. `kurir_hitung` None = J&T atau SPX (digabung, seperti
+    semula); selain itu salah satu kunci KURIR_AWALAN_HITUNG = hanya kurir/varian itu."""
+    if kurir_hitung is None:
+        return df["grup_kurir"] != "Lain"
+    if kurir_hitung not in KURIR_AWALAN_HITUNG:
+        raise ValueError(f"kurir_hitung tidak dikenal: {kurir_hitung!r} "
+                         f"(pilihan: {sorted(KURIR_AWALAN_HITUNG)})")
+    return df["Kurir"].fillna("").str.upper().str.startswith(KURIR_AWALAN_HITUNG[kurir_hitung])
+
+
+def resi_kandidat(df: pd.DataFrame, kurir_hitung: str | None = None) -> set[str]:
+    """No pesanan yang lolos R1-R3; hanya ini yang perlu dicek nilainya ke API.
+    `kurir_hitung`: lihat _lolos_kurir() - harus sama dengan yang dipakai hitung_sku_spesial()."""
     df = _tandai(df)
-    lolos = (df["jml_baris_resi"] == 1) & (df["qty"] == 1) & (df["grup_kurir"] != "Lain")
+    lolos = (df["jml_baris_resi"] == 1) & (df["qty"] == 1) & _lolos_kurir(df, kurir_hitung)
     return set(df.loc[lolos, "No pesanan"])
 
 
@@ -217,13 +239,17 @@ def sku_bundle_per_pesanan(df: pd.DataFrame) -> dict[str, str]:
     return hasil
 
 
-def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None = None):
-    """nilai_pesanan: {No pesanan: grand_total}. None = aturan nilai 0 tidak dipakai."""
+def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None = None,
+                       kurir_hitung: str | None = None):
+    """nilai_pesanan: {No pesanan: grand_total}. None = aturan nilai 0 tidak dipakai.
+    `kurir_hitung`: None (default) = J&T + SPX digabung; atau kunci KURIR_AWALAN_HITUNG untuk
+    menghitung SATU kurir/varian saja (mode event) - resi kurir lain tidak ikut dihitung
+    sehingga tidak menambah jumlah resi SKU maupun masuk daftar resi spesial."""
     df = _tandai(df)
 
     f1 = df[df["jml_baris_resi"] == 1]          # resi hanya 1 baris = 1 SKU
     f2 = f1[f1["qty"] == 1]                     # qty tepat 1
-    f3 = f2[f2["grup_kurir"] != "Lain"]         # kurir J&T / SPX
+    f3 = f2[_lolos_kurir(f2, kurir_hitung)]     # kurir J&T / SPX (atau 1 kurir, mode event)
 
     if nilai_pesanan is None:
         f4, resi_nilai_0, resi_tanpa_nilai = f3, 0, 0
@@ -258,6 +284,7 @@ def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None 
         "resi_1_baris": len(f1),
         "resi_1_baris_qty1": len(f2),
         "resi_lolos_kurir": len(f3),
+        "kurir_hitung": kurir_hitung,
         "resi_nilai_0": resi_nilai_0,
         "resi_tanpa_nilai": resi_tanpa_nilai,
         "resi_lolos_nilai": len(f4),

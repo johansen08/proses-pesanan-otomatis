@@ -54,6 +54,18 @@ dipicklist:
     python src/main.py --label --kurir jnt --tanpa-reguler --jalankan
     python src/main.py --reguler --bagian 1qty --kurir spx --jalankan
 
+Mode EVENT (hari 10.10/11.11/12.12 dst, lihat docs/jadwal-proses.md; proses-event.bat): J&T,
+SPX Hemat, dan SPX Standard dipisah SEPANJANG HARI. Berdiri sendiri dari alur harian - tanpa
+--event, perilaku semua flag di atas TIDAK berubah. J&T dan SPX Hemat: spesial, satuan, kombinasi
+(penentuan SKU spesial dihitung PER KURIR, bukan digabung) lewat --event + --kurir jnt|spx-hemat;
+SPX Standard: hanya dipecah per lantai (1/2/3/LAINNYA) lewat --spx-standard. Versi Shopee Pagi
+(jam pesan s.d. 12:00, folder hasil TERPISAH): --kurir spx-hemat-pagi dan --spx-standard --pagi:
+    python src/main.py --label --event --kurir jnt --tanpa-reguler --jalankan
+    python src/main.py --reguler --event --kurir spx-hemat --bagian 1qty --jalankan
+    python src/main.py --label --event --kurir spx-hemat-pagi --tanpa-reguler --jalankan
+    python src/main.py --spx-standard --jalankan
+    python src/main.py --spx-standard --pagi --jalankan
+
 Picklist Shopee Pagi (proses_label.py): dijalankan MANUAL 1x sehari (mis. jam 13:00), BUKAN
 bagian alur otomatis --label --jalankan. Semua pesanan channel Shopee yang jam pesannya (WIB)
 maksimal jam 12 siang hari ini, dipecah per LANTAI rak gudang (1/2/3/LAINNYA) - sama pola
@@ -203,6 +215,10 @@ def dalam_jam_menu(menu: str) -> bool:
         "2": [(13 * 60, 13 * 60 + 59)],
         "3": [(13 * 60, 14 * 60 + 59)],
         "4": [(15 * 60, 15 * 60 + 59)],
+        # proses-event.bat pilihan 2 (Shopee Pagi, picklist jam pesan s.d. 12.00): baru masuk
+        # akal SETELAH jam 12.00 (semua pesanan s.d. 12.00 sudah masuk), kapan pun sesudahnya
+        # sampai sore. Pilihan 1 (sesi biasa) tidak punya jendela - boleh kapan saja.
+        "E2": [(12 * 60, 15 * 60 + 59)],
     }
     return any(awal <= sekarang <= akhir for awal, akhir in jendela[menu])
 
@@ -308,11 +324,25 @@ def _main() -> int:
                         "(tanpa --jalankan = mode uji)")
     ap.add_argument("--bagian", choices=["1qty", "kombinasi"],
                     help="dipakai bersama --reguler: batasi ke 1 bagian saja")
-    ap.add_argument("--kurir", choices=["jnt", "spx"],
+    ap.add_argument("--kurir", choices=["jnt", "spx", "spx-hemat", "spx-hemat-pagi"],
                     help="dipakai bersama --label atau --reguler: pisahkan J&T dan SPX jadi "
                         "picklist sendiri-sendiri, bukan digabung (dipakai TIPE 2 & TIPE 3 - "
                         "lihat proses-harian.bat/docs/jadwal-proses.md); tanpa --kurir = J&T "
-                        "dan SPX digabung seperti semula (TIPE 1/TIPE 4)")
+                        "dan SPX digabung seperti semula (TIPE 1/TIPE 4). spx-hemat & "
+                        "spx-hemat-pagi (s.d. jam 12:00, folder hasil terpisah) hanya untuk "
+                        "mode event dan WAJIB bersama --event")
+    ap.add_argument("--event", action="store_true",
+                    help="mode event, dipakai bersama --label atau --reguler dan --kurir jnt|"
+                        "spx-hemat|spx-hemat-pagi: penentuan SKU spesial dihitung hanya dari "
+                        "kurir itu (bukan J&T+SPX digabung). Tanpa --event perilaku harian")
+    ap.add_argument("--spx-standard", action="store_true",
+                    help="hanya buat picklist SPX Standard (mode event): semua pesanan SPX "
+                        "Standard, TANPA dipisah spesial/satuan/kombinasi, dipecah per lantai "
+                        "rak gudang (1/2/3/LAINNYA) sampai label PDF (tanpa --jalankan = mode "
+                        "uji)")
+    ap.add_argument("--pagi", action="store_true",
+                    help="dipakai bersama --spx-standard: versi Shopee Pagi (hanya Shopee, jam "
+                        "pesan s.d. 12:00 WIB hari ini, folder hasil SPX_PAGI)")
     ap.add_argument("--shopee-pagi", action="store_true",
                     help="hanya buat picklist Shopee Pagi (channel Shopee, jam pesan s.d. "
                         "12:00 WIB hari ini, dipecah per lantai rak gudang) sampai label PDF "
@@ -356,7 +386,7 @@ def _main() -> int:
                         "riwayat (mis. KOMBINASI-REGULER-LANTAI2, atau SKU-nya utk SKU spesial)")
     ap.add_argument("--tag", metavar="TAG",
                     help="dipakai bersama --lanjut: penanda SKU spesial (SPESIAL/JNT_SPESIAL/"
-                        "SPX_SPESIAL) - disisipkan di nama file & jadi subfolder")
+                        "SPX_SPESIAL/SPXHEMAT_SPESIAL/SPXHEMATPAGI_SPESIAL) - disisipkan di nama file & jadi subfolder")
     ap.add_argument("--subfolder", metavar="SUBFOLDER",
                     help="dipakai bersama --lanjut: subfolder tujuan PDF (URGENT, SATUAN, "
                         "KOMBINASI, JNT_SATUAN, dst)")
@@ -364,6 +394,8 @@ def _main() -> int:
                     help="simpan label ke folder sesi ini (mis. 2026-10-06/12, folder sesi "
                         "asal picklist yang terhenti), bukan folder sesi baru")
     args = ap.parse_args()
+    if (pesan := pesan_salah_mode_event(args)):
+        ap.error(pesan)
 
     muat_env(ROOT / ".env")
     log = siapkan_log()
@@ -390,6 +422,8 @@ def _main() -> int:
             return recheck_stok_pesanan(log, args)
         if args.sampel:
             return sampel_picklist(log, args)
+        if args.spx_standard:
+            return spx_standard_picklist(log, args)
         if args.urgent:
             return urgent_picklist(log, args)
         if args.reguler:
@@ -412,11 +446,11 @@ def _main() -> int:
         nilai = None
         if not args.tanpa_cek_nilai:
             import jubelio
-            kandidat = resi_kandidat(df)
+            kandidat = resi_kandidat(df, kurir_hitung(args))
             log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
             nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
 
-        tabel, ringkasan = hitung_sku_spesial(df, nilai)
+        tabel, ringkasan = hitung_sku_spesial(df, nilai, kurir_hitung(args))
         log.info("Baris %d | resi %d | lolos 1 baris %d | qty1 %d | J&T/SPX %d | "
                  "nilai 0 (kreator) %d | lolos nilai %d",
                  ringkasan["total_baris"], ringkasan["total_resi"], ringkasan["resi_1_baris"],
@@ -436,7 +470,7 @@ def _main() -> int:
             return proses_label_sku(log, token, df, tabel, ringkasan, args, lama_daftar, waktu)
 
         FOLDER_PDF.mkdir(exist_ok=True)
-        pdf = FOLDER_PDF / f"SKU_Spesial_{waktu:%Y-%m-%d_%H%M}.pdf"
+        pdf = FOLDER_PDF / nama_pdf_spesial(waktu, args)
         buat_pdf(tabel, ringkasan, pdf, waktu)
         log.info("SELESAI: %d SKU spesial, %d resi spesial -> %s",
                  ringkasan["total_sku_spesial"], ringkasan["total_resi_spesial"], pdf)
@@ -479,6 +513,7 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     resi_per_sku = {s: ringkasan["resi_per_sku"][s] for s in urutan}
 
     k = proses_label.Klien(token)
+    batas = proses_label.batas_untuk_kurir(args.kurir)      # None kecuali spx-hemat-pagi
     rak_per_sku = dict(zip(tabel["SKU"], tabel["No Rak"]))
     # Fallback khusus SKU bundling utk picklist 1qty reguler (lihat proses_reguler()):
     # live API Jubelio selalu melaporkan location_id -1/virtual utk item bundle, padahal kolom
@@ -493,12 +528,12 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
             log.info("Tidak ada SKU spesial untuk diproses")
             return 0
         log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana(k, resi_per_sku, rak_per_sku, args.kurir)
+        proses_label.rencana(k, resi_per_sku, rak_per_sku, args.kurir, batas)
         if not args.sku and not args.tanpa_reguler:
             resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
             proses_label.rencana_reguler(k, resi_spesial_semua, kurir=args.kurir,
                                          grup_dari_excel=grup_dari_excel,
-                                         lantai_dari_excel=lantai_dari_excel)
+                                         lantai_dari_excel=lantai_dari_excel, batas=batas)
         return 0
 
     hasil, lama_proses = [], 0.0
@@ -506,7 +541,7 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         log.info("MEMPROSES %d SKU spesial per rak sampai label PDF", len(resi_per_sku))
         mulai = time.monotonic()
         hasil = proses_label.proses(k, resi_per_sku, FOLDER_LABEL_SESI, FILE_RIWAYAT, rak_per_sku,
-                                    args.kurir)
+                                    args.kurir, batas)
         lama_proses = time.monotonic() - mulai
 
         log.info("RINGKASAN (urut rak):")
@@ -527,7 +562,7 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         "total_resi_spesial": int(tabel_aktual["Jumlah Resi"].sum()) if len(tabel_aktual) else 0,
     }
     FOLDER_PDF.mkdir(exist_ok=True)
-    pdf = FOLDER_PDF / f"SKU_Spesial_{waktu:%Y-%m-%d_%H%M}.pdf"
+    pdf = FOLDER_PDF / nama_pdf_spesial(waktu, args)
     buat_pdf(tabel_aktual, ringkasan_aktual, pdf, waktu)
     log.info("SELESAI: %d SKU spesial (benar-benar diproses), %d resi -> %s",
              ringkasan_aktual["total_sku_spesial"], ringkasan_aktual["total_resi_spesial"], pdf)
@@ -544,7 +579,8 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         hasil_reguler = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT,
                                                      FOLDER_LABEL_SESI, kurir=args.kurir,
                                                      grup_dari_excel=grup_dari_excel,
-                                                     lantai_dari_excel=lantai_dari_excel)
+                                                     lantai_dari_excel=lantai_dari_excel,
+                                                     batas=batas)
 
     diproses = [h["detik"] for h in hasil if h.get("No Picklist")]
     log.info("Waktu buat daftar resi spesial : %s", durasi(lama_daftar))
@@ -630,10 +666,10 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     nilai = None
     if not args.tanpa_cek_nilai:
         import jubelio
-        kandidat = resi_kandidat(df)
+        kandidat = resi_kandidat(df, kurir_hitung(args))
         log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
         nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
-    _, ringkasan = hitung_sku_spesial(df, nilai)
+    _, ringkasan = hitung_sku_spesial(df, nilai, kurir_hitung(args))
     resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
     log.info("%d resi SKU spesial hari ini (dikeluarkan dari picklist reguler)",
              len(resi_spesial_semua))
@@ -645,20 +681,73 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     lantai_dari_excel = lantai_per_pesanan(df, proses_label.LANTAI_RAK, rak_dominan_sku)
 
     k = proses_label.Klien(token)
+    batas = proses_label.batas_untuk_kurir(args.kurir)      # None kecuali spx-hemat-pagi
     grup_dari_excel, lantai_dari_excel = _lengkapi_fallback_bundle(
         k, df, grup_dari_excel, lantai_dari_excel)
     if not args.jalankan:
         log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
         proses_label.rencana_reguler(k, resi_spesial_semua, args.bagian, args.kurir,
                                      grup_dari_excel=grup_dari_excel,
-                                     lantai_dari_excel=lantai_dari_excel)
+                                     lantai_dari_excel=lantai_dari_excel, batas=batas)
         return 0
     hasil = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI,
                                         args.bagian, args.kurir, grup_dari_excel=grup_dari_excel,
-                                        lantai_dari_excel=lantai_dari_excel)
+                                        lantai_dari_excel=lantai_dari_excel, batas=batas)
     gagal = cetak_bermasalah(hasil)
     log.info("SELESAI reguler: %d picklist dibuat%s", len(hasil) - len(gagal),
              f", {len(gagal)} bermasalah" if gagal else "")
+    return 1 if gagal else 0
+
+
+KURIR_MODE_EVENT = ("jnt", "spx-hemat", "spx-hemat-pagi")      # nilai --kurir yang sah dgn --event
+KURIR_HANYA_EVENT = ("spx-hemat", "spx-hemat-pagi")            # nilai --kurir yang WAJIB --event
+
+
+def pesan_salah_mode_event(args) -> str | None:
+    """Pesan error kalau kombinasi flag mode event salah, None kalau sah. Dipisah dari argparse
+    supaya mudah diuji. SPX Hemat tanpa --event DITOLAK (bukan diam-diam dihitung digabung):
+    penentuan SKU spesial per kurir hanya berlaku dengan --event, jadi salah ketik di .bat tidak
+    boleh menghasilkan picklist dengan hitungan yang tidak dimaksud."""
+    if args.kurir in KURIR_HANYA_EVENT and not args.event:
+        return f"--kurir {args.kurir} hanya untuk mode event: tambahkan --event"
+    if args.event:
+        if not (args.label or args.reguler):
+            return "--event dipakai bersama --label atau --reguler"
+        if args.kurir not in KURIR_MODE_EVENT:
+            return "--event butuh --kurir " + " atau ".join(KURIR_MODE_EVENT)
+    if args.pagi and not args.spx_standard:
+        return "--pagi hanya dipakai bersama --spx-standard"
+    if args.spx_standard and (args.label or args.reguler or args.event):
+        return "--spx-standard berdiri sendiri (tidak bersama --label/--reguler/--event)"
+    return None
+
+
+def kurir_hitung(args) -> str | None:
+    """Kurir untuk penentuan SKU spesial (sku_spesial.hitung_sku_spesial): HANYA mode event yang
+    menghitung per kurir; selain itu None = J&T+SPX digabung seperti semula, APA PUN nilai
+    --kurir (TIPE 2/3 harian tetap menggabung)."""
+    return args.kurir if getattr(args, "event", False) else None
+
+
+def nama_pdf_spesial(waktu: datetime, args) -> str:
+    """Nama PDF ringkasan SKU spesial. Mode event diberi akhiran kurir supaya hitungan J&T dan
+    SPX Hemat (dijalankan berturut-turut, bisa dalam menit yang sama) tidak saling menimpa."""
+    akhiran = f"_{args.kurir}" if kurir_hitung(args) else ""
+    return f"SKU_Spesial_{waktu:%Y-%m-%d_%H%M}{akhiran}.pdf"
+
+
+def spx_standard_picklist(log: logging.Logger, args) -> int:
+    import proses_label
+
+    k = proses_label.Klien(login(log))
+    if not args.jalankan:
+        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
+        proses_label.rencana_spx_standard(k, args.pagi)
+        return 0
+    hasil = proses_label.proses_spx_standard(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, args.pagi)
+    gagal = cetak_bermasalah(hasil)
+    log.info("SELESAI SPX Standard%s: %d picklist dibuat%s", " (Shopee Pagi)" if args.pagi else "",
+             len(hasil) - len(gagal), f", {len(gagal)} bermasalah" if gagal else "")
     return 1 if gagal else 0
 
 

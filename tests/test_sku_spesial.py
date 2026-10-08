@@ -321,6 +321,82 @@ def uji_validasi_resi_multibaris_tidak_lolos_ke_tabel_spesial():
     print("  validasi internal: resi spesial tetap unik & 1-baris (guard RuntimeError tidak terpicu)")
 
 
+
+# -------------------------------------------------- mode event: hitung spesial PER KURIR
+def _resi(awalan, kurir, jumlah, sku="X"):
+    return [(f"{awalan}{i}", sku, 1, kurir) for i in range(jumlah)]
+
+
+def uji_event_default_tetap_menggabung_semua_kurir():
+    # 2 J&T + 2 SPX Hemat + 2 SPX Standard untuk SKU yang sama: digabung (alur harian) = 6 resi
+    df = _df(_resi("J", "J&T Express Standard", 2) + _resi("H", "SPX Hemat", 2)
+             + _resi("S", "SPX Standard", 2))
+    tabel, ringkasan = ss.hitung_sku_spesial(df)
+    assert int(tabel["Jumlah Resi"].iat[0]) == 6, tabel
+    assert ringkasan["kurir_hitung"] is None
+    assert ss.resi_kandidat(df) == ss.resi_kandidat(df, None) == set(df["No pesanan"])
+    print("  tanpa kurir_hitung: J&T + SPX Hemat + SPX Standard tetap digabung (alur harian)")
+
+
+def uji_event_jnt_dan_spx_hemat_dihitung_terpisah_masing_masing_min_resi():
+    df = _df(_resi("J", "J&T Express Standard", 2) + _resi("H", "SPX Hemat", 2))
+    # digabung 4 resi -> spesial; dipisah, masing-masing cuma 2 (< MIN_RESI 3) -> tidak spesial
+    assert len(ss.hitung_sku_spesial(df)[0]) == 1
+    for kurir in ("jnt", "spx-hemat"):
+        tabel, _ = ss.hitung_sku_spesial(df, kurir_hitung=kurir)
+        assert tabel.empty, (kurir, tabel)
+    print("  event: 2 J&T + 2 SPX Hemat -> tidak ada yang spesial (ambang dihitung per kurir, "
+          "bukan digabung 4)")
+
+
+def uji_event_resi_spesial_hanya_dari_kurir_yang_dihitung():
+    df = _df(_resi("J", "J&T Express Standard", 3) + _resi("H", "SPX Hemat", 3)
+             + _resi("S", "SPX Standard", 5))
+    tabel_j, r_j = ss.hitung_sku_spesial(df, kurir_hitung="jnt")
+    tabel_h, r_h = ss.hitung_sku_spesial(df, kurir_hitung="spx-hemat")
+    assert r_j["resi_per_sku"] == {"X": ["J0", "J1", "J2"]}, r_j["resi_per_sku"]
+    assert r_h["resi_per_sku"] == {"X": ["H0", "H1", "H2"]}, r_h["resi_per_sku"]
+    assert int(tabel_j["Jumlah Resi"].iat[0]) == int(tabel_h["Jumlah Resi"].iat[0]) == 3
+    # SPX Standard 5 resi TIDAK pernah ikut menaikkan hitungan Hemat (dan tidak ikut spesial)
+    assert not any(no.startswith("S") for r in (r_j, r_h)
+                   for daftar in r["resi_per_sku"].values() for no in daftar)
+    assert ss.resi_kandidat(df, "jnt") == {"J0", "J1", "J2"}
+    assert ss.resi_kandidat(df, "spx-hemat") == {"H0", "H1", "H2"}
+    print("  event: daftar resi spesial J&T dan SPX Hemat terpisah; SPX Standard (5 resi) "
+          "tidak ikut spesial maupun menaikkan hitungan Hemat")
+
+
+def uji_event_spx_hemat_tidak_menangkap_jnt_hemat_atau_spx_standard():
+    df = _df(_resi("A", "SPX Hemat", 1) + _resi("B", "J&T Express Hemat", 3)
+             + _resi("C", "spx standard", 3) + _resi("D", "spx hemat", 1) + _resi("E", " SPX Hemat ", 1))
+    # kolom Kurir di-strip baca_excel(); _df() di sini tidak -> strip manual seperti baca_excel
+    df["Kurir"] = df["Kurir"].astype("string").str.strip()
+    _, r = ss.hitung_sku_spesial(df, kurir_hitung="spx-hemat")
+    assert r["resi_per_sku"] == {"X": ["A0", "D0", "E0"]}, r["resi_per_sku"]
+    print("  event: 'spx-hemat' cocok 'SPX Hemat'/'spx hemat' (huruf kecil), bukan J&T Hemat "
+          "atau SPX Standard")
+
+
+def uji_event_kurir_hitung_tidak_dikenal_ditolak():
+    df = _df(_resi("A", "SPX Hemat", 3))
+    for fungsi in (lambda: ss.hitung_sku_spesial(df, kurir_hitung="hemat"),
+                   lambda: ss.resi_kandidat(df, "gtl")):
+        try:
+            fungsi()
+        except ValueError as e:
+            assert "tidak dikenal" in str(e)
+        else:
+            raise AssertionError("kurir_hitung salah harus ValueError, bukan diam-diam kosong")
+    print("  kurir_hitung salah ketik -> ValueError (tidak diam-diam menghasilkan nol SKU spesial)")
+
+
+def uji_event_kunci_kurir_hitung_sama_dengan_kurir_pilihan_proses_label():
+    import proses_label as pl
+    assert set(ss.KURIR_AWALAN_HITUNG) == set(pl.KURIR_PILIHAN), \
+        "kunci --kurir harus sama di sku_spesial dan proses_label"
+    print("  kunci KURIR_AWALAN_HITUNG sama dengan proses_label.KURIR_PILIHAN")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

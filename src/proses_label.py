@@ -114,7 +114,17 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # Pemisahan J&T/SPX saat proses (dipakai TIPE 2 & TIPE 3 - lihat proses-harian.bat/
 # JADWAL-PROSES.md): nilai --kurir CLI ("jnt"/"spx") -> nilai filter kurir Jubelio.
 # kurir=None (default, dipakai TIPE 1/TIPE 4) = J&T dan SPX digabung seperti semula.
-KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx"}
+#
+# "spx-hemat"/"spx-standard" (mode EVENT, proses-event.bat - lihat docs/jadwal-proses.md): varian
+# SPX dipisah sendiri-sendiri. Nilai filter `couriers[]` Jubelio TIDAK membedakan huruf besar/
+# kecil dan memakai pencocokan sebagian teks, jadi harus selengkap "spx hemat" (bukan "hemat"
+# saja - ikut menangkap "J&T Express Hemat"); sniff 2026-10-08 & uji langsung API.
+#
+# "spx-hemat-pagi" = SPX Hemat untuk Shopee Pagi mode event (pesanan jam pesan <= 12:00 saja -
+# lihat KURIR_BERBATAS): filter kurirnya SAMA dengan "spx-hemat", tapi diberi kunci sendiri
+# supaya tag/subfolder/label/nama file-nya TERPISAH dari SPX Hemat sisa hari (SPXHEMATPAGI_*).
+KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx", "spx-hemat": "spx hemat",
+                 "spx-hemat-pagi": "spx hemat", "spx-standard": "spx standard"}
 # Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
 # (folder_label / tag), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
 # lanjutkan_picklist() dipanggil dari proses()); lanjutkan() (--lanjut) hanya memakainya kalau
@@ -292,7 +302,7 @@ def nama_detail_per_kurir(nama_dasar: str, tag: str | None) -> str:
     detail-resi-spesial.xlsx -> detail-resi-spesial-jnt.xlsx, supaya resi J&T dan SPX
     (TIPE 2 & 3, kurir dipisah) tidak bercampur di 1 file. Tanpa kurir (TIPE 1 & 4, digabung)
     nama dasar apa adanya."""
-    for kode in KURIR_LABEL_FILE.values():
+    for kode in KURIR_KODE_FILE_SEMUA.values():
         if tag and tag.startswith(f"{kode}_"):
             dasar, ekstensi = nama_dasar.rsplit(".", 1)
             return f"{dasar}-{kode.lower()}.{ekstensi}"
@@ -432,9 +442,46 @@ def durasi(detik: float) -> str:
 
 
 # ============================================================== 1. filter
-def cari_pesanan(k: Klien, sku: str, kurir: str | None = None) -> list[dict]:
+def batas_jam_hari_ini(jam: int, sekarang: datetime | None = None) -> datetime:
+    """Jam `jam`:00:00 WIB HARI INI (dari `sekarang`, default waktu sungguhan) - batas jam pesan
+    untuk picklist ber-cutoff (Shopee Pagi 12:00, J&T Siang 15:00, dan varian mode event)."""
+    return (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
+
+
+# Kurir yang otomatis dibatasi jam pesan (nilai = jam cutoff WIB hari ini): dipakai main.py supaya
+# `--kurir spx-hemat-pagi` selalu berarti "hanya pesanan s.d. jam 12:00" tanpa flag terpisah.
+KURIR_BERBATAS = {"spx-hemat-pagi": JAM_CUTOFF_SHOPEE_PAGI}
+
+
+def batas_untuk_kurir(kurir: str | None, sekarang: datetime | None = None) -> datetime | None:
+    """Batas jam pesan untuk `kurir` (lihat KURIR_BERBATAS), None kalau kurir itu tidak dibatasi."""
+    jam = KURIR_BERBATAS.get(kurir) if kurir else None
+    return batas_jam_hari_ini(jam, sekarang) if jam is not None else None
+
+
+def saring_sampai_batas(pesanan: list[dict], batas: datetime | None) -> list[dict]:
+    """Pesanan yang jam pesannya (WIB) maksimal `batas` (pas di batas ikut). `batas` None =
+    tidak menyaring sama sekali. Pesanan tanpa transaction_date dibuang - sama dengan aturan
+    ambil_pesanan_shopee_pagi()/ambil_pesanan_jnt_siang()."""
+    if batas is None:
+        return pesanan
+    hasil = []
+    for o in pesanan:
+        ts = o.get("transaction_date")
+        if not ts:
+            continue
+        waktu = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
+        if waktu <= batas:
+            hasil.append(o)
+    return hasil
+
+
+def cari_pesanan(k: Klien, sku: str, kurir: str | None = None,
+                 batas: datetime | None = None) -> list[dict]:
     """`kurir`: None (default) = J&T + SPX digabung, atau "jnt"/"spx" untuk 1 kurir saja
-    (lihat KURIR_PILIHAN - dipakai TIPE 2 & TIPE 3)."""
+    (lihat KURIR_PILIHAN - dipakai TIPE 2 & TIPE 3; "spx-hemat"/"spx-standard" mode event).
+    `batas`: kalau diisi, hanya pesanan dengan jam pesan <= batas (lihat saring_sampai_batas();
+    dipakai Shopee Pagi mode event)."""
     filter_kurir = _filter_kurir(kurir, KURIR_FILTER)
     hasil, page = [], 1
     while True:
@@ -446,7 +493,7 @@ def cari_pesanan(k: Klien, sku: str, kurir: str | None = None) -> list[dict]:
         data = j.get("data") or []
         hasil += data
         if not data or len(hasil) >= int(j.get("totalCount") or 0):
-            return hasil
+            return saring_sampai_batas(hasil, batas)
         page += 1
 
 
@@ -486,7 +533,7 @@ def _ambil_pesanan_channel_mentah(k: Klien, channel_ids: list[int] | None = None
     tidak diproses lewat alur picklist ini (lihat TIPE_PESANAN_FILTER), jadi filter tipe
     pesanan otomatis ditambahkan kalau channel-nya Shopee dan/atau kurirnya SPX."""
     pakai_filter_tipe = ((channel_ids and CHANNEL_ID_SHOPEE in channel_ids)
-                         or any(c.lower() == "spx" for c in couriers or []))
+                         or any(c.lower().startswith("spx") for c in couriers or []))
     hasil, page = [], 1
     while True:
         # ASC (terlama dulu): kalau totalnya > MAKS_PESANAN_PICKLIST dan dipecah beberapa
@@ -748,11 +795,14 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
 
 
 # ==================================================== 1c. picklist sisa reguler
-def ambil_pesanan_reguler(k: Klien, kurir: str | None = None) -> list[dict]:
+def ambil_pesanan_reguler(k: Klien, kurir: str | None = None,
+                          batas: datetime | None = None) -> list[dict]:
     """Semua pesanan Siap Proses channel TikTok Shop ("Shop | Tokopedia") & Shopee, kurir
     J&T/SPX (atau 1 kurir saja, lihat cari_pesanan()), lintas SKU (belum dipisah spesial/
-    1 qty/kombinasi, lihat pisah_reguler())."""
-    return ambil_pesanan_channel(k, CHANNEL_IDS_REGULER, _filter_kurir(kurir, KURIR_FILTER_REGULER))
+    1 qty/kombinasi, lihat pisah_reguler()). `batas`: lihat cari_pesanan()."""
+    return saring_sampai_batas(
+        ambil_pesanan_channel(k, CHANNEL_IDS_REGULER, _filter_kurir(kurir, KURIR_FILTER_REGULER)),
+        batas)
 
 
 def _ambil_kombinasi_rak_mentah(k: Klien) -> list[str]:
@@ -844,7 +894,7 @@ def ambil_id_per_grup_rak(k: Klien, kombinasi_per_grup: dict[str, list[str]],
     kepanjangan. Dipakai _kelompok_1qty_per_rak(). Antar grup saling independen, jadi
     dijalankan BERSAMAAN lewat ThreadPoolExecutor."""
     pakai_filter_tipe = ((channel_ids and CHANNEL_ID_SHOPEE in channel_ids)
-                         or any(c.lower() == "spx" for c in couriers or []))
+                         or any(c.lower().startswith("spx") for c in couriers or []))
 
     def _ambil_grup(item: tuple[str, list[str]]) -> tuple[str, set[int]]:
         grup, daftar = item
@@ -1084,10 +1134,17 @@ _BAGIAN_REGULER = {
     "1qty": ("1 Qty Reguler", LABEL_REGULER_1QTY, 0, SUBFOLDER_SATUAN),
     "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1, SUBFOLDER_KOMBINASI),
 }
-KURIR_LABEL = {"jnt": "J&T", "spx": "SPX"}   # awalan nama/label saat kurir dipisah (tampilan)
+KURIR_LABEL = {"jnt": "J&T", "spx": "SPX", "spx-hemat": "SPX-HEMAT",
+               "spx-hemat-pagi": "SPX-HEMAT-PAGI", "spx-standard": "SPX-STANDARD"}   # awalan nama/label saat kurir dipisah (tampilan)
 # nama file tidak boleh mengandung "&" (dibuang _nama_file()), jadi nama picklist/PDF
 # tetap pakai varian tanpa simbol; kolom SKU di riwayat & log tetap pakai KURIR_LABEL.
 KURIR_LABEL_FILE = {"jnt": "JNT", "spx": "SPX"}
+# Varian SPX mode event dipisah dari KURIR_LABEL_FILE di atas SENGAJA: print_spesial.py
+# menurunkan daftar jenis cetak/subfolder-nya dari KURIR_LABEL_FILE, jadi menambahkan di sana
+# otomatis mengubah perilaku cetak harian. Dipakai lewat KURIR_KODE_FILE_SEMUA di bawah.
+KURIR_LABEL_FILE_EVENT = {"spx-hemat": "SPXHEMAT", "spx-hemat-pagi": "SPXHEMATPAGI",
+                          "spx-standard": "SPXSTD"}
+KURIR_KODE_FILE_SEMUA = {**KURIR_LABEL_FILE, **KURIR_LABEL_FILE_EVENT}
 
 
 def _nama_kurir(nama: str, kurir: str | None) -> str:
@@ -1099,14 +1156,14 @@ def _label_kurir(label: str, kurir: str | None) -> str:
 
 
 def _label_kurir_file(label: str, kurir: str | None) -> str:
-    return f"{KURIR_LABEL_FILE[kurir]}-{label}" if kurir else label
+    return f"{KURIR_KODE_FILE_SEMUA[kurir]}-{label}" if kurir else label
 
 
 def _gabung_kurir(dasar: str, kurir: str | None) -> str:
     """Sisipkan awalan kurir (JNT_/SPX_) ke `dasar` (tag nama file atau subfolder) kalau
     --kurir dipakai, supaya J&T dan SPX tidak bercampur - dipakai _tag_spesial() (Alur 1)
     dan subfolder SATUAN/KOMBINASI (Alur 3, lihat proses_reguler())."""
-    return f"{KURIR_LABEL_FILE[kurir]}_{dasar}" if kurir else dasar
+    return f"{KURIR_KODE_FILE_SEMUA[kurir]}_{dasar}" if kurir else dasar
 
 
 def _tag_spesial(kurir: str | None) -> str:
@@ -1154,13 +1211,14 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
                     kurir: str | None = None,
                     grup_dari_excel: dict[str, str] | None = None,
-                    lantai_dari_excel: dict[str, str] | None = None) -> None:
+                    lantai_dari_excel: dict[str, str] | None = None,
+                    batas: datetime | None = None) -> None:
     """Mode uji picklist sisa reguler: hanya membaca data, tidak mengubah apa pun di Jubelio.
     `kurir`: lihat cari_pesanan(). Bagian "1qty" dipecah per grup rak (lihat
     _kelompok_1qty_per_rak()/GRUP_RAK, `grup_dari_excel`: fallback SKU bundling). Bagian
     "kombinasi" dipecah per lantai (lihat _kelompok_kombinasi_per_lantai()/LANTAI_RAK,
-    `lantai_dari_excel`: fallback SKU bundling)."""
-    kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
+    `lantai_dari_excel`: fallback SKU bundling). `batas`: lihat cari_pesanan()."""
+    kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir, batas), resi_spesial_semua)
     for kunci, (nama, _, idx, _subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
@@ -1180,7 +1238,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    folder_label: Path, bagian: str | None = None,
                    kurir: str | None = None,
                    grup_dari_excel: dict[str, str] | None = None,
-                   lantai_dari_excel: dict[str, str] | None = None) -> list[dict]:
+                   lantai_dari_excel: dict[str, str] | None = None,
+                   batas: datetime | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
     (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU 1 qty yang
     tidak spesial - dipecah per grup rak (lihat _kelompok_1qty_per_rak(), GRUP_RAK), (2)
@@ -1192,8 +1251,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
     pisah_satu_qty_per_rak()/pisah_kombinasi_per_lantai() (fallback khusus SKU bundling).
     Bagian "1qty" disimpan di subfolder SUBFOLDER_SATUAN ("SATUAN"), bagian "kombinasi" di
     SUBFOLDER_KOMBINASI ("KOMBINASI") - kalau --kurir dipakai, subfolder disisipi awalan
-    JNT_/SPX_ (lihat _gabung_kurir())."""
-    kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir), resi_spesial_semua)
+    JNT_/SPX_ (lihat _gabung_kurir()). `batas`: lihat cari_pesanan()."""
+    kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir, batas), resi_spesial_semua)
     hasil = []
     for kunci, (nama, label, idx, subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
@@ -1312,12 +1371,85 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[d
                                subfolder=SUBFOLDER_JNT_SIANG)
 
 
+# ==================================================== 1f. picklist SPX Standard (mode event)
+# Mode event (proses-event.bat, hari 10.10/11.11/12.12 dst): SPX Standard volumenya kecil, jadi
+# TIDAK dipecah spesial/satuan/kombinasi - semua pesanannya digabung lalu dipecah per LANTAI rak
+# gudang saja (1/2/3/LAINNYA, pola sama dengan Shopee Pagi/J&T Siang). SPX Hemat sebaliknya
+# diproses lewat alur biasa dengan kurir="spx-hemat" (spesial, satuan, kombinasi).
+LABEL_SPX_STANDARD = "SPX-STANDARD"
+LABEL_SHOPEE_PAGI_SPX_STANDARD = "SHOPEE-PAGI-SPX-STANDARD"
+SUBFOLDER_SPX_STANDARD = "SPX_STANDARD"
+KURIR_FILTER_SPX_STANDARD = [KURIR_PILIHAN["spx-standard"]]
+
+
+def _lingkup_spx_standard(pagi: bool, sekarang: datetime | None) -> tuple[list[int], datetime | None]:
+    """(channel_ids, batas jam pesan) picklist SPX Standard. `pagi`: versi Shopee Pagi (channel
+    Shopee saja, jam pesan <= JAM_CUTOFF_SHOPEE_PAGI hari ini); selain itu seluruh hari event
+    (CHANNEL_IDS_REGULER, tanpa batas jam)."""
+    if pagi:
+        return [CHANNEL_ID_SHOPEE], batas_jam_hari_ini(JAM_CUTOFF_SHOPEE_PAGI, sekarang)
+    return CHANNEL_IDS_REGULER, None
+
+
+def ambil_pesanan_spx_standard(k: Klien, pagi: bool = False,
+                               sekarang: datetime | None = None) -> list[dict]:
+    """Semua pesanan Siap Proses kurir SPX Standard (lihat _lingkup_spx_standard())."""
+    channel_ids, batas = _lingkup_spx_standard(pagi, sekarang)
+    return saring_sampai_batas(
+        ambil_pesanan_channel(k, channel_ids, KURIR_FILTER_SPX_STANDARD), batas)
+
+
+def _kelompok_spx_standard(k: Klien, pesanan: list[dict], pagi: bool,
+                           lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
+    """Peta lantai -> pesanan (key sudah berformat LANTAI1/2/3/LAINNYA, lihat _label_lantai())."""
+    channel_ids, _ = _lingkup_spx_standard(pagi, None)
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, lantai_dari_excel,
+                                            channel_ids=channel_ids,
+                                            couriers=KURIR_FILTER_SPX_STANDARD)
+    return {_label_lantai(lt): p for lt, p in per_lt.items()}
+
+
+def rencana_spx_standard(k: Klien, pagi: bool = False, sekarang: datetime | None = None,
+                         lantai_dari_excel: dict[str, str] | None = None) -> None:
+    """Mode uji picklist SPX Standard: hanya membaca data, tidak mengubah apa pun di Jubelio."""
+    pesanan = ambil_pesanan_spx_standard(k, pagi, sekarang)
+    log.info("[UJI] %s pesanan siap proses %3d, dipecah per lantai",
+             "Shopee Pagi SPX Standard" if pagi else "SPX Standard", len(pesanan))
+    for lt, sub in _kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel).items():
+        batch = bagi_batch([o["salesorder_id"] for o in sub])
+        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
+                 lt, len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+
+
+def proses_spx_standard(k: Klien, file_riwayat: Path, folder_label: Path, pagi: bool = False,
+                        sekarang: datetime | None = None,
+                        lantai_dari_excel: dict[str, str] | None = None) -> list[dict]:
+    """Picklist SPX Standard: semua pesanan kurir SPX Standard digabung (TANPA dipisah spesial/
+    satuan/kombinasi), dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
+    _kelompok_spx_standard()/_proses_subkelompok()), masing-masing dipecah lagi kalau >
+    MAKS_PESANAN_PICKLIST. Label/nama file "SPX-STANDARD-LANTAI1" dst, disimpan di subfolder
+    SUBFOLDER_SPX_STANDARD. `pagi`: versi Shopee Pagi di hari event - hanya pesanan Shopee jam
+    pesan <= 12:00, label "SHOPEE-PAGI-SPX-STANDARD-LANTAI1" dst, disimpan di SUBFOLDER_SPX_PAGI
+    (ikut tercetak bersama jenis cetak spx-pagi). Dipanggil lewat mode event saja, tidak pernah
+    dari alur harian. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
+    pesanan = ambil_pesanan_spx_standard(k, pagi, sekarang)
+    subkelompok = _kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel)
+    if pagi:
+        nama, label = "Shopee Pagi SPX Standard", LABEL_SHOPEE_PAGI_SPX_STANDARD
+        subfolder = SUBFOLDER_SPX_PAGI
+    else:
+        nama, label = "SPX Standard", LABEL_SPX_STANDARD
+        subfolder = SUBFOLDER_SPX_STANDARD
+    return _proses_subkelompok(k, nama, label, subkelompok, file_riwayat, folder_label,
+                               kurir=None, prefix="", subfolder=subfolder)
+
+
 # ============================================================== 2. picklist
-def buat_picklist(k: Klien, sku: str, resi_spesial: set[str],
-                  kurir: str | None = None) -> tuple[int, str, list[int], list[dict]]:
-    """`kurir`: lihat cari_pesanan()."""
+def buat_picklist(k: Klien, sku: str, resi_spesial: set[str], kurir: str | None = None,
+                  batas: datetime | None = None) -> tuple[int, str, list[int], list[dict]]:
+    """`kurir`, `batas`: lihat cari_pesanan()."""
     for coba in range(1, MAKS_COBA_PICKLIST + 1):
-        pakai, _ = saring(cari_pesanan(k, sku, kurir), resi_spesial, kurir)
+        pakai, _ = saring(cari_pesanan(k, sku, kurir, batas), resi_spesial, kurir)
         if len(pakai) < MIN_RESI:
             raise Lewati(f"pesanan tersisa {len(pakai)} (< {MIN_RESI})")
         ids = [o["salesorder_id"] for o in pakai]
@@ -1936,13 +2068,14 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
 
 
 def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
-            rak_per_sku: dict[str, str] | None = None, kurir: str | None = None) -> list[dict]:
-    """Mode uji: hanya membaca data, tidak mengubah apa pun di Jubelio. `kurir`: lihat
-    cari_pesanan()."""
+            rak_per_sku: dict[str, str] | None = None, kurir: str | None = None,
+            batas: datetime | None = None) -> list[dict]:
+    """Mode uji: hanya membaca data, tidak mengubah apa pun di Jubelio. `kurir`, `batas`:
+    lihat cari_pesanan()."""
     rak_per_sku = rak_per_sku or {}
     hasil = []
     for sku, resi in resi_per_sku.items():
-        pakai, buang = saring(cari_pesanan(k, sku, kurir), set(resi), kurir)
+        pakai, buang = saring(cari_pesanan(k, sku, kurir, batas), set(resi), kurir)
         hitung_kurir: dict[str, int] = {}
         for o in pakai:
             hitung_kurir[o["shipper"]] = hitung_kurir.get(o["shipper"], 0) + 1
@@ -1955,16 +2088,17 @@ def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
                 log.info("        - %s dibuang: %s", no, alasan)
         hilang = set(resi) - {o["salesorder_no"] for o in pakai} - {no for no, _ in buang}
         if hilang:
-            log.info("        - %d resi spesial sudah tidak ada di Siap Proses", len(hilang))
+            log.info("        - %d resi spesial sudah tidak ada di Siap Proses%s", len(hilang),
+                     " (atau lewat jam batas)" if batas else "")
         hasil.append({"sku": sku, "pesanan": len(pakai), "status": status})
     return hasil
 
 
 def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
            file_riwayat: Path, rak_per_sku: dict[str, str] | None = None,
-           kurir: str | None = None) -> list[dict]:
+           kurir: str | None = None, batas: datetime | None = None) -> list[dict]:
     """Proses SKU sesuai urutan resi_per_sku (urut rak). Tiap hasil berisi Rak, Durasi & detik.
-    `kurir`: lihat cari_pesanan(). Picklist (langkah 1-2) dibuat berurutan untuk tiap SKU
+    `kurir`, `batas`: lihat cari_pesanan(). Picklist (langkah 1-2) dibuat berurutan untuk tiap SKU
     (perlu urutan pasti demi peringatan_picklist.ambil_nomor_hilang()), tapi langkah 3-6
     (tunggu picking, minta resi, unduh PDF - lihat lanjutkan_picklist()) untuk SKU yang
     picklist-nya berhasil dibuat dijalankan BERSAMAAN lewat ThreadPoolExecutor
@@ -1982,7 +2116,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
         idx = len(hasil) - 1
         try:
             log.info("  [1-2] Filter pesanan & buat picklist")
-            pid, pno, ids, _ = buat_picklist(k, sku, set(resi), kurir)
+            pid, pno, ids, _ = buat_picklist(k, sku, set(resi), kurir, batas)
         except Lewati as e:
             log.info("  Dilewati: %s", e)
             detik = time.monotonic() - mulai
