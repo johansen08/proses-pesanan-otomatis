@@ -150,6 +150,12 @@ setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
 atas) sampai jam 07.00 besok.
 
+### proses-malam.bat (tanpa menu)
+
+Satu klik + 1 konfirmasi Y/N, tanpa cek jam & tanpa Recheck Stok/Sampel/IRESIS: 1. Urgent Lazada,
+2. Urgent GTL & SiCepat (tanpa `--lewati-malam`, jadi tidak ditahan), 3. SPX - J&T SPESIAL,
+4. 1 QTY REGULER, 5. KOMBINASI (J&T+SPX digabung), 6. Tulis PICKLIST.xlsx, lalu rekap waktu.
+
 ### Upload faktur ke IRESIS (langkah paling terakhir tiap TIPE)
 
 **Sejak 2026-10-07**: langkah **UPLOAD FAKTUR & PESANAN KE IRESIS** (`--upload-iresis --jalankan`) jadi
