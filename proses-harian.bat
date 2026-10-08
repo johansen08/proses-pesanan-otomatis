@@ -35,8 +35,8 @@ goto menu
 rem ============================================================
 rem TIPE 1: J&T dan SPX DIGABUNG (seperti semula). Dipakai siklus
 rem pagi 07.00-11.xx DAN siklus sore 16.00-17.00 (malam/dini hari: proses-malam.bat)
-rem keesokan harinya (setelah TIPE 4 selesai sampai TIPE 1 besok
-rem pagi) - lihat docs/jadwal-proses.md
+rem (setelah TIPE 4 selesai, sampai jam 17.00)
+rem - lihat docs/jadwal-proses.md
 rem ============================================================
 :tipe1
 call :cek_jam 1 "TIPE 1 (07.00-12.00 / 16.00-17.00)"
