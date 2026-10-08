@@ -656,6 +656,114 @@ def uji_main_jenis_banyak_pilih_printer_sekali():
           "jalan lagi = sudah tercatat, tidak dicetak ulang")
 
 
+def uji_daftar_folder_sesi_dua_hari_terlama_ke_terbaru():
+    from datetime import date
+
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp)
+        for tanggal, nomor in (("2026-10-06", "4"), ("2026-10-07", "10"), ("2026-10-07", "2"),
+                               ("2026-10-08", "1"), ("2026-10-09", "1"), ("2026-13-45", "1")):
+            (label / tanggal / nomor).mkdir(parents=True)
+        (label / "2026-10-07" / "bukan-sesi").mkdir()
+        (label / "bukan-folder-sesi").mkdir()
+        nama = lambda hari: [f"{p.parent.name}/{p.name}"    # noqa: E731
+                             for p in ps.daftar_folder_sesi(label, hari, date(2026, 10, 8))]
+        # 2 hari = kemarin + hari ini; masa depan tidak dibuang; urut angka, bukan teks
+        assert nama(2) == ["2026-10-07/2", "2026-10-07/10", "2026-10-08/1", "2026-10-09/1"], nama(2)
+        assert nama(1) == ["2026-10-08/1", "2026-10-09/1"], nama(1)
+        assert nama(3)[0] == "2026-10-06/4"
+        assert ps.daftar_folder_sesi(Path(tmp) / "tidak-ada", 2) == []
+    print("  daftar_folder_sesi: N hari terakhir, terlama -> terbaru, nomor sebagai angka, "
+          "tanggal/folder tidak valid dibuang")
+
+
+def uji_tanya_cakupan_sesi():
+    def tanya(masukan):
+        antre = list(masukan)
+
+        def baca(prompt):
+            if not antre:
+                raise EOFError
+            return antre.pop(0)
+        layar = []
+        return ps.tanya_cakupan_sesi(2, baca, layar.append), "\n".join(layar)
+
+    assert tanya(["2"])[0] is True
+    assert tanya(["1"])[0] is False and tanya([""])[0] is False and tanya([])[0] is False
+    hasil, layar = tanya(["x", "3", "2"])
+    assert hasil is True and layar.count("tidak dikenali") == 2, layar
+    print("  tanya_cakupan_sesi: 2 = semua sesi, 1/Enter/EOF = terbaru, salah ketik diulang")
+
+
+def uji_main_semua_sesi_malam_dan_pagi_sekali_jalan():
+    """--semua-sesi: sesi malam (kemarin) + pagi (hari ini) tercetak dalam SATU sesi cetak,
+    terlama dulu; yang sudah tercetak dilewati; nomor terlompat dicek per sesi."""
+    import sys
+    from datetime import date, timedelta
+    from unittest import mock
+
+    kemarin = (date.today() - timedelta(days=1)).isoformat()
+    hari_ini = date.today().isoformat()
+    lama = (date.today() - timedelta(days=5)).isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        for tanggal, sesi, nomor in ((lama, "1", 100), (kemarin, "5", 200), (kemarin, "6", 300),
+                                     (hari_ini, "1", 400)):
+            folder = label / tanggal / sesi / "JNT_SATUAN"
+            folder.mkdir(parents=True)
+            _buat(folder, f"PICK-{nomor:09d}_JNT-1QTY-REGULER-2A_x.pdf")
+        log_dir = Path(tmp) / "logs"
+        dicetak, panggilan = [], {"printer": 0, "input": 0}
+
+        def pilih_printer(daftar):
+            panggilan["printer"] += 1
+            return "PRINTER-X"
+
+        def input_palsu(prompt=""):
+            panggilan["input"] += 1
+            return "y"
+
+        asli_terbaru = ps.folder_sesi_terbaru
+
+        def jalankan(*argumen):
+            dicetak.clear()
+            with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir), \
+                    mock.patch.object(ps, "folder_sesi_terbaru", lambda: asli_terbaru(label)), \
+                    mock.patch.object(ps, "FILE_SUDAH_DICETAK", log_dir / "sudah_dicetak.txt"), \
+                    mock.patch.object(ps, "cari_sumatra", return_value=Path("sumatra.exe")), \
+                    mock.patch.object(ps, "daftar_printer", return_value=["PRINTER-X"]), \
+                    mock.patch.object(ps, "pilih_printer", side_effect=pilih_printer), \
+                    mock.patch.object(ps, "dukungan_pemantauan_job", return_value=False), \
+                    mock.patch.object(ps, "cetak", side_effect=lambda s, p, f, pantau: dicetak.append(f.parent.parent.parent.name + "/" + f.parent.parent.name) or True), \
+                    mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0), \
+                    mock.patch.object(ps, "siapkan_log"), \
+                    mock.patch("builtins.input", input_palsu), \
+                    mock.patch.object(sys, "argv", ["print_spesial.py", *argumen]):
+                return ps.main()
+
+        assert jalankan("--jenis", "satuan-jnt", "--semua-sesi") == 0
+        # sesi 5 harian lama (5 hari lalu) tidak ikut; urut kemarin/5, kemarin/6, hari ini/1
+        assert dicetak == [f"{kemarin}/5", f"{kemarin}/6", f"{hari_ini}/1"], dicetak
+        assert panggilan == {"printer": 1, "input": 1}, panggilan   # printer & konfirmasi 1x
+        # dijalankan lagi (pagi): semuanya sudah tercatat -> tidak ada yang dicetak dobel
+        assert jalankan("--jenis", "satuan-jnt", "--semua-sesi") == 0 and dicetak == []
+        # --hari 7 menjangkau sesi lama juga, sisanya sudah tercetak
+        assert jalankan("--jenis", "satuan-jnt", "--semua-sesi", "--hari", "7") == 0
+        assert dicetak == [f"{lama}/1"], dicetak
+        # tanpa --semua-sesi (dan tanpa menu) tetap sesi terbaru saja, perilaku lama
+        assert jalankan("--jenis", "satuan-jnt", "--cetak-ulang-semua") == 0
+        assert dicetak == [f"{hari_ini}/1"], dicetak
+        # tidak bisa digabung dengan --folder
+        try:
+            jalankan("--jenis", "satuan-jnt", "--semua-sesi", "--folder", str(label))
+        except SystemExit as e:
+            assert e.code == 2
+        else:
+            raise AssertionError("--semua-sesi + --folder harus ditolak")
+    print("  main(--semua-sesi): sesi malam + pagi dicetak sekali jalan terlama dulu, printer 1x, "
+          "ulang = tidak dobel, --hari melebarkan, tanpa flag = sesi terbaru")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

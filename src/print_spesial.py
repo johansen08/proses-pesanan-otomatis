@@ -57,6 +57,11 @@ harian, masing-masing cuma memanggil ini dengan --jenis tetap):
         # cari folder sesi terbaru, tampilkan daftar printer, pilih, konfirmasi, cetak
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis gtl-sicepat --folder label-pengiriman/2026-10-01/3
         # pakai folder sesi tertentu, bukan yang terbaru
+    .venv\\Scripts\\python.exe src\\print_spesial.py --paket jnt --semua-sesi [--hari 3]
+        # SEMUA folder sesi dari 2 hari terakhir (default; --hari N mengubahnya), terlama ->
+        # terbaru. Untuk sesi malam yang menumpuk sampai pagi: label yang sudah tercatat
+        # tercetak (logs/sudah_dicetak.txt) dilewati, jadi aman dijalankan berulang. Nomor PICK
+        # terlompat dicek PER sesi. Dari menu: ditanya "sesi terbaru" atau "semua sesi".
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis satuan --tanpa-konfirmasi
         # lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer)
     .venv\\Scripts\\python.exe src\\print_spesial.py --jenis kombinasi --ulang logs\\gagal_cetak_2026-10-01_153000.txt
@@ -96,7 +101,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
@@ -113,6 +118,9 @@ FOLDER_LOG = ROOT / "logs"
 FILE_SUDAH_DICETAK = FOLDER_LOG / "sudah_dicetak.txt"
 
 POLA_TANGGAL_SESI = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# --semua-sesi: berapa hari terakhir (termasuk hari ini) yang ditelusuri. 2 = kemarin + hari ini,
+# cukup untuk sesi malam yang baru dicetak pagi.
+HARI_SEMUA_SESI = 2
 # Penanda SPESIAL ini dibuat proses_label.py (lihat TAG_SPESIAL & _tag_spesial()) - HANYA
 # alur SKU spesial yang menyisipkannya di nama file, jadi cukup cari pola ini saja. Kalau
 # --kurir jnt/spx dipakai saat proses, tag-nya disisipi awalan JNT_/SPX_ (lihat
@@ -284,6 +292,29 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
     if terbaik is None:
         raise CetakError(f"Tidak ada folder sesi (YYYY-MM-DD/N) di {folder_label}")
     return terbaik[1]
+
+
+def daftar_folder_sesi(folder_label: Path = FOLDER_LABEL, hari: int = HARI_SEMUA_SESI,
+                       hari_ini: date | None = None) -> list[Path]:
+    """Semua folder sesi (`YYYY-MM-DD/N`) dari `hari` hari terakhir (termasuk hari ini; hari=2 ->
+    kemarin + hari ini), urut dari TERLAMA ke terbaru (tanggal lalu nomor urut sebagai angka).
+    Dipakai --semua-sesi: sesi malam yang menumpuk sampai pagi tercetak sekali jalan. Kosong
+    (bukan error) kalau tidak ada."""
+    batas = (hari_ini or date.today()) - timedelta(days=max(hari, 1) - 1)
+    hasil = []
+    for folder_tanggal in folder_label.iterdir() if folder_label.is_dir() else []:
+        if not folder_tanggal.is_dir() or not POLA_TANGGAL_SESI.match(folder_tanggal.name):
+            continue
+        try:
+            tanggal = date.fromisoformat(folder_tanggal.name)
+        except ValueError:
+            continue
+        if tanggal < batas:
+            continue
+        for item in folder_tanggal.iterdir():
+            if item.is_dir() and item.name.isdigit():
+                hasil.append(((tanggal, int(item.name)), item))
+    return [item for _, item in sorted(hasil, key=lambda x: x[0])]
 
 
 def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> list[Path]:
@@ -634,6 +665,24 @@ def menu_pilih_jenis(baca=input, tulis=print) -> list[str] | None:
             return list(pilihan[sub - 1][1])
 
 
+def tanya_cakupan_sesi(hari: int = HARI_SEMUA_SESI, baca=input, tulis=print) -> bool:
+    """Setelah jenis dipilih dari menu: cetak dari sesi terbaru saja (False, default/Enter) atau
+    dari SEMUA sesi `hari` hari terakhir (True) - untuk sesi malam yang menumpuk sampai pagi."""
+    tulis("Cetak dari sesi mana?")
+    tulis("  1. Sesi TERBARU saja")
+    tulis(f"  2. SEMUA sesi {hari} hari terakhir yang belum tercetak (terlama -> terbaru)")
+    while True:
+        try:
+            teks = baca("Pilih (1-2, Enter = 1): ").strip()
+        except EOFError:
+            return False
+        if teks in ("", "1"):
+            return False
+        if teks == "2":
+            return True
+        tulis(f'Pilihan "{teks}" tidak dikenali, coba lagi.')
+
+
 def parse_jenis(teks: str) -> list[str]:
     """Nilai --jenis: satu jenis atau daftar dipisah koma (urutan dipertahankan, duplikat dibuang)."""
     hasil = list(dict.fromkeys(j.strip() for j in teks.split(",") if j.strip()))
@@ -667,6 +716,12 @@ def main() -> int:
                       help="Paket jenis yang dicetak berurutan dalam satu sesi (lihat PAKET)")
     ap.add_argument("--folder", type=Path,
                     help="Folder sesi label-pengiriman tertentu (default: paling baru)")
+    ap.add_argument("--semua-sesi", action="store_true",
+                    help="Cetak dari SEMUA folder sesi --hari hari terakhir (terlama -> terbaru), "
+                         "bukan hanya yang terbaru; label yang sudah tercetak dilewati")
+    ap.add_argument("--hari", type=int, default=HARI_SEMUA_SESI, metavar="N",
+                    help="Untuk --semua-sesi: telusuri N hari terakhir termasuk hari ini "
+                         f"(default {HARI_SEMUA_SESI})")
     ap.add_argument("--tanpa-konfirmasi", action="store_true",
                     help="Tanpa tanya Y/N sebelum mulai cetak (tetap tanya pilih printer; "
                          "tetap tanya juga kalau ada nomor PICK terlompat, lihat "
@@ -677,6 +732,10 @@ def main() -> int:
                     help="Cetak ULANG hanya file dari daftar gagal sebelumnya "
                          "(logs/gagal_cetak_*.txt), lewati pencarian folder sesi")
     args = ap.parse_args()
+    if args.semua_sesi and (args.folder or args.ulang):
+        ap.error("--semua-sesi tidak bisa digabung dengan --folder atau --ulang")
+    if args.hari < 1:
+        ap.error("--hari minimal 1")
 
     siapkan_log()
     try:
@@ -689,36 +748,60 @@ def main() -> int:
                 log.info("Keluar dari menu, tidak ada yang dicetak.")
                 return 0
             nama_jenis = ", ".join(j.upper() for j in jenis_list)
-            folder = args.folder or folder_sesi_terbaru()
-            log.info("Folder sesi: %s", folder)
+            semua_sesi = args.semua_sesi
+            if not semua_sesi and not args.folder and not (args.jenis or args.paket):
+                semua_sesi = tanya_cakupan_sesi(args.hari)   # dari menu -> tanya sesi terbaru/semua
+            if semua_sesi:
+                folders = daftar_folder_sesi(FOLDER_LABEL, args.hari)
+                if not folders:
+                    raise CetakError(f"Tidak ada folder sesi (YYYY-MM-DD/N) dalam {args.hari} "
+                                     f"hari terakhir di {FOLDER_LABEL}")
+                log.info("Semua sesi %d hari terakhir (%d folder, terlama -> terbaru): %s",
+                         args.hari, len(folders), ", ".join(f"{f.parent.name}/{f.name}" for f in folders))
+            else:
+                folders = [args.folder or folder_sesi_terbaru()]
+                log.info("Folder sesi: %s", folders[0])
             log.info("Jenis dicetak (berurutan): %s", nama_jenis)
-            file_pdf, laporan = kumpulkan_label(folder, jenis_list, args.cetak_ulang_semua)
-            for lap in laporan:
-                log.info("%s: ditemukan %d, sudah tercetak %d, akan dicetak %d",
-                         lap["jenis"].upper(), lap["ditemukan"], lap["sudah_tercetak"],
-                         lap["akan_dicetak"])
+            sudah = set() if args.cetak_ulang_semua else baca_sudah_dicetak()
+            file_pdf, laporan, per_folder = [], [], []
+            for folder in folders:
+                file_folder, lap_folder = kumpulkan_label(folder, jenis_list,
+                                                          args.cetak_ulang_semua, sudah)
+                for lap in lap_folder:
+                    log.info("%s%s: ditemukan %d, sudah tercetak %d, akan dicetak %d",
+                             f"[{folder.parent.name}/{folder.name}] " if semua_sesi else "",
+                             lap["jenis"].upper(), lap["ditemukan"], lap["sudah_tercetak"],
+                             lap["akan_dicetak"])
+                file_pdf += file_folder
+                laporan += lap_folder
+                if file_folder:
+                    per_folder.append(folder)
             if not file_pdf:
+                tempat = "di sesi-sesi ini" if semua_sesi else "di folder ini"
                 if sum(lap["ditemukan"] for lap in laporan) == 0:
-                    log.info("Tidak ada label %s di folder ini.", nama_jenis)
+                    log.info("Tidak ada label %s %s.", nama_jenis, tempat)
                 else:
-                    log.info("Semua label %s di folder ini sudah tercetak (pakai "
-                             "--cetak-ulang-semua untuk mencetak ulang).", nama_jenis)
+                    log.info("Semua label %s %s sudah tercetak (pakai "
+                             "--cetak-ulang-semua untuk mencetak ulang).", nama_jenis, tempat)
                 return 0
             log.info("Ditemukan %d label (urut cetak):", len(file_pdf))
             for f in file_pdf:
                 log.info("  %s", f.name)
 
-            terlompat = nomor_terlompat_semua(folder, jenis_list)
-            if terlompat:
-                log.warning("Nomor PICK TERLOMPAT di folder sesi ini (%d nomor): %s",
-                           len(terlompat), ", ".join(str(n) for n in terlompat))
+            for folder in per_folder:
+                terlompat = nomor_terlompat_semua(folder, jenis_list)
+                if not terlompat:
+                    continue
+                nama_sesi = f"{folder.parent.name}/{folder.name}"
+                log.warning("Nomor PICK TERLOMPAT di folder sesi %s (%d nomor): %s",
+                            nama_sesi, len(terlompat), ", ".join(str(n) for n in terlompat))
                 print()
                 print(f"!!! PERINGATAN: ada {len(terlompat)} nomor PICK yang terlompat/hilang "
-                     "di antara label folder sesi ini "
-                     "(nomor yang ada di jenis/kurir lain sudah tidak dihitung):")
+                      f"di antara label folder sesi {nama_sesi} "
+                      "(nomor yang ada di jenis/kurir lain sudah tidak dihitung):")
                 print("    " + ", ".join(str(n) for n in terlompat))
                 print("    Kemungkinan ada label yang belum masuk folder ini (mis. masih dibuat, "
-                     "gagal, atau beda folder sesi) - cek dulu sebelum lanjut.")
+                      "gagal, atau beda folder sesi) - cek dulu sebelum lanjut.")
                 lanjut = input("Tetap lanjut cetak yang ADA sekarang? (Y/N): ").strip().lower()
                 if lanjut != "y":
                     log.info("Dibatalkan oleh user (nomor PICK terlompat).")
