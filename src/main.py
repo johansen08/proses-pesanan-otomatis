@@ -230,6 +230,13 @@ def jam_malam(sekarang: datetime | None = None) -> bool:
     return jam >= 16 or jam < 7
 
 
+def jam_tanpa_iresis(sekarang: datetime | None = None) -> bool:
+    """True kalau jam sekarang 20.00-04.59: semua yang terkait IRESIS (unduh faktur/pesanan
+    & upload) dilewati di jendela ini. Bisa dipaksa manual lewat `--upload-iresis --paksa`."""
+    jam = (sekarang or datetime.now()).hour
+    return jam >= 20 or jam < 5
+
+
 def muat_env(path: Path) -> None:
     """Baca file .env sederhana (KUNCI=nilai) ke environment."""
     if not path.exists():
@@ -368,6 +375,9 @@ def _main() -> int:
                         "ke menu Upload Resi IRESIS (dulu manual, setelah proses pesanan "
                         "selesai) - langkah terakhir tiap TIPE proses-harian.bat; tanpa "
                         "--jalankan = mode uji, hanya unduh & tampilkan rencana")
+    ap.add_argument("--paksa", action="store_true",
+                    help="dipakai bersama --upload-iresis: tetap jalan walau jam 20.00-04.59 "
+                        "(jendela yang biasanya melewati IRESIS)")
     ap.add_argument("--hari", type=int, default=2, metavar="N",
                     help="dipakai bersama --upload-iresis: rentang laporan faktur N hari "
                         "terakhir termasuk hari ini (bawaan 2, seperti kebiasaan tim)")
@@ -402,6 +412,11 @@ def _main() -> int:
     if args.tulis_excel:
         # bukan proses picklist - jangan buat folder sesi label baru yang kosong
         return tulis_picklist_excel(log, args)
+    if args.upload_iresis and not args.paksa and jam_tanpa_iresis():
+        log.info("IRESIS DILEWATI: jam %s masuk jendela 20.00-05.00 (unduh & upload faktur/pesanan "
+                 "tidak dijalankan). Paksa manual: --upload-iresis --jalankan --paksa.",
+                 datetime.now().strftime("%H.%M"))
+        return 0
     if args.upload_iresis:
         # bukan proses picklist - jangan buat folder sesi label baru yang kosong
         return upload_faktur_iresis(log, args)

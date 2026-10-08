@@ -165,6 +165,9 @@ Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IR
   pesanan (dan sebaliknya); exit code 1 kalau salah satu gagal.
 - Butuh `IRESIS_USERNAME` & `IRESIS_PASSWORD` di `.env` (opsional `IRESIS_URL`,
   `IRESIS_NAMA_PK`, `IRESIS_CA_BUNDLE`); PC harus satu LAN dengan server IRESIS.
+- **Revisi 2026-10-08**: jam **20.00-04.59** semua yang terkait IRESIS (unduh faktur/pesanan +
+  upload) **dilewati otomatis** (`jam_tanpa_iresis()` di `src/main.py`; langkah di `.bat` tetap
+  tampil tapi langsung selesai). Paksa manual: `jalankan.bat --upload-iresis --jalankan --paksa`.
 - Upload ulang aman (IRESIS melewati baris yang tidak berubah).
 - Gagal (server mati/login salah/respons aneh): TIPE tetap selesai, peringatan "UPLOAD IRESIS
   GAGAL" dicetak mencolok & muncul lagi di rekap waktu; upload ulang manual dengan

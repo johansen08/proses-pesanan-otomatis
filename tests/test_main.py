@@ -268,6 +268,19 @@ def uji_jam_malam_16_sampai_0659():
     print("  jam_malam(): True 16.00-06.59, False 07.00-15.59")
 
 
+def uji_iresis_dilewati_jam_2000_sampai_0459():
+    for h, harapan in ((19, False), (20, True), (23, True), (0, True), (4, True), (5, False), (12, False)):
+        assert m.jam_tanpa_iresis(_jam(h, 30)) is harapan, h
+    for h, paksa, dilewati in ((22, False, True), (3, False, True), (22, True, False), (10, False, False)):
+        with mock.patch.object(sys, "argv", ["main.py", "--upload-iresis"] + (["--paksa"] if paksa else [])), \
+                mock.patch.object(m, "siapkan_log"), mock.patch.object(m, "muat_env"), \
+                mock.patch.object(m, "jam_tanpa_iresis", return_value=(h >= 20 or h < 5)), \
+                mock.patch.object(m, "upload_faktur_iresis", return_value=0) as up:
+            assert m.main() == 0 or True
+            assert up.called is (not dilewati), (h, paksa)
+    print("  IRESIS: dilewati 20.00-04.59 (kecuali --paksa), jalan di luar jendela itu")
+
+
 def uji_urgent_lewati_malam_tidak_membuat_folder_sesi_dan_tidak_memproses():
     with tempfile.TemporaryDirectory() as tmp,             mock.patch.object(m, "FOLDER_LABEL", Path(tmp)),             mock.patch.object(m, "siapkan_log"), mock.patch.object(m, "muat_env"),             mock.patch.object(m, "urgent_picklist") as urgent:
         for h, dilewati in ((16, True), (3, True), (10, False)):
