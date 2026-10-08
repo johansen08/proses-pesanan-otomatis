@@ -5,6 +5,10 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
+**Revisi 2026-10-08**: tambah **mode event** (`proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst)
+— J&T, SPX Hemat, dan SPX Standard dipisah sepanjang hari. `proses-harian.bat` **tidak berubah**
+sama sekali; lihat bagian "proses-event.bat — mode event" di bawah.
+
 **Revisi 2026-10-06**: tambah langkah **Recheck Stok** (`--recheck-stok`) sebagai langkah
 PALING PERTAMA di tiap TIPE 1-4 (sebelum Sampel TikTok) — cek ulang stok SEMUA pesanan
 berstatus stok kosong (`EMPTY_STOCK`, biasanya bekas picklist sebelumnya yang gagal karena
@@ -301,6 +305,137 @@ jam 16.00; guard akan menanyakan konfirmasi kalau TIPE 1 dipilih sebelum
 jam 16.00, tim cukup jawab Y karena itu memang urutan yang benar (TIPE 4
 baru saja selesai).
 
+## proses-event.bat — mode event (10.10, 11.11, 12.12, dst)
+
+Dipakai **seharian penuh** di hari event (tanggal kembar / promo besar) **menggantikan**
+`proses-harian.bat`. Beda utamanya: J&T, SPX Hemat, dan SPX Standard **dipisah sepanjang hari**
+(bukan bergantian digabung/dipisah per TIPE). Alur harian tidak disentuh — kalau ada masalah di
+hari event, tim langsung kembali ke `proses-harian.bat`. `proses-event-uji.bat` = versi mode uji
+(tanpa `--jalankan`, tanpa konfirmasi, tanpa pertanyaan), langkahnya dijaga identik dengan versi
+sungguhan oleh `tests/test_bat.py`.
+
+### Pemisahan kurir
+
+| Kurir | Spesial | 1 qty reguler (satuan) | Kombinasi | Per lantai saja |
+|---|---|---|---|---|
+| **J&T** | ya | ya | ya | – |
+| **SPX Hemat** | ya | ya | ya | – |
+| **SPX Standard** | – | – | – | ya (lantai 1 / 2 / 3 / LAINNYA) |
+
+SPX Standard volumenya kecil, jadi seluruh pesanannya digabung lalu dipecah per lantai rak gudang
+saja (tidak ada pemisahan spesial/satuan/kombinasi). Pembeda kurir diambil dari kolom `shipper`
+Jubelio (`SPX Hemat`, `SPX Standard`) — filter `couriers[]` Jubelio menerima nilai selengkap
+`spx hemat` / `spx standard` (sniff & uji langsung 2026-10-08; jangan pakai `hemat` saja, ikut
+menangkap `J&T Express Hemat`).
+
+### Dua pilihan menu
+
+```
+1. EVENT - SESI BIASA          (J&T / SPX HEMAT / SPX STANDARD dipisah)
+2. EVENT - TEPAT JAM 13.00     (SHOPEE PAGI <= 12.00, lalu sesi biasa)
+0. Keluar
+```
+
+**Pilihan 1 — sesi biasa (kapan saja):**
+
+1. RECHECK STOK
+2. SAMPEL TIKTOK (NILAI 0)
+3. URGENT LAZADA *(`--lewati-malam`: dilewati 16.00-06.59, sama seperti TIPE 1)*
+4. URGENT GTL & SICEPAT *(idem)*
+5. J&T <= 15.00 (J&T RESI SIANG) — **opsional**, ditanya di awal (Y/N, bawaan N)
+6. J&T SPESIAL
+7. J&T 1 QTY REGULER
+8. J&T KOMBINASI
+9. SPX HEMAT SPESIAL
+10. SPX HEMAT 1 QTY REGULER
+11. SPX HEMAT KOMBINASI
+12. SPX STANDARD (PER LANTAI)
+13. TULIS PICKLIST.XLSX
+14. UPLOAD FAKTUR & PESANAN KE IRESIS
+
+**Pilihan 2 — tepat jam 13.00 (Shopee Pagi, cukup 1x sehari):**
+
+1-4. sama seperti di atas, tetapi urgent **tanpa** `--lewati-malam` (seperti TIPE 2)
+5. SPX STANDARD PAGI <= 12.00 (PER LANTAI)
+6. SPX HEMAT PAGI SPESIAL
+7. SPX HEMAT PAGI 1 QTY REGULER
+8. SPX HEMAT PAGI KOMBINASI
+9-11. J&T spesial / 1 qty / kombinasi
+12-14. SPX Hemat spesial / 1 qty / kombinasi
+15. SPX STANDARD (PER LANTAI)
+16. TULIS PICKLIST.XLSX
+17. UPLOAD FAKTUR & PESANAN KE IRESIS
+
+Shopee Pagi mendahului langkah seharian supaya pesanan Shopee dengan jam pesan WIB maksimal
+12.00 pasti masuk picklist pagi yang **foldernya terpisah** (tabel di bawah). Pesanan setelah
+jam 12.00 diproses langkah seharian di pilihan yang sama. Kalau SKU spesial punya kurang dari 3
+resi yang masuk jendela ≤ 12.00, SKU itu dilewati di langkah pagi dan baru diproses langkah
+seharian (perilaku sama dengan SKU lain yang kurang dari 3 resi).
+
+**J&T Resi Siang (≤ 15.00) tetap opsional.** Di pilihan 1 ditanya sekali di awal, tepat setelah
+konfirmasi Y/N (supaya proses setelahnya tidak berhenti menunggu input); jawab `Y` hanya di sesi
+sekitar jam 15.00, cukup 1x sehari. Di pilihan 2 tidak ditanya. Di versi uji selalu ditampilkan
+(hanya baca).
+
+### Istilah tim → perintah program
+
+| Istilah tim | Perintah (`jalankan.bat ...`) |
+|---|---|
+| J&T spesial (event) | `--label --event --kurir jnt --tanpa-reguler --jalankan` |
+| J&T 1 qty reguler (event) | `--reguler --event --kurir jnt --bagian 1qty --jalankan` |
+| J&T kombinasi (event) | `--reguler --event --kurir jnt --bagian kombinasi --jalankan` |
+| SPX Hemat spesial | `--label --event --kurir spx-hemat --tanpa-reguler --jalankan` |
+| SPX Hemat 1 qty reguler | `--reguler --event --kurir spx-hemat --bagian 1qty --jalankan` |
+| SPX Hemat kombinasi | `--reguler --event --kurir spx-hemat --bagian kombinasi --jalankan` |
+| SPX Standard per lantai | `--spx-standard --jalankan` |
+| SPX Hemat Pagi spesial / 1 qty / kombinasi | sama dengan SPX Hemat, `--kurir spx-hemat-pagi` |
+| SPX Standard Pagi per lantai | `--spx-standard --pagi --jalankan` |
+| J&T Resi Siang | `--jnt-siang --jalankan` (sama dengan harian) |
+
+`--kurir spx-hemat` dan `--kurir spx-hemat-pagi` **ditolak tanpa `--event`** (exit 2, sebelum login
+dan sebelum membuat folder sesi) — supaya salah ketik tidak diam-diam menghasilkan picklist dengan
+hitungan spesial yang tidak dimaksud. `--event` hanya sah bersama `--label`/`--reguler` dan
+`--kurir jnt|spx-hemat|spx-hemat-pagi`.
+
+### Folder hasil dan cetak bulk
+
+Tiap kelompok punya subfolder (di dalam folder sesi `label-pengiriman/<tanggal>/<sesi>/`) dan
+jenis cetak sendiri. Jenis cetak harian gabungan (`spesial`, `satuan`, `kombinasi`) **tidak**
+ikut mencetak folder event.
+
+| Hasil | Subfolder | `print_spesial.py --jenis` | `.bat` cetak |
+|---|---|---|---|
+| J&T (event) | `JNT_SPESIAL`, `JNT_SATUAN`, `JNT_KOMBINASI` (sama dengan harian) | `spesial-jnt`, `satuan-jnt`, `kombinasi-jnt` | `cetak-label-{spesial,satuan,kombinasi}-jnt.bat` |
+| SPX Hemat | `SPXHEMAT_SPESIAL`, `SPXHEMAT_SATUAN`, `SPXHEMAT_KOMBINASI` | `spesial-spx-hemat`, dst | `cetak-label-{spesial,satuan,kombinasi}-spx-hemat.bat` |
+| SPX Hemat Pagi | `SPXHEMATPAGI_SPESIAL`, `SPXHEMATPAGI_SATUAN`, `SPXHEMATPAGI_KOMBINASI` | `spesial-spx-hemat-pagi`, dst | `cetak-label-{spesial,satuan,kombinasi}-spx-hemat-pagi.bat` |
+| SPX Standard | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) | `spx-standard` | `cetak-label-spx-standard.bat` |
+| SPX Standard Pagi | `SPX_PAGI` (`SHOPEE-PAGI-SPX-STANDARD-LANTAI*`) | `spx-pagi` | `cetak-label-spx-pagi.bat` |
+| J&T Resi Siang | `JNT_SIANG` | `jnt-siang` | `cetak-label-jnt-siang.bat` |
+
+### Aturan SKU spesial di mode event
+
+Dengan `--event`, penentuan SKU spesial dihitung **per kurir** (`hitung_sku_spesial(...,
+kurir_hitung=...)` di `sku_spesial.py`): minimal 3 resi sejenis **dari kurir itu saja** — resi J&T
+dan SPX Hemat **tidak digabung**, dan SPX Standard tidak ikut hitungan sama sekali. Tanpa
+`--event` perilaku harian tetap: J&T + semua SPX digabung (lihat "Aturan permanen").
+
+### Penjaga jam
+
+Pilihan 2 diberi peringatan Y/N kalau dipilih di luar 12.00-15.59 (`dalam_jam_menu("E2")` —
+Shopee Pagi baru masuk akal setelah jam 12.00). Pilihan 1 tidak punya jendela jam.
+
+### Uji coba sebelum hari event pertama (10.10)
+
+1. Di hari biasa, buka web Jubelio (Siap Proses) dan cek: jumlah filter kurir `spx hemat` +
+   `spx standard` **sama dengan** `spx`. Kalau tidak sama, ada varian lain yang belum tertangani.
+2. Jalankan `proses-event-uji.bat` pilihan 1 dan 2 (mode uji, hanya baca). Cek log: SPX Standard
+   muncul hanya per lantai; SPX Hemat muncul sebagai spesial/satuan/kombinasi; tidak ada pesanan
+   SPX kilat; jumlah per kelompok masuk akal terhadap angka di web Jubelio.
+3. Di hari event jalankan lagi `proses-event-uji.bat` dulu, baru `proses-event.bat`. Setelah
+   langkah pertama selesai, cek folder `label-pengiriman/<tanggal>/<sesi>/` dan hasil cetaknya
+   (`cetak-label-*-spx-hemat.bat` dst) sebelum meneruskan sesi berikutnya.
+4. Cadangan: `proses-harian.bat` tidak berubah dan tetap bisa dipakai kapan saja.
+
 ## Jadwal harian (sudah berjalan pakai program)
 
 Dijalankan tim setiap hari, siklus 2 jam di jam kerja (jam bulat, lalu
@@ -354,10 +489,14 @@ pengawasan.
   lihat bagian 3 [README.md](../README.md)). Setiap pengembangan baru wajib
   mempertahankan aturan ini.
 - **Penentuan SKU "spesial"** (dari Excel, `hitung_sku_spesial` di
-  `sku_spesial.py`) **selalu** menggabung resi J&T+SPX (minimal 3 resi
-  sejenis), terlepas dari TIPE mana yang dipakai. `--kurir` di TIPE 2/TIPE 3
-  hanya membatasi resi kurir mana yang benar-benar dipicklist saat proses
-  SKU spesial itu berjalan — bukan mengubah daftar SKU spesial itu sendiri.
+  `sku_spesial.py`) di **alur harian** (`proses-harian.bat`) **selalu**
+  menggabung resi J&T+SPX (minimal 3 resi sejenis), terlepas dari TIPE mana
+  yang dipakai. `--kurir` di TIPE 2/TIPE 3 hanya membatasi resi kurir mana
+  yang benar-benar dipicklist saat proses SKU spesial itu berjalan — bukan
+  mengubah daftar SKU spesial itu sendiri. **Satu-satunya pengecualian**
+  adalah mode event (`proses-event.bat`, flag `--event`): di sana hitungan
+  dilakukan per kurir (J&T dan SPX Hemat terpisah, SPX Standard tidak ikut).
+  Pengecualian ini tidak pernah aktif tanpa `--event`.
 
 ---
 

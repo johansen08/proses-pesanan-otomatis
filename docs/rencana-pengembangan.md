@@ -26,21 +26,30 @@ jam manual di atas kemungkinan digantikan sepenuhnya oleh mode polling ini
 (atau berjalan berdampingan sebagai fallback — perlu diputuskan saat
 implementasi).
 
-## B. Mode khusus hari event (SPX Standard vs SPX Hemat)
+## B. Mode khusus hari event (SPX Standard vs SPX Hemat) — **SUDAH diimplementasikan 2026-10-08**
 
-Pemisahan **J&T vs SPX** saat pembuatan picklist (dulu direncanakan di sini
-untuk "hari event") **sudah diimplementasikan** lewat `--kurir` dan dipakai
-tiap hari di TIPE 2/TIPE 3 (lihat [jadwal-proses.md](jadwal-proses.md)) —
-bukan cuma hari event lagi. Yang **belum** diimplementasikan: pemisahan
-lebih lanjut antara **SPX Standard vs SPX Hemat** (keduanya sama-sama "SPX"
-di Jubelio hari ini, perlu dicek dulu field/atribut apa yang membedakan
-varian ini sebelum implementasi):
+> Diimplementasikan: `proses-event.bat` / `proses-event-uji.bat`, flag `--event` /
+> `--spx-standard` / `--pagi` / `--kurir spx-hemat|spx-hemat-pagi` di `main.py`,
+> `proses_label.proses_spx_standard()` dkk, `sku_spesial.hitung_sku_spesial(kurir_hitung=...)`,
+> jenis cetak baru di `print_spesial.py`. Jadwal, urutan langkah, folder hasil, dan rencana uji
+> coba: [jadwal-proses.md](jadwal-proses.md) bagian "proses-event.bat — mode event". Bagian ini
+> dibiarkan sebagai catatan keputusan.
+
+Pemisahan **J&T vs SPX** saat pembuatan picklist sudah berjalan tiap hari lewat `--kurir` (TIPE
+2/TIPE 3). Untuk hari event, SPX dipisah lagi menjadi **SPX Standard** dan **SPX Hemat**
+(pembeda: field `shipper` Jubelio; filter `couriers[]` menerima `spx hemat` / `spx standard`,
+dikonfirmasi sniff & uji langsung 2026-10-08):
 
 | Kurir | SKU spesial? | 1 SKU 1 qty reguler | Kombinasi reguler |
 |---|---|---|---|
 | **J&T** | Ya | Ya | Ya |
-| **SPX Standard** | Perlu dikaji ulang — mungkin tidak perlu dipisah spesial kalau volumenya kecil | Ya | Ya |
+| **SPX Standard** | Tidak — volumenya kecil, hanya dipecah per lantai 1/2/3/LAINNYA | – | – |
 | **SPX Hemat** | Ya (sama seperti J&T) | Ya | Ya |
+
+Keputusan (2026-10-08): penentuan SKU spesial dihitung **per kurir** di mode event (J&T dan SPX
+Hemat tidak digabung, SPX Standard tidak ikut); Shopee Pagi mode event memisah SPX Standard
+(per lantai) dan SPX Hemat (spesial/satuan/kombinasi) dengan **folder terpisah**; J&T Resi Siang
+tetap opsional; menu event hanya dua pilihan.
 
 Aturan "SPX tipe pengiriman kilat selalu dikeluarkan" (lihat
 [jadwal-proses.md](jadwal-proses.md) bagian "Aturan permanen") tetap

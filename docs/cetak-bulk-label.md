@@ -25,6 +25,21 @@ sendiri:
 | `jnt-siang` | `cetak-label-jnt-siang.bat` | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
 | `kombinasi` | `cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
+**Mode event** (`proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst — lihat
+[jadwal-proses.md](jadwal-proses.md)) punya jenis sendiri; jenis gabungan di atas (`spesial`,
+`satuan`, `kombinasi`) **tidak** ikut mencetak folder event. J&T mode event memakai jenis
+`*-jnt` yang sudah ada (foldernya sama dengan harian).
+
+| Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
+|---|---|---|---|
+| `spesial-spx-hemat` / `satuan-spx-hemat` / `kombinasi-spx-hemat` | `cetak-label-spesial-spx-hemat.bat` dst | `SPXHEMAT_SPESIAL` / `SPXHEMAT_SATUAN` / `SPXHEMAT_KOMBINASI` | `--event --kurir spx-hemat` |
+| `spesial-spx-hemat-pagi` / `satuan-spx-hemat-pagi` / `kombinasi-spx-hemat-pagi` | `cetak-label-spesial-spx-hemat-pagi.bat` dst | `SPXHEMATPAGI_SPESIAL` / `SPXHEMATPAGI_SATUAN` / `SPXHEMATPAGI_KOMBINASI` | `--event --kurir spx-hemat-pagi` (Shopee Pagi, s.d. 12:00) |
+| `spx-standard` | `cetak-label-spx-standard.bat` | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) — semua PDF | `--spx-standard` |
+| `spx-pagi` (sudah ada) | `cetak-label-spx-pagi.bat` | `SPX_PAGI` — di mode event juga berisi `SHOPEE-PAGI-SPX-STANDARD-LANTAI*` | `--spx-standard --pagi` |
+
+`tests/test_print_spesial.py` menjaga agar setiap jenis punya tepat satu `.bat` cetak dan agar
+nama folder yang ditulis `proses_label.py` selalu sama dengan yang dicari `print_spesial.py`.
+
 Untuk jenis `satuan`/`kombinasi`, nama file labelnya variatif (mis. `1QTY-REGULER-2A`,
 `KOMBINASI-REGULER-LANTAI2`) dan TIDAK punya tag unik seperti `_SPESIAL_` — karena
 subfolder-nya sendiri sudah eksklusif per jenis (dibuat `proses_label.py` khusus alur itu),

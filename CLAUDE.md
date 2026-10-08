@@ -124,7 +124,23 @@ GTL-SiCepat, selalu manual terpisah, TIDAK pernah bagian dari `--label --jalanka
 `--reguler` (sisa TikTok Shop & Shopee non-spesial, bisa berdiri sendiri atau otomatis
 setelah `--label`), `--shopee-pagi` dan `--jnt-siang` (manual 1x/hari, filter waktu pesan
 WIB). Opsi `--kurir jnt`/`--kurir spx` pada `--label`/`--reguler` memisahkan picklist per
-kurir saat PEMBUATAN saja — penentuan SKU "spesial" itu sendiri selalu menggabung J&T+SPX.
+kurir saat PEMBUATAN saja — penentuan SKU "spesial" itu sendiri selalu menggabung J&T+SPX
+(kecuali mode event di bawah).
+
+**Mode event** (hari 10.10/11.11/12.12 dst; `proses-event.bat`/`proses-event-uji.bat`, 2 pilihan
+menu): J&T, SPX Hemat, SPX Standard dipisah seharian. Flag `--event` (bersama `--label`/
+`--reguler` + `--kurir jnt|spx-hemat|spx-hemat-pagi`) membuat penentuan SKU spesial dihitung PER
+KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesial — hanya
+`--spx-standard [--pagi]`, dipecah per lantai. `--kurir spx-hemat`/`spx-hemat-pagi` tanpa
+`--event` ditolak (`main.pesan_salah_mode_event`). Kunci kurir event TIDAK boleh ditambahkan ke
+`KURIR_LABEL_FILE` (yang menurunkan jenis cetak harian di `print_spesial.py`) — pakai
+`KURIR_LABEL_FILE_EVENT`/`KURIR_KODE_FILE_SEMUA`. Detail & jadwal:
+[docs/jadwal-proses.md](docs/jadwal-proses.md) bagian "proses-event.bat — mode event".
+
+`proses-event.bat` dan `proses-event-uji.bat` ditulis terpisah tetapi dijaga identik (selain
+`--jalankan`) oleh `tests/test_bat.py` — edit keduanya sekaligus, dan setiap perintahnya divalidasi
+argparse sungguhan oleh `tests/test_main.py` — jalankan keduanya setelah mengubah `.bat` event
+atau flag di `main.py`.
 
 `proses-harian.bat` (sungguhan) dan `proses-harian-uji.bat` (mode uji, struktur sama) adalah
 menu interaktif 4 TIPE yang masing-masing menjalankan rangkaian flag `jalankan.bat` di atas
