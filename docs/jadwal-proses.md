@@ -197,8 +197,8 @@ Implementasi kode: `catat()`/`terapkan()` di `src/rekap_master_excel.py`,
 ### Jam tunda Urgent Lazada & GTL/SiCepat
 
 **Revisi 2026-10-02**: pesanan urgent yang jam pesannya (WIB) masih jauh dari waktu proses
-tidak buru-buru dipicklist — ditahan dulu, baru dilanjutkan otomatis sekali TIPE 1 jam 16.00
-dijalankan lagi:
+tidak buru-buru dipicklist — ditahan dulu, baru dilanjutkan otomatis begitu urgent dijalankan
+lagi setelah jam 16.00 (lewat `proses-malam.bat`):
 
 | | Urgent Lazada | Urgent GTL/SiCepat |
 |---|---|---|
@@ -206,9 +206,11 @@ dijalankan lagi:
 | Dilanjutkan otomatis setelah | jam 16.00 | jam 16.00 |
 
 Berlaku di setiap TIPE (07.00-15.00): pesanan yang jam pesannya di atas jam tunda hari itu
-TIDAK ikut picklist saat itu — bukan dibuang, cuma ditahan sampai jendela TIPE 1 jam 16.00
-(lihat jadwal harian di bawah) dijalankan, lalu otomatis ikut tanpa batas jam lagi (karena
-sudah lewat jam 16.00, batas tunda diabaikan sepenuhnya). Implementasi kode:
+TIDAK ikut picklist saat itu — bukan dibuang, cuma ditahan sampai `proses-malam.bat`
+dijalankan SETELAH jam 16.00, lalu otomatis ikut tanpa batas jam lagi (batas tunda diabaikan
+sepenuhnya setelah jam 16.00). `proses-malam.bat` tidak punya penjaga jam dan tidak berjalan
+otomatis: kalau dijalankan sebelum 16.00 pesanan masih tertahan, kalau tidak dijalankan sama
+sekali urgent baru terambil lagi di TIPE 1 pagi berikutnya. Implementasi kode:
 `JAM_CUTOFF_URGENT_LAZADA`/`JAM_CUTOFF_URGENT_GTL_SICEPAT`/`JAM_LANJUT_URGENT` &
 `_saring_jam_urgent()` di `src/proses_label.py`.
 
@@ -216,7 +218,9 @@ sudah lewat jam 16.00, batas tunda diabaikan sepenuhnya). Implementasi kode:
 langkah 3 & 4 (Urgent Lazada, Urgent GTL & SiCepat) lewat `--urgent ... --lewati-malam`
 (`jam_malam()` di `src/main.py`) — sebelumnya pesanan yang ditahan ikut terambil begitu jam 16.00.
 TIPE 1 pagi (07.00-12.00) tetap menjalankan urgent. Pesanan urgent yang tertahan tidak hilang:
-diproses lagi di TIPE 1 pagi / TIPE 2-4 besok, atau manual lewat `jalankan.bat --urgent`.
+diproses di `proses-malam.bat` (urgent tanpa `--lewati-malam`, jadi tidak ditahan) yang
+dijalankan setelah jam 16.00, atau di TIPE 1 pagi / TIPE 2-4 berikutnya, atau manual lewat
+`jalankan.bat --urgent`.
 
 ### Recheck stok
 
