@@ -536,7 +536,10 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
         print(f'!!! PRINTER BERMASALAH ({status}) saat mencetak: {nama_file}')
         print("    Perbaiki printer (isi kertas / buka yang macet, dst), lalu tekan ENTER untuk melanjutkan")
         print('    (ketik "lewati" lalu ENTER untuk melewati file ini saja dan lanjut ke berikutnya)')
-        aksi = input("> ").strip().lower()
+        try:
+            aksi = input("> ").strip().lower()
+        except EOFError:   # tanpa konsol interaktif (dijalankan server_ui.py): jangan menggantung
+            aksi = "lewati"
         if aksi == "lewati":
             log.warning('File %s DILEWATI manual oleh user (status job terakhir: %s)', nama_file, status)
             return False
@@ -780,6 +783,9 @@ def main() -> int:
     ap.add_argument("--file-dari", type=Path, metavar="DAFTAR.txt",
                     help="Seperti --file, tapi daftar path dibaca dari file teks (satu path per "
                          "baris) - dipakai kalau pilihan terlalu banyak untuk baris perintah")
+    ap.add_argument("--printer", metavar="NAMA",
+                    help="Nama printer persis seperti di Windows (lihat daftar saat pilih printer); "
+                         "melewati tanya pilih printer. Dipakai UI desktop (server_ui.py)")
     args = ap.parse_args()
     per_file = bool(args.file or args.file_dari)
     if per_file and (args.jenis or args.paket or args.folder or args.semua_sesi or args.ulang):
@@ -877,7 +883,14 @@ def main() -> int:
                     return 0
 
         sumatra = cari_sumatra()
-        printer = pilih_printer(daftar_printer())
+        if args.printer:
+            tersedia = daftar_printer()
+            if args.printer not in tersedia:
+                raise CetakError(f'Printer "{args.printer}" tidak ditemukan. Yang ada: '
+                                 + ", ".join(tersedia))
+            printer = args.printer
+        else:
+            printer = pilih_printer(daftar_printer())
         log.info("Printer dipilih: %s", printer)
 
         pantau = dukungan_pemantauan_job()

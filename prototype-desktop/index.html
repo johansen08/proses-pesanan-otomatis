@@ -271,6 +271,7 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
   <section class="view" id="v-cetak">
     <div class="ctoolbar">
       <div class="dstrip" id="dStrip"></div>
+      <span class="pill" id="modeInfo"></span>
       <div class="grow"></div>
       <input type="search" id="cari" placeholder="Cari file / SKU / PICK…" style="min-width:210px">
       <label class="sw on" id="swBelum"><i></i>Sembunyikan yang sudah dicetak <i class="i" data-tip="Label yang sudah tercatat tercetak disembunyikan dan tidak ikut dicentang, supaya tidak tercetak dua kali.">i</i></label>
@@ -447,17 +448,19 @@ const JENIS={
  'Kombinasi':['KOMBINASI-REGULER-LANTAI1','KOMBINASI-REGULER-LANTAI2','KOMBINASI-REGULER-LANTAI3','KOMBINASI-REGULER-LAINNYA'],
  'GTL-SiCepat':['URGENT-GTL-SICEPAT-LANTAI1','URGENT-GTL-SICEPAT-LANTAI2','URGENT-GTL-SICEPAT-LAINNYA']};
 const BLN=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-const HARI0=new Date(2026,9,8);
+let HARI0=new Date(2026,9,8),API=false;
+const lb=x=>API?'':` · ${x} label`;
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 function rnd(seed){let x=seed*9301+49297;return()=>{x=(x*9301+49297)%233280;return x/233280}}
 const CACHE={};
-function dataHari(tgl){ // data tiruan, konsisten per tanggal
+function dataHari(tgl){ // API aktif: data sungguhan; kalau tidak, data tiruan konsisten per tanggal
  if(CACHE[tgl])return CACHE[tgl];
+ if(API)return CACHE[tgl]=[];
  const r=rnd(+tgl.split('-').join('')%997),n=1+Math.floor(r()*3),isToday=tgl===iso(HARI0),out=[];let pick=157000+Math.floor(r()*900);
  for(let i=1;i<=n;i++){const jam=['07.05','10.18','13.02','16.04'][Math.min(i-1,3)],hh=jam.replace('.','');
   out.push({id:tgl+'/'+i,no:i,jam:jam,jenis:Object.keys(JENIS).map(j=>({nama:j,files:JENIS[j].map((lb,k)=>{
    const sec=String(10+Math.floor(r()*49)).padStart(2,'0');
-   return {f:'PICK-000'+(pick++)+'_'+lb+'_'+tgl+'_'+hh+sec+'.pdf',n:Math.floor(r()*60)+4,done:!(isToday&&i===n)&&r()<.6}})}))});}
+   const fn='PICK-000'+(pick++)+'_'+lb+'_'+tgl+'_'+hh+sec+'.pdf';return {f:fn,rel:tgl+'/'+i+'/'+j+'/'+fn,n:Math.floor(r()*60)+4,done:!(isToday&&i===n)&&r()<.6}})}))});}
  return CACHE[tgl]=out;}
 let tglAktif=iso(HARI0),bukaS=new Set(),bukaJ=new Set(),pilihC=new Set(),sembunyi=true,ssAktif=[],kata='';
 const kf=(sid,j,f)=>sid+'|'+j+'|'+f;
@@ -469,8 +472,8 @@ const keysS=s=>jenisVis(s).flatMap(j=>keysJ(s,j));
 function st(keys){const p=keys.filter(k=>pilihC.has(k)).length;return !keys.length?'':p===keys.length?'on':p?'mix':'';}
 function toggleKeys(keys){const semua=keys.length&&keys.every(k=>pilihC.has(k));keys.forEach(k=>semua?pilihC.delete(k):pilihC.add(k));}
 function drawStrip(){
- $('#dStrip').innerHTML=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d),blm=dataHari(t).reduce((a,s)=>a+s.jenis.reduce((b,j)=>b+j.files.filter(f=>!f.done).reduce((c,f)=>c+f.n,0),0),0);
-  return `<button class="dchip ${t===tglAktif?'on':''}" data-t="${t}"><small>${['Hari ini','Kemarin','2 hari lalu'][i]}</small><b>${d.getDate()} ${BLN[d.getMonth()]}</b>${blm?`<small style="color:var(--warn)">${blm} belum</small>`:'<small style="color:var(--ok)">tercetak</small>'}</button>`}).join('');
+ $('#dStrip').innerHTML=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d),blm=dataHari(t).reduce((a,s)=>a+s.jenis.reduce((b,j)=>b+j.files.filter(f=>!f.done).reduce((c,f)=>c+(API?1:f.n),0),0),0);
+  return `<button class="dchip ${t===tglAktif?'on':''}" data-t="${t}"><small>${['Hari ini','Kemarin','2 hari lalu'][i]}</small><b>${d.getDate()} ${BLN[d.getMonth()]}</b>${blm?`<small style="color:var(--warn)">${blm}${API?' file':''} belum</small>`:'<small style="color:var(--ok)">tercetak</small>'}</button>`}).join('');
 }
 function drawCetak(){
  drawStrip();
@@ -478,19 +481,19 @@ function drawCetak(){
  $('#sesiList').innerHTML=ss.map(s=>{
   const jv=jenisVis(s),ks=keysS(s),pil=ks.filter(k=>pilihC.has(k)).length,tot=jv.reduce((a,j)=>a+fileVis(j).reduce((b,f)=>b+f.n,0),0);
   all+=ks.length;if(pil)sesiSet++;
-  jv.forEach(j=>fileVis(j).forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f))){total+=f.n;nFile++;jenisSet.add(j.nama)}}));
+  jv.forEach(j=>fileVis(j).forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f))){total+=f.n||0;nFile++;jenisSet.add(j.nama)}}));
   const stS=st(ks),open=bukaS.has(s.id)||(kata&&ks.length);
   return `<div class="sesi ${stS?'sel':''} ${open?'open':''}" data-s="${s.id}">
    <div class="sh" data-act="sesi"><span class="b ${stS}" data-act="cs">${ic('check')}</span>
-    <span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">· ${s.jam}</span><small>${ks.length?jv.length+' jenis · '+ks.length+' file · '+tot+' label'+(pil?' · '+pil+' dipilih':''):'tidak ada file'+(kata?' yang cocok':' — semua sudah tercetak')}</small></span>
+    <span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">· ${s.jam}</span><small>${ks.length?jv.length+' jenis · '+ks.length+' file'+(API?'':' · '+tot+' label')+(pil?' · '+pil+' dipilih':''):'tidak ada file'+(kata?' yang cocok':' — semua sudah tercetak')}</small></span>
     ${ks.length?'':'<span class="pill ok">'+(kata?'—':'Selesai')+'</span>'}${ic('back').replace('<svg','<svg class="chev"')}</div>
    <div class="sb">${jv.map(j=>{const kj=keysJ(s,j),sj=st(kj),bj=bukaJ.has(s.id+'|'+j.nama)||(kata&&kj.length);
-     return `<div class="jgrp ${bj?'open':''}" data-j="${s.id}|${j.nama}"><div class="jr" data-act="jenis"><span class="b ${sj}" data-act="cj">${ic('check')}</span><span class="nm">${j.nama}</span><span class="n">${kj.length} file · ${fileVis(j).reduce((a,f)=>a+f.n,0)} label</span>${ic('back').replace('<svg','<svg class="chv"')}</div>
-      <div class="fl">${fileVis(j).map(f=>`<div class="fr ${f.done?'done':''}" data-k="${kf(s.id,j.nama,f.f)}"><span class="b ${pilihC.has(kf(s.id,j.nama,f.f))?'on':''}">${ic('check')}</span><span class="fn">${f.f}</span>${f.done?'<span class="pill ok">tercetak</span>':''}<span class="n">${f.n} label</span></div>`).join('')}</div></div>`}).join('')}</div></div>`}).join('')||'<div class="emp">Belum ada sesi</div>';
+     return `<div class="jgrp ${bj?'open':''}" data-j="${s.id}|${j.nama}"><div class="jr" data-act="jenis"><span class="b ${sj}" data-act="cj">${ic('check')}</span><span class="nm">${j.nama}</span><span class="n">${kj.length} file${lb(fileVis(j).reduce((a,f)=>a+f.n,0))}</span>${ic('back').replace('<svg','<svg class="chv"')}</div>
+      <div class="fl">${fileVis(j).map(f=>`<div class="fr ${f.done?'done':''}" data-k="${kf(s.id,j.nama,f.f)}"><span class="b ${pilihC.has(kf(s.id,j.nama,f.f))?'on':''}">${ic('check')}</span><span class="fn">${f.f}</span>${f.done?'<span class="pill ok">tercetak</span>':''}<span class="n">${API?f.kb+' KB':f.n+' label'}</span></div>`).join('')}</div></div>`}).join('')}</div></div>`}).join('')||'<div class="emp">Belum ada sesi</div>';
  const pilAll=pilihC.size;
  $('#ckAll .b').className='b '+(all&&pilAll===all?'on':pilAll?'mix':'');
  $('#cTot').textContent=pilAll+' dari '+all+' file dipilih';$('#cTot').className='pill '+(pilAll?'acc':'');
- $('#cInfo').textContent=pilAll?`${sesiSet} sesi · ${jenisSet.size} jenis · ${nFile} file · ${total} label`:'Belum ada yang dipilih';
+ $('#cInfo').textContent=pilAll?`${sesiSet} sesi · ${jenisSet.size} jenis · ${nFile} file${lb(total)}`:'Belum ada yang dipilih';
  $('#cCetak').disabled=!pilAll;
 }
 $('#sesiList').onclick=e=>{
@@ -511,10 +514,11 @@ $('#swBelum').onclick=e=>{if(e.target.closest('.i[data-tip]'))return;sembunyi=!s
  const ada=new Set(ssAktif.flatMap(keysS));[...pilihC].forEach(k=>{if(!ada.has(k))pilihC.delete(k)});drawCetak();};
 $('#cCetak').onclick=()=>{
  const grp={};let tot=0,nf=0;
- ssAktif.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f))){const g='Sesi '+s.no+' · '+j.nama;grp[g]=grp[g]||[0,0];grp[g][0]++;grp[g][1]+=f.n;tot+=f.n;nf++}})));
- konfirmasi(`<h2>Cetak ${nf} file (${tot} label)?</h2><p>Printer: <b>${$('#cPrinter').value}</b><br>Tanggal ${tglAktif}, urut dari sesi terlama ke terbaru.</p>
+ ssAktif.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f))){const g='Sesi '+s.no+' · '+j.nama;grp[g]=grp[g]||[0,0];grp[g][0]++;grp[g][1]+=f.n||0;tot+=f.n||0;nf++}})));
+ konfirmasi(`<h2>Cetak ${nf} file${API?'':' ('+tot+' label)'}?</h2><p>Printer: <b>${$('#cPrinter').value}</b><br>Tanggal ${tglAktif}, urut dari sesi terlama ke terbaru.</p>
  <div class="chips">${Object.keys(grp).map(g=>`<span class="chip">${g} · ${grp[g][0]} file</span>`).join('')}</div>
  <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" id="yaCetak">Cetak</button></div>`);
+ if(API)return $('#yaCetak').onclick=()=>kirimCetak();
  $('#yaCetak').onclick=()=>{tutup();toast('Mengirim '+nf+' file ke printer…');
   ssAktif.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f)))f.done=true})));
   setTimeout(()=>{toast('Selesai dicetak ✓');pilihC.clear();drawCetak();},1800);};};
@@ -526,7 +530,46 @@ function drawPeringatan(){
  $('#pMasalah').innerHTML=`<div class="row"><span class="pill bad">Gagal</span><span class="tx"><b>J&T Kombinasi</b><small>Timeout unduh label PDF · 10.18</small></span><button class="btn sec2" onclick="toast('Dilanjutkan dari PICK-000104830')">Lanjutkan</button></div>`;
 }
 
-render();drawCetak();drawPeringatan();
+
+/* ---------- sambungan ke server_ui.py (print_spesial.py --file) ---------- */
+async function api(url,opt){const r=await fetch(url,opt);const j=await r.json();if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j;}
+async function muatData(){
+ const d=await api('/api/sesi');
+ Object.keys(CACHE).forEach(k=>delete CACHE[k]);
+ HARI0=new Date(d.hari_ini+'T00:00:00');
+ d.hari.forEach(h=>{CACHE[h.tanggal]=h.sesi.map(s=>({id:s.id,no:s.no,jam:s.jam,jenis:s.jenis.map(j=>({nama:j.nama,files:j.files.map(f=>({f:f.f,rel:f.rel,kb:f.kb,n:null,done:f.done}))}))}))});
+ API=true;return d;
+}
+async function initCetak(){
+ if(location.protocol.startsWith('http')){
+  try{const dd=await muatData();tglAktif=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0);
+   const p=await api('/api/printer');$('#cPrinter').innerHTML=p.printer.map(x=>`<option>${x}</option>`).join('');
+   $('#modeInfo').textContent='Tersambung ke printer & label sungguhan';$('#modeInfo').className='pill ok';
+  }catch(e){toast('Server UI error: '+e.message);}
+ }else{$('#modeInfo').textContent='Mode contoh (data tiruan) — jalankan src/server_ui.py untuk data sungguhan';$('#modeInfo').className='pill warn';}
+ drawCetak();
+}
+async function kirimCetak(){
+ const files=[];ssAktif.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
+ tutup();
+ try{await api('/api/cetak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({files,printer:$('#cPrinter').value})});}
+ catch(e){return toast('Gagal mulai: '+e.message);}
+ konfirmasi(`<h2 id="jT">Mencetak ${files.length} file…</h2><div class="bar"><i id="jBar"></i></div>
+  <pre id="jLog" class="log" style="max-height:260px;min-height:120px;white-space:pre-wrap"></pre>
+  <div class="acts"><button class="btn sec2" id="jTutup" disabled>Tutup</button></div>`);
+ $('#jTutup').onclick=tutup;
+ const iv=setInterval(async()=>{
+  try{const j=await api('/api/job');
+   const L=j.lines||[];$('#jLog').textContent=L.slice(-60).join('\n');$('#jLog').scrollTop=1e6;
+   const m=[...L].reverse().map(x=>x.match(/\[(\d+)\/(\d+)\] Mencetak/)).find(Boolean);
+   if(m)$('#jBar').style.width=Math.round((m[1]-1)/m[2]*100)+'%';
+   if(j.status!=='jalan'){clearInterval(iv);$('#jBar').style.width='100%';
+    $('#jT').textContent=j.status==='selesai'?'Selesai ✓':'Selesai dengan masalah — lihat catatan';$('#jTutup').disabled=false;
+    pilihC.clear();await muatData();drawCetak();}
+  }catch(e){clearInterval(iv);$('#jLog').textContent+='\n'+e.message;$('#jTutup').disabled=false;}
+ },1000);
+}
+render();drawPeringatan();initCetak();
 </script>
 </body>
 </html>

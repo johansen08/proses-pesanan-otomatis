@@ -817,6 +817,10 @@ def uji_main_file_cetak_hanya_pilihan_dan_lewati_yang_sudah_tercetak():
         assert dicetak == ["PICK-000000002_SPESIAL_B_x.pdf"], dicetak
         assert jalankan("--file", c) == 0 and dicetak == []
         assert jalankan("--file", c, "--cetak-ulang-semua") == 0 and dicetak == ["PICK-000000003_SPESIAL_C_x.pdf"]
+        # --printer: nama valid melewati tanya printer; nama tidak ada -> error, tidak mencetak
+        assert jalankan("--file", c, "--cetak-ulang-semua", "--printer", "PRINTER-X") == 0
+        assert dicetak == ["PICK-000000003_SPESIAL_C_x.pdf"], dicetak
+        assert jalankan("--file", c, "--cetak-ulang-semua", "--printer", "TIDAK-ADA") == 1 and dicetak == []
         # path buruk -> error (exit 1) dan tidak ada yang dicetak; gabung --jenis ditolak
         assert jalankan("--file", "2026-10-07/1/SPESIAL/tidak-ada.pdf") == 1 and dicetak == []
         try:

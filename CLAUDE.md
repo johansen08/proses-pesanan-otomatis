@@ -35,6 +35,7 @@ jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_jubelio.py
 .venv\Scripts\python tests\test_main.py
 .venv\Scripts\python tests\test_rekap_master_excel.py
+.venv\Scripts\python tests\test_server_ui.py
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
 
@@ -85,6 +86,13 @@ project secara umum, root tidak boleh berisi file `.py`):
   Hanya `cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.
+- `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
+  `prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
+  API `/api/sesi` (3 hari, jenis spesial/satuan/kombinasi/gtl-sicepat, file PDF + status tercetak),
+  `/api/printer`, `/api/cetak`, `/api/job`. Cetak SELALU lewat proses terpisah
+  `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
+  server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
+  satu job sekaligus. Menu Harian di UI masih simulasi. Tes: `tests/test_server_ui.py`.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
