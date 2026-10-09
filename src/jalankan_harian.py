@@ -10,6 +10,8 @@ Aturan yang SAMA dengan .bat:
     per langkah dan peringatan dari logs/ ikut tampil di rekap.
   - Urgent memakai `--lewati-malam` hanya untuk judul "TIPE 1" (dan "KUSTOM"), tidak untuk
     TIPE 2-4 dan MALAM - sama seperti proses-harian.bat / proses-malam.bat.
+  - `--non-wajib` / `--non-wajib-sore` (tulisan NON WAJIB KELUAR di kolom U) lewat flag_non_wajib();
+    WAKTU_MENU_MULAI = waktu job mulai, dibaca main.py untuk TIPE 1.
   - Judul "EVENT - ..." memakai KATALOG_EVENT (padanan proses-event.bat, J&T/SPX Hemat/SPX
     Standard dipisah seharian); EVENT - TIPE 2 = pilihan 2 .bat, TIPE 1/3/4 = pilihan 1 (sesi biasa).
 Urutan langkah SELALU mengikuti KATALOG / KATALOG_EVENT (bukan urutan kiriman UI).
@@ -83,6 +85,24 @@ LANGKAH_IRESIS = "Upload faktur & pesanan ke IRESIS"
 JUDUL_TANPA_IRESIS = {"MALAM", "EVENT - MALAM"}     # IRESIS hanya di jaringan lokal kantor: menu malam tidak boleh menyentuhnya
 MENU_JAM = {"TIPE 1": "1", "TIPE 2": "2", "TIPE 3": "3", "TIPE 4": "4",     # untuk dalam_jam_menu()
             "EVENT - TIPE 1": "1", "EVENT - TIPE 2": "2", "EVENT - TIPE 3": "3", "EVENT - TIPE 4": "4"}
+# Tulisan NON WAJIB KELUAR di kolom U PICKLIST.xlsx (lihat docs/jadwal-proses.md), sama dengan .bat:
+# langkah SPX dipisah di TIPE 2/3 dan langkah SPX-J&T gabungan di TIPE 4 selalu (`--non-wajib`);
+# langkah gabungan TIPE 1 hanya kalau menu dimulai setelah 16.00 (`--non-wajib-sore`). Event, MALAM,
+# KUSTOM tidak.
+NON_WAJIB_SPX_DIPISAH = {"SPX Spesial", "SPX 1 qty reguler", "SPX Kombinasi"}
+NON_WAJIB_SPX_GABUNG = {"SPX-J&T Spesial", "SPX-J&T 1 qty reguler", "SPX-J&T Kombinasi"}
+
+
+def flag_non_wajib(judul: str, nama_langkah: str) -> str | None:
+    if judul in ("TIPE 2", "TIPE 3") and nama_langkah in NON_WAJIB_SPX_DIPISAH:
+        return "--non-wajib"
+    if judul == "TIPE 4" and nama_langkah in NON_WAJIB_SPX_GABUNG:
+        return "--non-wajib"
+    if judul == "TIPE 1" and nama_langkah in NON_WAJIB_SPX_GABUNG:
+        return "--non-wajib-sore"
+    return None
+
+
 BARIS_MAKS = 50000
 
 _kunci = threading.Lock()
@@ -159,7 +179,7 @@ def _jalankan_proses(job: dict, argumen: list[str], env: dict) -> int:
 def _kerjakan(job: dict, sesi: str) -> None:
     global _proses
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1",
-           "LABEL_SESI_DIR": sesi}
+           "LABEL_SESI_DIR": sesi, "WAKTU_MENU_MULAI": str(job["mulai"])}
     lewati_malam = job["judul"] in JUDUL_LEWATI_MALAM
     total = len(job["langkah"])
     waktu = []
@@ -175,6 +195,8 @@ def _kerjakan(job: dict, sesi: str) -> None:
         argumen = [sys.executable, str(SRC / "main.py"), *flag, "--jalankan"]
         if lewati_malam and flag[:1] == ["--urgent"]:
             argumen.append("--lewati-malam")
+        if (nw := flag_non_wajib(job["judul"], lg["nama"])):
+            argumen.append(nw)
         try:
             lg["kode"] = _jalankan_proses(job, argumen, env)
         except OSError as e:

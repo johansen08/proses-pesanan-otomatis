@@ -12,7 +12,8 @@ Kolom yang diisi (nilainya saja, rumus bawaan template dibiarkan): F=operator (o
 lihat operator_aktif.py / data/operator.json), G=tanggal, H=jam (desimal gaya "HH.MM", mis. 18.53 = jam 18:53, BUKAN pecahan jam
 sungguhan), L=nomor picklist (angka saja), M=Total Pesanan, N=Resi Keluar, T=label alur
 (sama seperti kolom "SKU" di riwayat_picklist.xlsx), U=daftar no pesanan yang belum dapat
-resi. Kolom rumus B/E/O/Q/W di tiap baris baru disalin dari baris rumus template (rumus
+resi, diawali "NON WAJIB KELUAR | " untuk langkah non wajib keluar (atur_catatan_proses(), lihat
+docs/jadwal-proses.md). Kolom rumus B/E/O/Q/W di tiap baris baru disalin dari baris rumus template (rumus
 relatif, jadi tetap benar kalau ditempel ke baris lain di master).
 
 Pewarnaan kuning: sel O (MINUS = Total Pesanan - Resi Keluar) kalau hasilnya > 0, dan seluruh
@@ -58,6 +59,16 @@ WARNA_KUNING = "FFFFFF00"
 TEKS_TERLOMPAT = "PICKLIST CANCEL"
 MAKS_COBA_GANTI_FILE = 3       # os.replace gagal (PermissionError) kalau file sedang dibuka
 JEDA_COBA_GANTI_FILE_S = 0.5
+
+
+_catatan_proses = ""     # awalan kolom U untuk semua picklist proses ini (mis. NON WAJIB KELUAR)
+
+
+def atur_catatan_proses(teks: str) -> None:
+    """Awalan kolom U (U=catatan) tiap picklist yang ditulis proses ini; "" = tanpa awalan.
+    Digabung dengan daftar pesanan tanpa resi: `NON WAJIB KELUAR | 123, 456`."""
+    global _catatan_proses
+    _catatan_proses = teks or ""
 
 
 class _Buku:
@@ -280,8 +291,10 @@ def _tulis_baris(buku: _Buku, baris_riwayat: dict, nomor_terlompat: list[int] | 
         ws.cell(r, KOLOM_N_PRINT, resi)
     if baris_riwayat.get("SKU") is not None:
         ws.cell(r, KOLOM_T_JENIS, baris_riwayat["SKU"])
-    if baris_riwayat.get("Tanpa Resi"):
-        ws.cell(r, KOLOM_U_CATATAN, ", ".join(baris_riwayat["Tanpa Resi"]))
+    catatan = " | ".join(x for x in (
+        _catatan_proses, ", ".join(baris_riwayat.get("Tanpa Resi") or [])) if x)
+    if catatan:
+        ws.cell(r, KOLOM_U_CATATAN, catatan)
     if str(baris_riwayat.get("Catatan", "")).startswith(("GAGAL", "TERHENTI")):
         _tandai_kuning(ws, r)
     elif isinstance(total, (int, float)) and isinstance(resi, (int, float)) and total - resi > 0:

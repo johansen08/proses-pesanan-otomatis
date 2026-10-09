@@ -295,7 +295,8 @@ def _args(**kw):
     from types import SimpleNamespace
     dasar = dict(kurir=None, event=False, label=False, reguler=False, spx_standard=False,
                  pagi=False, bagian=None, excel=Path("x.xlsx"), tanpa_cek_nilai=True,
-                 jalankan=True, sku=None, tanpa_reguler=False)
+                 jalankan=True, sku=None, tanpa_reguler=False,
+                 non_wajib=False, non_wajib_sore=False)
     dasar.update(kw)
     return SimpleNamespace(**dasar)
 
@@ -466,6 +467,76 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                     raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
     assert total == 2 * (12 + 16 + 12 + 13 + 9), total      # TIPE 1-4 + MALAM, sungguhan & uji
     print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
+
+
+def uji_menu_mulai_setelah_16_dan_waktu_menu_mulai():
+    assert [m.menu_mulai_setelah_16(_jam(h, mnt)) for h, mnt in
+            ((7, 0), (15, 59), (16, 0), (16, 1), (16, 59), (17, 0), (23, 59))] == [
+        False, False, False, True, True, True, True]
+    with mock.patch.dict(os.environ, {"WAKTU_MENU_MULAI": str(datetime(2026, 10, 9, 16, 30).timestamp())}):
+        assert m.waktu_menu_mulai() == datetime(2026, 10, 9, 16, 30)
+    for nilai in ("", "bukan-angka"):
+        with mock.patch.dict(os.environ, {"WAKTU_MENU_MULAI": nilai}):
+            assert abs((datetime.now() - m.waktu_menu_mulai()).total_seconds()) < 5
+    print("  menu_mulai_setelah_16(): 16.00 wajib, 16.01 dst non wajib; WAKTU_MENU_MULAI dibaca, rusak -> sekarang")
+
+
+def uji_atur_catatan_non_wajib():
+    import rekap_master_excel as rme
+    awal = _jam(16, 30).timestamp()
+    pagi = _jam(9, 0).timestamp()
+    kasus = [  # (non_wajib, sore, env, aktif)
+        (True, False, None, True), (False, False, None, False),
+        (False, True, str(awal), True), (False, True, str(pagi), False)]
+    for nw, sore, env, aktif in kasus:
+        with mock.patch.dict(os.environ, {"WAKTU_MENU_MULAI": env or ""}):
+            assert m.atur_catatan_non_wajib(_args(non_wajib=nw, non_wajib_sore=sore)) is aktif, (nw, sore, env)
+        assert rme._catatan_proses == (m.TEKS_NON_WAJIB if aktif else "")
+    rme.atur_catatan_proses("")
+    assert m.pesan_salah_mode_event(_args(non_wajib=True)) is not None
+    assert m.pesan_salah_mode_event(_args(non_wajib_sore=True, reguler=True)) is None
+    assert m.pesan_salah_mode_event(_args(non_wajib=True, label=True)) is None
+    print("  atur_catatan_non_wajib(): --non-wajib selalu, --non-wajib-sore hanya menu mulai >16.00; butuh --label/--reguler")
+
+
+def uji_perintah_di_bat_harian_lolos_argparse():
+    """Setiap baris `main.py ...` di proses-harian(.uji).bat (termasuk --non-wajib/--non-wajib-sore)
+    diterima argparse sungguhan, dan flag non wajib hanya di langkah yang dimaksud."""
+    import re
+    import shlex
+
+    class Berhenti(Exception):
+        pass
+
+    pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
+    for nama in ("proses-harian.bat", "proses-harian-uji.bat"):
+        per_tipe, tipe, jumlah = {}, None, 0
+        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
+            if (mt := re.match(r":(tipe\d)", baris)):
+                tipe = mt.group(1)
+            cocok = pola.match(baris)
+            if not cocok:
+                continue
+            args = shlex.split(cocok.group(1), posix=False)
+            with mock.patch.object(sys, "argv", ["main.py", *args]), \
+                    mock.patch.object(m, "muat_env", side_effect=Berhenti):
+                try:
+                    m._main()
+                except Berhenti:
+                    jumlah += 1
+                except SystemExit as e:
+                    raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
+            nw = [a for a in args if a.startswith("--non-wajib")]
+            if nw:
+                per_tipe.setdefault(tipe, []).append((nw[0], "--kurir" in args and args[args.index("--kurir") + 1]))
+        assert sorted(per_tipe) == ["tipe1", "tipe2", "tipe3", "tipe4"], (nama, per_tipe)
+        assert all(len(v) == 3 for v in per_tipe.values()), (nama, per_tipe)
+        assert {x[0] for x in per_tipe["tipe1"]} == {"--non-wajib-sore"} and all(not x[1] for x in per_tipe["tipe1"])
+        assert {x[0] for x in per_tipe["tipe4"]} == {"--non-wajib"} and all(not x[1] for x in per_tipe["tipe4"])
+        for t in ("tipe2", "tipe3"):
+            assert {x for x in per_tipe[t]} == {("--non-wajib", "spx")}, per_tipe[t]
+        assert jumlah > 30, jumlah
+    print("  proses-harian(.uji).bat: perintah lolos argparse; non wajib hanya di SPX TIPE 2/3 & SPX-J&T TIPE 4 + TIPE 1 (sore)")
 
 
 if __name__ == "__main__":

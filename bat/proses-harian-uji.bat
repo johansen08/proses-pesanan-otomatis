@@ -30,6 +30,7 @@ goto menu
 :tipe1
 echo.
 call :catat_waktu TR_AWAL
+set "WAKTU_MENU_MULAI=%TR_AWAL%"
 echo === 1/8 Uji RECHECK STOK ===
 ".venv\Scripts\python.exe" src\main.py --recheck-stok
 call :catat_waktu TR_AKHIR
@@ -51,17 +52,17 @@ call :catat_waktu T2_AKHIR
 echo.
 call :catat_waktu T3_AWAL
 echo === 5/8 Uji SPX - J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --non-wajib-sore
 call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
 echo === 6/8 Uji SPX - J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --non-wajib-sore
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
 echo === 7/8 Uji SPX - J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --non-wajib-sore
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -118,17 +119,17 @@ call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu T7_AWAL
 echo === 9/12 Uji SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --non-wajib
 call :catat_waktu T7_AKHIR
 echo.
 call :catat_waktu T8_AWAL
 echo === 10/12 Uji SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --non-wajib
 call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu T9_AWAL
 echo === 11/12 Uji SPX KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --non-wajib
 call :catat_waktu T9_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -180,17 +181,17 @@ call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
 echo === 8/11 Uji SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu T7_AWAL
 echo === 9/11 Uji SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --non-wajib
 call :catat_waktu T7_AKHIR
 echo.
 call :catat_waktu T8_AWAL
 echo === 10/11 Uji SPX KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --non-wajib
 call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -232,17 +233,17 @@ call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
 echo === 6/9 Uji SPX - J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --non-wajib
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
 echo === 7/9 Uji SPX - J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --non-wajib
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
 echo === 8/9 Uji SPX - J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu TF_AWAL

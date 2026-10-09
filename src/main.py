@@ -229,6 +229,33 @@ def jam_malam(sekarang: datetime | None = None) -> bool:
     return jam >= 16 or jam < 7
 
 
+TEKS_NON_WAJIB = "NON WAJIB KELUAR"
+
+
+def menu_mulai_setelah_16(mulai: datetime) -> bool:
+    """True kalau menu dimulai 16.01 atau lebih (16.00 pas masih wajib keluar). Dihitung dari
+    waktu MENU dimulai (bukan waktu tiap picklist), supaya satu TIPE tidak berisi sebagian
+    picklist bertulisan dan sebagian tidak walau langkah terakhirnya selesai lewat 17.00."""
+    return mulai.hour * 60 + mulai.minute > 16 * 60
+
+
+def waktu_menu_mulai() -> datetime:
+    """Waktu menu mulai dari env WAKTU_MENU_MULAI (epoch detik; diisi sekali per menu oleh
+    proses-harian.bat / jalankan_harian.py); kosong atau tidak valid = sekarang."""
+    try:
+        return datetime.fromtimestamp(float(os.environ["WAKTU_MENU_MULAI"]))
+    except (KeyError, ValueError, OverflowError, OSError):
+        return datetime.now()
+
+
+def atur_catatan_non_wajib(args) -> bool:
+    """Aktifkan tulisan NON WAJIB KELUAR di kolom U PICKLIST.xlsx untuk proses ini kalau
+    --non-wajib, atau --non-wajib-sore dan menunya dimulai setelah 16.00."""
+    aktif = bool(args.non_wajib or (args.non_wajib_sore and menu_mulai_setelah_16(waktu_menu_mulai())))
+    rekap_master_excel.atur_catatan_proses(TEKS_NON_WAJIB if aktif else "")
+    return aktif
+
+
 def jam_tanpa_iresis(sekarang: datetime | None = None) -> bool:
     """True kalau jam sekarang 20.00-04.59: semua yang terkait IRESIS (unduh faktur/pesanan
     & upload) dilewati di jendela ini. Bisa dipaksa manual lewat `--upload-iresis --paksa`."""
@@ -368,6 +395,15 @@ def _main() -> int:
     ap.add_argument("--lewati-malam", action="store_true",
                     help="dipakai bersama --urgent: lewati (tidak memproses apa pun) kalau "
                         "jam sekarang 16.00-06.59 (jendela malam TIPE 1)")
+    ap.add_argument("--non-wajib", action="store_true",
+                    help="dipakai bersama --label/--reguler: tulis 'NON WAJIB KELUAR' di kolom U "
+                        "PICKLIST.xlsx tiap picklist proses ini (TIPE 2/3 langkah SPX, TIPE 4 "
+                        "langkah SPX-J&T)")
+    ap.add_argument("--non-wajib-sore", action="store_true",
+                    help="seperti --non-wajib, tapi hanya kalau menu mulai dijalankan setelah "
+                        "16.00 (16.01 dst; jam menu dibaca dari env WAKTU_MENU_MULAI, epoch detik, "
+                        "diisi sekali oleh proses-harian.bat/jalankan_harian.py; kosong = sekarang) "
+                        "- dipakai TIPE 1 yang juga berjalan pagi 07.00-12.00 (wajib keluar)")
     ap.add_argument("--reguler", action="store_true",
                     help="hanya buat picklist sisa reguler (TikTok Shop & Shopee, bukan SKU "
                         "spesial) sampai label PDF, tanpa proses SKU spesial "
@@ -486,6 +522,8 @@ def _main() -> int:
     FOLDER_LABEL_SESI = FOLDER_LABEL / args.sesi if args.sesi else folder_label_sesi()
     FOLDER_LABEL_SESI.mkdir(parents=True, exist_ok=True)
     log.info("Folder sesi label: %s", FOLDER_LABEL_SESI)
+    if atur_catatan_non_wajib(args):
+        log.info("Catatan kolom U PICKLIST.xlsx: %s", TEKS_NON_WAJIB)
     try:
         if args.lanjut:
             return lanjut_picklist(log, args)
@@ -786,6 +824,8 @@ def pesan_salah_mode_event(args) -> str | None:
             return "--event dipakai bersama --label atau --reguler"
         if args.kurir not in KURIR_MODE_EVENT:
             return "--event butuh --kurir " + " atau ".join(KURIR_MODE_EVENT)
+    if (args.non_wajib or args.non_wajib_sore) and not (args.label or args.reguler):
+        return "--non-wajib/--non-wajib-sore dipakai bersama --label atau --reguler"
     if args.pagi and not args.spx_standard:
         return "--pagi hanya dipakai bersama --spx-standard"
     if args.spx_standard and (args.label or args.reguler or args.event):

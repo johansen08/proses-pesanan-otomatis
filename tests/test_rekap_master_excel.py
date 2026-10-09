@@ -87,6 +87,25 @@ def uji_catat_buat_file_sesi_dari_template_rumus_dan_format_ikut():
     print("  catat(): file sesi dari template, nilai F/G/H/L/M/N/T/U terisi, rumus & format disalin")
 
 
+def uji_catatan_non_wajib_keluar_kolom_u():
+    _reset()
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        rme.atur_catatan_proses("NON WAJIB KELUAR")
+        try:
+            rme.catat(folder, _baris(157601))
+            rme.catat(folder, _baris(157602, **{"Tanpa Resi": ["SO1", "SO2"]}), [157603])
+        finally:
+            rme.atur_catatan_proses("")
+        rme.catat(folder, _baris(157604, **{"Tanpa Resi": ["SO9"]}))
+        _, ws = _muat(folder)
+        assert ws.cell(6, 21).value == "NON WAJIB KELUAR"
+        assert ws.cell(7, 12).value == 157603 and ws.cell(7, 21).value is None     # PICKLIST CANCEL tanpa catatan
+        assert ws.cell(8, 21).value == "NON WAJIB KELUAR | SO1, SO2"
+        assert ws.cell(9, 21).value == "SO9"                                       # setelah dimatikan
+    print("  kolom U: NON WAJIB KELUAR (digabung ' | ' dgn tanpa resi), tanpa awalan setelah dimatikan")
+
+
 def uji_minus_lebih_dari_nol_sel_o_kuning():
     _reset()
     with tempfile.TemporaryDirectory() as tmp:

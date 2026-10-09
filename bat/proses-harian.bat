@@ -48,6 +48,7 @@ set /p "yakin=Lanjutkan TIPE 1? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 call :catat_waktu TR_AWAL
+set "WAKTU_MENU_MULAI=%TR_AWAL%"
 echo === 1/8 RECHECK STOK ===
 ".venv\Scripts\python.exe" src\main.py --recheck-stok --jalankan
 call :catat_waktu TR_AKHIR
@@ -69,17 +70,17 @@ call :catat_waktu T2_AKHIR
 echo.
 call :catat_waktu T3_AWAL
 echo === 5/8 SPX - J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan --non-wajib-sore
 call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
 echo === 6/8 SPX - J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan --non-wajib-sore
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
 echo === 7/8 SPX - J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan --non-wajib-sore
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -148,17 +149,17 @@ call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu T7_AWAL
 echo === 9/12 SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
 call :catat_waktu T7_AKHIR
 echo.
 call :catat_waktu T8_AWAL
 echo === 10/12 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
 call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu T9_AWAL
 echo === 11/12 SPX KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan --non-wajib
 call :catat_waktu T9_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -222,17 +223,17 @@ call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
 echo === 8/11 SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu T7_AWAL
 echo === 9/11 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
 call :catat_waktu T7_AKHIR
 echo.
 call :catat_waktu T8_AWAL
 echo === 10/11 SPX KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan --non-wajib
 call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu TF_AWAL
@@ -287,17 +288,17 @@ call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
 echo === 6/9 SPX - J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan
+".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan --non-wajib
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
 echo === 7/9 SPX - J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan --non-wajib
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
 echo === 8/9 SPX - J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu TF_AWAL

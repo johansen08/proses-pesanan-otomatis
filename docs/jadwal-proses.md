@@ -280,6 +280,27 @@ urutan ini).
 
 Detail masing-masing alur & opsi `--kurir`: lihat [README.md](../README.md).
 
+### Tulisan "NON WAJIB KELUAR" (kolom U PICKLIST.xlsx)
+
+**Revisi 2026-10-09**: picklist yang bukan target wajib keluar hari itu diberi tulisan `NON WAJIB KELUAR`
+di kolom U `PICKLIST.xlsx` (digabung dengan daftar pesanan tanpa resi: `NON WAJIB KELUAR | SO1, SO2`).
+Lewat flag `main.py --non-wajib` / `--non-wajib-sore` pada langkah `--label`/`--reguler`:
+
+| Menu | Langkah bertulisan | Flag |
+|---|---|---|
+| TIPE 2, TIPE 3 | SPX Spesial, SPX 1 Qty (Satuan), SPX Kombinasi | `--non-wajib` |
+| TIPE 4 | SPX-J&T Spesial, 1 Qty, Kombinasi | `--non-wajib` |
+| TIPE 1 | SPX-J&T Spesial, 1 Qty, Kombinasi — **hanya kalau menu dimulai 16.01 atau lebih** | `--non-wajib-sore` |
+
+TIPE 1 pagi (07.00-12.00) dan 16.00 pas tetap wajib keluar (tanpa tulisan). Jam ditentukan dari waktu
+**menu dimulai** (env `WAKTU_MENU_MULAI`, diisi sekali per menu oleh `proses-harian.bat` /
+`jalankan_harian.py`), bukan per picklist, jadi satu TIPE tidak berisi picklist bertulisan dan tidak
+bertulisan sekaligus. Menu 1 yang dimulai setelah 17.00 tetap bertulisan. Tidak berlaku di
+`proses-malam.bat`, mode event (`proses-event.bat`), KUSTOM, Urgent, Sampel, SPX Resi Pagi, J&T Resi Siang
+(`MALAM`/event belum punya aturan wajib-keluar sendiri). Implementasi: `atur_catatan_non_wajib()` di
+`src/main.py`, `atur_catatan_proses()` di `src/rekap_master_excel.py`, `flag_non_wajib()` di
+`src/jalankan_harian.py`.
+
 ### Penjaga jam
 
 TIPE 1-4 diberi peringatan Y/N kalau dipilih di luar jamnya (`dalam_jam_menu("1".."4")`, sama dengan

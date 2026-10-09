@@ -93,7 +93,7 @@ def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
     assert palsu.flag_main() == [
         ["--recheck-stok", "--jalankan"],
         ["--urgent", "--channel", "lazada", "--jalankan", "--lewati-malam"],   # TIPE 1 -> lewati malam
-        ["--label", "--tanpa-reguler", "--jalankan"],
+        ["--label", "--tanpa-reguler", "--jalankan", "--non-wajib-sore"],      # TIPE 1 -> tulisan non wajib (sore)
         ["--upload-iresis", "--jalankan"]], palsu.flag_main()
     assert all(env["LABEL_SESI_DIR"] == "2026-10-08/7" for _, env in palsu.panggilan)
     rekap = palsu.panggilan[-1][0]
@@ -111,6 +111,36 @@ def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
         assert palsu.flag_main() == [["--urgent", "--channel", "gtl-sicepat", "--jalankan"]], (judul, palsu.flag_main())
     print("  urutan = KATALOG, tiap langkah 1 proses main.py --jalankan, --lewati-malam hanya TIPE 1, "
           "LABEL_SESI_DIR & rekap waktu benar")
+
+
+def uji_non_wajib_keluar():
+    """TIPE 2/3: hanya 3 langkah SPX; TIPE 4: 3 langkah SPX-J&T (--non-wajib); TIPE 1: 3 langkah
+    SPX-J&T dengan --non-wajib-sore; MALAM/KUSTOM/EVENT tidak. WAKTU_MENU_MULAI selalu diisi."""
+    semua = [n for n, _ in jh.KATALOG if n != jh.LANGKAH_IRESIS]
+    harapan = {
+        "TIPE 1": ("--non-wajib-sore", jh.NON_WAJIB_SPX_GABUNG),
+        "TIPE 2": ("--non-wajib", jh.NON_WAJIB_SPX_DIPISAH),
+        "TIPE 3": ("--non-wajib", jh.NON_WAJIB_SPX_DIPISAH),
+        "TIPE 4": ("--non-wajib", jh.NON_WAJIB_SPX_GABUNG),
+        "MALAM": (None, set()), "KUSTOM": (None, set())}
+    for judul, (flag_nw, nama_nw) in harapan.items():
+        _reset()
+        palsu = Palsu()
+        with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
+            jh.mulai(semua, judul)
+            _tunggu()
+        urut = [n for n in semua]
+        for (argumen, env), nama in zip([p for p in palsu.panggilan if Path(p[0][1]).name == "main.py"], urut):
+            ada = [a for a in argumen if a in ("--non-wajib", "--non-wajib-sore")]
+            assert ada == ([flag_nw] if nama in nama_nw else []), (judul, nama, argumen)
+            assert float(env["WAKTU_MENU_MULAI"]) > 0
+    _reset()
+    palsu = Palsu()
+    with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
+        jh.mulai(["SPX Hemat Spesial", "J&T Spesial"], "EVENT - TIPE 2")
+        _tunggu()
+    assert not any("--non-wajib" in a for a, _ in palsu.panggilan)
+    print("  NON WAJIB KELUAR: flag hanya di langkah SPX TIPE 2/3, SPX-J&T TIPE 4 (+sore TIPE 1), tidak di MALAM/KUSTOM/EVENT")
 
 
 def uji_menu_event():
@@ -219,7 +249,7 @@ def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
         for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
             cocok = pola.search(baris)
             if cocok:
-                token = [t for t in shlex.split(cocok.group(1), posix=False) if t not in ("--jalankan", "--lewati-malam")]
+                token = [t for t in shlex.split(cocok.group(1), posix=False) if t not in ("--jalankan", "--lewati-malam", "--non-wajib", "--non-wajib-sore")]
                 himpunan_bat.add(frozenset(token))
     for nama, flag in [*jh.KATALOG, *jh.KATALOG_EVENT]:
         assert frozenset(flag) in himpunan_bat, f"{nama}: {flag} tidak ada di .bat"
