@@ -112,6 +112,7 @@ import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 import rekap_master_excel
+import serah_terima
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
                          lantai_per_pesanan, rak_dominan_per_sku, resi_kandidat,
@@ -299,15 +300,42 @@ def atur_operator(args) -> int:
     return 0
 
 
+def cek_sinkron() -> int:
+    """--cek-sinkron: status kunci serah-terima + file konflik sinkron. 1 kalau ada masalah."""
+    print(serah_terima.status())
+    d = serah_terima._baca()
+    dipegang_lain = (serah_terima._aktif(d, time.time())
+                     and d.get("perangkat") != serah_terima.nama_perangkat())
+    konflik = serah_terima.laporan_konflik(ROOT)
+    print(chr(10).join(konflik) if konflik else "Tidak ada file konflik sinkron.")
+    return 1 if konflik or dipegang_lain else 0
+
+
+def ambil_kunci(log: logging.Logger, args) -> str | None:
+    """Ambil kunci serah-terima untuk proses yang mengubah data (--jalankan/--lanjut) dan cetak
+    peringatan konflik sinkron. Mode uji tidak mengambil kunci. Return pesan galat kalau ditolak."""
+    for baris in serah_terima.laporan_konflik(ROOT):
+        log.warning(baris)
+    if not (args.jalankan or args.lanjut):
+        return None
+    galat, peringatan = serah_terima.ambil(" ".join(sys.argv[1:])[:80],
+                                           abaikan=args.abaikan_kunci)
+    for p in peringatan:
+        log.warning(p)
+    return galat
+
+
 def main() -> int:
     """Jalankan _main(), lalu cetak peringatan picklist terlompat/batal & pesanan tanpa resi
     PALING AKHIR supaya tidak tenggelam di log yang panjang."""
     peringatan_picklist.atur_folder(FOLDER_LOG)
     peringatan_resi.atur_folder(FOLDER_LOG)
     peringatan_gagal.atur_folder(FOLDER_LOG)
+    serah_terima.atur_folder(FOLDER_LOG)
     try:
         return _main()
     finally:
+        serah_terima.lepas()
         import proses_label
 
         proses_label.tutup_riwayat()
@@ -401,6 +429,13 @@ def _main() -> int:
                         "di kolom F PICKLIST.xlsx (lihat operator_aktif.py)")
     ap.add_argument("--tambah-operator", metavar="NAMA",
                     help="tambah NAMA ke daftar operator (tidak mengganti operator aktif) lalu selesai")
+    ap.add_argument("--cek-sinkron", action="store_true",
+                    help="tampilkan status kunci serah-terima antar perangkat & cek file konflik "
+                        "sinkron (OneDrive/Google Drive/Syncthing) lalu selesai; exit 1 kalau "
+                        "ada konflik atau kunci dipegang perangkat lain (lihat serah_terima.py)")
+    ap.add_argument("--abaikan-kunci", action="store_true",
+                    help="ambil alih kunci serah-terima yang dipegang perangkat lain (hanya kalau "
+                        "yakin perangkat itu sudah berhenti)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -427,7 +462,12 @@ def _main() -> int:
         return atur_operator(args)
 
     muat_env(ROOT / ".env")
+    if args.cek_sinkron:
+        return cek_sinkron()
     log = siapkan_log()
+    if (galat := ambil_kunci(log, args)):
+        log.error(galat)
+        return 1
     if args.upload_iresis and not args.paksa and jam_tanpa_iresis():
         log.info("IRESIS DILEWATI: jam %s masuk jendela 20.00-05.00 (unduh & upload faktur/pesanan "
                  "tidak dijalankan). Paksa manual: --upload-iresis --jalankan --paksa.",

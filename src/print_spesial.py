@@ -112,6 +112,7 @@ import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import serah_terima
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
                            SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
                            SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
@@ -821,6 +822,9 @@ def main() -> int:
     ap.add_argument("--printer", metavar="NAMA",
                     help="Nama printer persis seperti di Windows (lihat daftar saat pilih printer); "
                          "melewati tanya pilih printer. Dipakai UI desktop (server_ui.py)")
+    ap.add_argument("--abaikan-kunci", action="store_true",
+                    help="ambil alih kunci serah-terima yang dipegang perangkat lain (hanya kalau "
+                         "yakin perangkat itu sudah berhenti; lihat serah_terima.py)")
     args = ap.parse_args()
     per_file = bool(args.file or args.file_dari)
     if per_file and (args.jenis or args.paket or args.folder or args.semua_sesi or args.ulang):
@@ -832,6 +836,21 @@ def main() -> int:
         ap.error("--hari minimal 1")
 
     siapkan_log()
+    serah_terima.atur_folder(FOLDER_LOG)
+    galat, peringatan = serah_terima.ambil("cetak " + " ".join(sys.argv[1:])[:70],
+                                           abaikan=args.abaikan_kunci)
+    for p in peringatan:
+        log.warning(p)
+    if galat:
+        log.error(galat)
+        return 1
+    try:
+        return _cetak(args, per_file)
+    finally:
+        serah_terima.lepas()
+
+
+def _cetak(args, per_file: bool) -> int:
     try:
         if args.ulang:
             file_pdf = baca_daftar_ulang(args.ulang)

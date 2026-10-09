@@ -154,6 +154,16 @@ project secara umum, root tidak boleh berisi file `.py`):
   berikutnya. Diatur lewat dropdown "Operator" di header UI (`/api/operator`; ganti operator DITOLAK 409
   selama proses harian/download ulang berjalan) atau CLI `main.py --operator [NAMA]` /
   `--tambah-operator NAMA`. Tes: `tests/test_operator_aktif.py`.
+- `src/serah_terima.py` — untuk 2 perangkat bergantian memakai folder project yang disinkronkan
+  (PC kantor siang, laptop malam; OneDrive/Google Drive/Syncthing). Kunci `logs/serah_terima.json`:
+  `main.py --jalankan/--lanjut` dan `print_spesial.py` mengambilnya di awal & melepasnya di akhir;
+  ditolak (exit 1) kalau dipegang PERANGKAT LAIN yang masih segar (TTL 3 jam; basi = diambil alih),
+  `--abaikan-kunci` untuk memaksa. Proses di perangkat sama boleh paralel (daftar PID). Perangkat lain
+  yang selesai <10 menit lalu = peringatan "tunggu sinkron". Nama perangkat = `PERANGKAT` di `.env`
+  (kalau kosong: nama komputer). Juga memeriksa file salinan konflik sinkron (`.sync-conflict-`,
+  `conflicted copy`, `nama (1).ext`, `nama-NAMAPC.ext`) di logs/, data/, sesi 3 hari terakhir:
+  peringatan di awal proses, atau `main.py --cek-sinkron` (exit 1 kalau ada konflik/kunci dipegang
+  lain). `.venv/`, `.env`, `data/operator.json` jangan disinkronkan. Tes: `tests/test_serah_terima.py`.
 - `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat
