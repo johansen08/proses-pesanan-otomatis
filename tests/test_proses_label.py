@@ -2210,6 +2210,56 @@ def uji_spx_hemat_pagi_folder_terpisah_dan_batas_jam_otomatis():
           "kurir sama dgn spx-hemat; batas jam 12:00 otomatis hanya untuknya")
 
 
+def uji_proses_channel_batch_picklist_serial_tunggu_paralel():
+    import time
+
+    asli = (pl.buat_picklist_channel, pl.lanjutkan_picklist, pl.catat_riwayat,
+            pl.rekap_master_excel.catat, pl.peringatan_picklist.ambil_nomor_hilang,
+            pl.peringatan_gagal.catat_terhenti)
+    urutan_buat, aktif, puncak, dicatat = [], [0], [0], []
+    kunci = threading.Lock()
+
+    def buat(k, ids):
+        urutan_buat.append(ids[0])
+        return ids[0], f"PICK-{ids[0]}", ids
+
+    def lanjut(k, pid, pno, jumlah, sku, folder, nama_file=None, tag=None, subfolder=None):
+        with kunci:
+            aktif[0] += 1
+            puncak[0] = max(puncak[0], aktif[0])
+        time.sleep(0.3)
+        with kunci:
+            aktif[0] -= 1
+        if pid == 2:
+            raise pl.ProsesError("macet")
+        return {"Waktu": "x", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": "f.pdf", "Catatan": ""}
+
+    pl.buat_picklist_channel, pl.lanjutkan_picklist = buat, lanjut
+    pl.catat_riwayat = lambda f, b: dicatat.append(b["No Picklist"])
+    pl.rekap_master_excel.catat = lambda *a, **kw: None
+    pl.peringatan_picklist.ambil_nomor_hilang = lambda: []
+    pl.peringatan_gagal.catat_terhenti = lambda *a, **kw: None
+    try:
+        sub = {"A": [{"salesorder_id": 1}], "B": [{"salesorder_id": 2}],
+               "C": [{"salesorder_id": 3}]}
+        t0 = time.monotonic()
+        hasil = pl._proses_subkelompok(None, "X", "LBL", sub, Path("riwayat.xlsx"),
+                                       Path("sesi"), kurir=None)
+        lama = time.monotonic() - t0
+    finally:
+        (pl.buat_picklist_channel, pl.lanjutkan_picklist, pl.catat_riwayat,
+         pl.rekap_master_excel.catat, pl.peringatan_picklist.ambil_nomor_hilang,
+         pl.peringatan_gagal.catat_terhenti) = asli
+    assert urutan_buat == [1, 2, 3], urutan_buat               # picklist dibuat berurutan
+    assert puncak[0] == 3 and lama < 0.8, (puncak, lama)       # 3 picklist menunggu BERSAMAAN
+    assert dicatat == ["PICK-1", "PICK-2", "PICK-3"], dicatat  # pencatatan urut, di thread utama
+    assert "TERHENTI: macet" in hasil[1]["Catatan"]
+    assert not hasil[0]["Catatan"] and not hasil[2]["Catatan"]  # kegagalan 1 tidak menular
+    print("  _proses_subkelompok: picklist dibuat serial, langkah 3-6 semua batch/sub-kelompok "
+          "paralel; 1 TERHENTI tidak menghentikan yang lain")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":

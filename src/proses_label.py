@@ -707,25 +707,27 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
                      _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
 
 
-def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
-                          file_riwayat: Path, folder_label: Path,
-                          label_file: str | None = None,
-                          subfolder: str | None = None) -> list[dict]:
-    """Pecah `pesanan` jadi beberapa batch (maks MAKS_PESANAN_PICKLIST), buat 1 picklist per
-    batch sampai label PDF (buat picklist -> selesaikan picking -> minta resi -> unduh label).
-    `label` dipakai lanjutkan_picklist() cuma sebagai penanda (bukan SKU asli), jadi nama file
-    label & kolom SKU di riwayat otomatis jadi mis. PICK-000xxxxxx_LAZADA_<tanggal>_<jam>.pdf.
-    `label_file`: varian `label` yang aman dipakai di nama file (mis. tanpa "&"); default sama
-    dengan `label`. `subfolder`: lihat parameter `subfolder` di lanjutkan_picklist() (mis.
-    SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI) - TIDAK memengaruhi nama file,
-    hanya lokasi penyimpanan PDF-nya. Dipakai proses_urgent() & proses_reguler(); kegagalan
-    1 batch tidak menghentikan yang lain."""
-    hasil = []
+class _AntreanTugas(list):
+    """list tugas picklist yang sudah dibuat + `galat` (error yang menghentikan pembuatan
+    picklist berikutnya di kelompok yang sama, None kalau lancar)."""
+    galat: Exception | None = None
+
+
+def _antre_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
+                         label_file: str | None = None,
+                         subfolder: str | None = None) -> _AntreanTugas:
+    """FASE 1 (serial): pecah `pesanan` jadi batch (maks MAKS_PESANAN_PICKLIST) dan buat 1
+    picklist per batch SAJA (langkah 1-2) - harus berurutan karena deteksi picklist terlompat
+    (peringatan_picklist.ambil_nomor_hilang()) butuh urutan pasti nomor yang baru dibuat. Hasilnya
+    antrean tugas untuk _jalankan_antrean(). Kalau pembuatan picklist batch ke-n melempar error,
+    tugas batch sebelumnya TETAP dikembalikan (picklist-nya sudah ada, harus diselesaikan) dan
+    error-nya disimpan di atribut `galat` - lihat _proses_channel_batch()."""
+    tugas = _AntreanTugas()
     log.info("=== %s", nama)
     batch = bagi_batch([o["salesorder_id"] for o in pesanan])
     if not batch:
         log.info("  Tidak ada pesanan Siap Proses")
-        return hasil
+        return tugas
     log.info("  %d pesanan -> %d picklist", len(pesanan), len(batch))
     for n, ids in enumerate(batch, 1):
         mulai = time.monotonic()
@@ -734,23 +736,74 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
         except Lewati as e:
             log.info("  [%d/%d] Dilewati: %s", n, len(batch), e)
             continue
+        except Exception as e:      # noqa: BLE001 - tugas yang sudah dibuat tetap dijalankan
+            tugas.galat = e
+            return tugas
         nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
-        log.info("  [%d/%d] Picklist %s dibuat, %d pesanan", n, len(batch), pno, len(ids_pakai))
+        log.info("  [%d/%d] Picklist %s dibuat, %d pesanan - lanjut diproses paralel",
+                 n, len(batch), pno, len(ids_pakai))
+        tugas.append({"mulai": mulai, "pid": pid, "pno": pno, "jumlah": len(ids_pakai),
+                      "label": label, "label_file": label_file, "subfolder": subfolder,
+                      "nomor_terlompat": nomor_terlompat})
+    return tugas
+
+
+def _jalankan_antrean(k: Klien, tugas: list[dict], file_riwayat: Path,
+                      folder_label: Path) -> list[dict]:
+    """FASE 2 (paralel): langkah 3-6 (tunggu picking, minta resi, unduh PDF - lihat
+    lanjutkan_picklist()) semua `tugas` BERSAMAAN lewat ThreadPoolExecutor (MAKS_WORKER_PARALEL),
+    karena di situlah waktu TUNGGU terbanyak - sama dengan proses() untuk SKU spesial. Pencatatan
+    riwayat/PICKLIST.xlsx tetap di thread utama, berurutan sesuai urutan tugas. Hasil urut sama
+    dengan `tugas`. Kegagalan 1 tugas tidak menghentikan yang lain."""
+    def _lanjutkan(t: dict) -> dict:
         try:
-            baris = lanjutkan_picklist(k, pid, pno, len(ids_pakai), label, folder_label,
-                                       nama_file=label_file, subfolder=subfolder)
-        except Exception as e:     # noqa: BLE001 - batch lain tetap lanjut
-            log.exception("  TERHENTI di %s: %s", pno, e)
-            lanjut = perintah_lanjut(pno, folder_label, label_file or label, subfolder=subfolder)
-            baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
-                     "No Picklist": pno, "Total Pesanan": len(ids_pakai),
+            baris = lanjutkan_picklist(k, t["pid"], t["pno"], t["jumlah"], t["label"],
+                                       folder_label, nama_file=t["label_file"],
+                                       subfolder=t["subfolder"])
+        except Exception as e:     # noqa: BLE001 - tugas lain tetap lanjut
+            log.exception("  TERHENTI di %s: %s", t["pno"], e)
+            lanjut = perintah_lanjut(t["pno"], folder_label, t["label_file"] or t["label"],
+                                     subfolder=t["subfolder"])
+            baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": t["label"],
+                     "No Picklist": t["pno"], "Total Pesanan": t["jumlah"],
                      "Catatan": f"TERHENTI: {e}. Lanjutkan: {lanjut}"}
-            peringatan_gagal.catat_terhenti(pno, label_file or label, folder_label, str(e),
-                                            subfolder=subfolder)
-        baris["Durasi"] = durasi(time.monotonic() - mulai)
-        catat_riwayat(file_riwayat, baris)
-        rekap_master_excel.catat(folder_label, baris, nomor_terlompat)
-        hasil.append(baris)
+            peringatan_gagal.catat_terhenti(t["pno"], t["label_file"] or t["label"],
+                                            folder_label, str(e), subfolder=t["subfolder"])
+        return baris
+
+    hasil = []
+    if not tugas:
+        return hasil
+    with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(tugas))) as ex:
+        for t, baris in zip(tugas, ex.map(_lanjutkan, tugas)):
+            baris["Durasi"] = durasi(time.monotonic() - t["mulai"])
+            catat_riwayat(file_riwayat, baris)
+            rekap_master_excel.catat(folder_label, baris, t["nomor_terlompat"])
+            log.info("  Selesai %s dalam %s", baris.get("No Picklist"), baris["Durasi"])
+            hasil.append(baris)
+    return hasil
+
+
+def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
+                          file_riwayat: Path, folder_label: Path,
+                          label_file: str | None = None,
+                          subfolder: str | None = None) -> list[dict]:
+    """Pecah `pesanan` jadi beberapa batch (maks MAKS_PESANAN_PICKLIST), buat 1 picklist per
+    batch sampai label PDF (buat picklist -> selesaikan picking -> minta resi -> unduh label).
+    Picklist dibuat berurutan dulu (_antre_channel_batch()), lalu langkah 3-6 semua batch
+    dijalankan paralel (_jalankan_antrean()) - tidak lagi menunggu batch sebelumnya sampai PDF.
+    `label` dipakai lanjutkan_picklist() cuma sebagai penanda (bukan SKU asli), jadi nama file
+    label & kolom SKU di riwayat otomatis jadi mis. PICK-000xxxxxx_LAZADA_<tanggal>_<jam>.pdf.
+    `label_file`: varian `label` yang aman dipakai di nama file (mis. tanpa "&"); default sama
+    dengan `label`. `subfolder`: lihat parameter `subfolder` di lanjutkan_picklist() (mis.
+    SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI) - TIDAK memengaruhi nama file,
+    hanya lokasi penyimpanan PDF-nya. Dipakai proses_urgent() & proses_reguler(); kegagalan
+    1 batch tidak menghentikan yang lain. Error pembuatan picklist (bukan Lewati) dilempar
+    SETELAH tugas yang sudah dibuat selesai dijalankan."""
+    tugas = _antre_channel_batch(k, nama, label, pesanan, label_file, subfolder)
+    hasil = _jalankan_antrean(k, tugas, file_riwayat, folder_label)
+    if tugas.galat:
+        raise tugas.galat
     return hasil
 
 
@@ -1194,21 +1247,25 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
     sendiri sudah jelas tanpa awalan). `subfolder`: diteruskan apa adanya ke
     _proses_channel_batch() (lihat lanjutkan_picklist()) - sama untuk semua sub-kelompok di
     sini (grup rak/lantai TIDAK ikut memecah subfolder, hanya nama file/label)."""
-    hasil = []
+    antrean, gagal = [], []     # gagal: baris GAGAL dari pembuatan picklist sub-kelompok
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
         tampil = _nama_kurir(nama_x, kurir)
         try:
-            hasil += _proses_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
-                                           _label_kurir(label_x, kurir), pesanan,
-                                           file_riwayat, folder_label,
-                                           label_file=_label_kurir_file(label_x, kurir),
-                                           subfolder=subfolder)
+            tugas = _antre_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
+                                         _label_kurir(label_x, kurir), pesanan,
+                                         label_file=_label_kurir_file(label_x, kurir),
+                                         subfolder=subfolder)
+            antrean += tugas
+            if tugas.galat:
+                raise tugas.galat
         except Exception as e:      # noqa: BLE001 - sub-kelompok lain tetap lanjut
             log.exception("  GAGAL %s %s: %s", prefix.lower(), nama_x, e)
-            hasil.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
+            gagal.append({"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"),
                           "SKU": _label_kurir(label_x, kurir), "Catatan": f"GAGAL: {e}"})
-    return hasil
+    # Semua picklist semua sub-kelompok dibuat dulu, lalu langkah 3-6 SEMUANYA paralel
+    # (dulu tiap sub-kelompok/batch menunggu PDF sebelumnya selesai).
+    return _jalankan_antrean(k, antrean, file_riwayat, folder_label) + gagal
 
 
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
