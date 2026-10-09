@@ -111,6 +111,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   `tests/test_jalankan_harian.py`: tiap flag diterima argparse `main.py` & punya padanan di `.bat`) —
   ubah langkah/flag di `.bat` berarti ubah `KATALOG` juga (dan nama langkah di UI). Jangan pernah
   menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
+  Menu Event di UI memakai judul `EVENT - TIPE 1..4`/`EVENT - MALAM`/`EVENT - KUSTOM` dan `KATALOG_EVENT`
+  (padanan `bat\proses-event.bat`, flag `--event`; TIPE 2 = pilihan 2 .bat, TIPE 1/3/4 = pilihan 1/sesi biasa;
+  MALAM menolak IRESIS). `KATALOG_EVENT` juga dikunci `tests/test_jalankan_harian.py` terhadap .bat event.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga

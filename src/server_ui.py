@@ -18,6 +18,7 @@ API (JSON):
   (printer BERBEDA boleh mencetak bersamaan; printer yang sama antre -> 409)
   GET  /api/harian/info          jam cocok per TIPE, peringatan hari ini, apakah ada job berjalan
   POST /api/harian/jalankan      {"langkah": [nama...], "judul": "TIPE 1"} -> {"job": id}
+                                 (judul "EVENT - TIPE 1".."EVENT - MALAM"/"EVENT - KUSTOM" = menu Event)
                                  (SUNGGUHAN: lihat jalankan_harian.py; 409 kalau masih berjalan)
   GET  /api/harian/job?dari=N    status per langkah + baris log ke-N dst
   POST /api/harian/hentikan      matikan langkah berjalan & batalkan sisanya
@@ -349,7 +350,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Server lokal UI desktop (menu Harian & Cetak).")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--buka", action="store_true", help="Buka UI di browser setelah server jalan")
-    ap.add_argument("--menu", choices=["harian", "cetak"], default="harian",
+    ap.add_argument("--menu", choices=["harian", "event", "cetak"], default="harian",
                     help="Menu yang dibuka pertama oleh --buka (default harian)")
     args = ap.parse_args()
     url = f"http://127.0.0.1:{args.port}/#{args.menu}"

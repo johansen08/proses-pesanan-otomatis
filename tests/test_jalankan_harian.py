@@ -113,6 +113,45 @@ def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
           "LABEL_SESI_DIR & rekap waktu benar")
 
 
+def uji_menu_event():
+    """Judul EVENT memakai KATALOG_EVENT (flag --event), urutan mengikuti katalog, --lewati-malam
+    seperti .bat (TIPE 1/3/4 ya, TIPE 2 & MALAM tidak), MALAM menolak IRESIS, katalog tidak tertukar."""
+    _reset()
+    palsu = Palsu()
+    with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
+        jh.mulai(["SPX Standard (per lantai)", "J&T Spesial", "SPX Hemat Pagi Kombinasi", "Urgent Lazada"], "EVENT - TIPE 2")
+        j = _tunggu()
+    assert j["status"] == "selesai", j
+    assert palsu.flag_main() == [
+        ["--urgent", "--channel", "lazada", "--jalankan"],            # TIPE 2: tanpa --lewati-malam
+        ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "kombinasi", "--jalankan"],
+        ["--label", "--event", "--kurir", "jnt", "--tanpa-reguler", "--jalankan"],
+        ["--spx-standard", "--jalankan"]], palsu.flag_main()
+    rekap = palsu.panggilan[-1][0]
+    assert rekap[2] == "EVENT - TIPE 2", rekap
+
+    _reset()
+    palsu = Palsu()
+    with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
+        jh.mulai(["Urgent GTL & SiCepat"], "EVENT - TIPE 3")
+        _tunggu()
+    assert palsu.flag_main() == [["--urgent", "--channel", "gtl-sicepat", "--jalankan", "--lewati-malam"]]
+
+    _reset()
+    for langkah, judul in ((["SPX Spesial"], "EVENT - TIPE 1"),               # nama menu harian
+                           (["SPX Hemat Spesial"], "TIPE 1"),                    # nama menu event
+                           (["Upload faktur & pesanan ke IRESIS"], "EVENT - MALAM"),
+                           (["Recheck stok"], "EVENT - TIPE 9")):
+        try:
+            jh.mulai(langkah, judul)
+        except jh.HarianError:
+            pass
+        else:
+            raise AssertionError(f"harus ditolak: {langkah!r} {judul!r}")
+    assert jh._job is None
+    print("  menu EVENT: flag --event, urutan katalog, --lewati-malam sesuai .bat, katalog tidak tertukar, MALAM tanpa IRESIS")
+
+
 def uji_langkah_gagal_tidak_menghentikan_berikutnya():
     _reset()
     palsu = Palsu(gagal=["--sampel"])
@@ -174,15 +213,15 @@ def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
     class Berhenti(Exception):
         pass
 
-    pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
+    pola = re.compile(r'"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
     himpunan_bat = set()
-    for nama in ("proses-harian.bat", "proses-malam.bat"):
+    for nama in ("proses-harian.bat", "proses-malam.bat", "proses-event.bat"):
         for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
-            cocok = pola.match(baris)
+            cocok = pola.search(baris)
             if cocok:
                 token = [t for t in shlex.split(cocok.group(1), posix=False) if t not in ("--jalankan", "--lewati-malam")]
                 himpunan_bat.add(frozenset(token))
-    for nama, flag in jh.KATALOG:
+    for nama, flag in [*jh.KATALOG, *jh.KATALOG_EVENT]:
         assert frozenset(flag) in himpunan_bat, f"{nama}: {flag} tidak ada di .bat"
         argumen = [*flag, "--jalankan"] + (["--lewati-malam"] if flag[:1] == ["--urgent"] else [])
         with mock.patch.object(sys, "argv", ["main.py", *argumen]),                 mock.patch.object(m, "muat_env", side_effect=Berhenti):
@@ -192,7 +231,7 @@ def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
                 pass
             except SystemExit as e:
                 raise AssertionError(f"{nama}: argparse menolak {argumen} (exit {e.code})")
-    print(f"  {len(jh.KATALOG)} langkah KATALOG: diterima argparse main.py & ada padanannya di .bat")
+    print(f"  {len(jh.KATALOG)}+{len(jh.KATALOG_EVENT)} langkah KATALOG/KATALOG_EVENT: diterima argparse main.py & ada padanannya di .bat")
 
 
 def uji_info_tidak_menggandakan_picklist_terhenti():

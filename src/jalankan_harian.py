@@ -10,7 +10,9 @@ Aturan yang SAMA dengan .bat:
     per langkah dan peringatan dari logs/ ikut tampil di rekap.
   - Urgent memakai `--lewati-malam` hanya untuk judul "TIPE 1" (dan "KUSTOM"), tidak untuk
     TIPE 2-4 dan MALAM - sama seperti proses-harian.bat / proses-malam.bat.
-Urutan langkah SELALU mengikuti KATALOG (bukan urutan kiriman UI).
+  - Judul "EVENT - ..." memakai KATALOG_EVENT (padanan proses-event.bat, J&T/SPX Hemat/SPX
+    Standard dipisah seharian); EVENT - TIPE 2 = pilihan 2 .bat, TIPE 1/3/4 = pilihan 1 (sesi biasa).
+Urutan langkah SELALU mengikuti KATALOG / KATALOG_EVENT (bukan urutan kiriman UI).
 """
 from __future__ import annotations
 
@@ -45,12 +47,42 @@ KATALOG: list[tuple[str, list[str]]] = [
     ("SPX Kombinasi", ["--reguler", "--bagian", "kombinasi", "--kurir", "spx"]),
     ("Upload faktur & pesanan ke IRESIS", ["--upload-iresis"]),
 ]
+
+# Menu EVENT (10.10/11.11/12.12 dst) - padanan bat\proses-event.bat: J&T, SPX Hemat, SPX Standard
+# dipisah seharian (`--event`). Nama langkah dipisah dari KATALOG karena nama yang sama
+# ("J&T Spesial") punya flag berbeda (`--event`). Urutan = urutan di .bat (Resi Siang sebelum
+# Shopee Pagi, lalu J&T, SPX Hemat, SPX Standard).
+KATALOG_EVENT: list[tuple[str, list[str]]] = [
+    ("Recheck stok", ["--recheck-stok"]),
+    ("Sampel TikTok (nilai 0)", ["--sampel"]),
+    ("Urgent Lazada", ["--urgent", "--channel", "lazada"]),
+    ("Urgent GTL & SiCepat", ["--urgent", "--channel", "gtl-sicepat"]),
+    ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
+    ("SPX Standard Pagi ≤ 12.00 (per lantai)", ["--spx-standard", "--pagi"]),
+    ("SPX Hemat Pagi Spesial", ["--label", "--event", "--kurir", "spx-hemat-pagi", "--tanpa-reguler"]),
+    ("SPX Hemat Pagi 1 qty reguler", ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "1qty"]),
+    ("SPX Hemat Pagi Kombinasi", ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "kombinasi"]),
+    ("J&T Spesial", ["--label", "--event", "--kurir", "jnt", "--tanpa-reguler"]),
+    ("J&T 1 qty reguler", ["--reguler", "--event", "--kurir", "jnt", "--bagian", "1qty"]),
+    ("J&T Kombinasi", ["--reguler", "--event", "--kurir", "jnt", "--bagian", "kombinasi"]),
+    ("SPX Hemat Spesial", ["--label", "--event", "--kurir", "spx-hemat", "--tanpa-reguler"]),
+    ("SPX Hemat 1 qty reguler", ["--reguler", "--event", "--kurir", "spx-hemat", "--bagian", "1qty"]),
+    ("SPX Hemat Kombinasi", ["--reguler", "--event", "--kurir", "spx-hemat", "--bagian", "kombinasi"]),
+    ("SPX Standard (per lantai)", ["--spx-standard"]),
+    ("Upload faktur & pesanan ke IRESIS", ["--upload-iresis"]),
+]
 FLAG = dict(KATALOG)
-JUDUL_VALID = {"TIPE 1", "TIPE 2", "TIPE 3", "TIPE 4", "MALAM", "KUSTOM"}
-JUDUL_LEWATI_MALAM = {"TIPE 1", "KUSTOM"}
+FLAG_EVENT = dict(KATALOG_EVENT)
+JUDUL_EVENT = {"EVENT - TIPE 1", "EVENT - TIPE 2", "EVENT - TIPE 3", "EVENT - TIPE 4",
+               "EVENT - MALAM", "EVENT - KUSTOM"}
+JUDUL_VALID = {"TIPE 1", "TIPE 2", "TIPE 3", "TIPE 4", "MALAM", "KUSTOM"} | JUDUL_EVENT
+# Urgent `--lewati-malam`: proses-event.bat pilihan 1 (sesi biasa = TIPE 1/3/4) memakainya,
+# pilihan 2 (TIPE 2, Shopee Pagi) dan MALAM tidak.
+JUDUL_LEWATI_MALAM = {"TIPE 1", "KUSTOM", "EVENT - TIPE 1", "EVENT - TIPE 3", "EVENT - TIPE 4", "EVENT - KUSTOM"}
 LANGKAH_IRESIS = "Upload faktur & pesanan ke IRESIS"
-JUDUL_TANPA_IRESIS = {"MALAM"}     # IRESIS hanya di jaringan lokal kantor: menu malam tidak boleh menyentuhnya
-MENU_JAM = {"TIPE 1": "1", "TIPE 2": "2", "TIPE 3": "3", "TIPE 4": "4"}   # untuk dalam_jam_menu()
+JUDUL_TANPA_IRESIS = {"MALAM", "EVENT - MALAM"}     # IRESIS hanya di jaringan lokal kantor: menu malam tidak boleh menyentuhnya
+MENU_JAM = {"TIPE 1": "1", "TIPE 2": "2", "TIPE 3": "3", "TIPE 4": "4",     # untuk dalam_jam_menu()
+            "EVENT - TIPE 1": "1", "EVENT - TIPE 2": "2", "EVENT - TIPE 3": "3", "EVENT - TIPE 4": "4"}
 BARIS_MAKS = 50000
 
 _kunci = threading.Lock()
@@ -89,12 +121,14 @@ def mulai(langkah: list[str], judul: str) -> str:
         raise HarianError(f"Judul tidak dikenal: {judul!r}")
     if not isinstance(langkah, list) or not all(isinstance(x, str) for x in langkah):
         raise HarianError("langkah harus daftar nama")
-    asing = [x for x in langkah if x not in FLAG]
+    flag = FLAG_EVENT if judul in JUDUL_EVENT else FLAG
+    katalog = KATALOG_EVENT if judul in JUDUL_EVENT else KATALOG
+    asing = [x for x in langkah if x not in flag]
     if asing:
         raise HarianError("Langkah tidak dikenal: " + ", ".join(asing))
     if judul in JUDUL_TANPA_IRESIS and LANGKAH_IRESIS in langkah:
         raise HarianError(f"Langkah IRESIS tidak boleh dipakai di {judul} (IRESIS hanya di jaringan lokal)")
-    urut = [nama for nama, _ in KATALOG if nama in set(langkah)]
+    urut = [nama for nama, _ in katalog if nama in set(langkah)]
     if not urut:
         raise HarianError("Tidak ada langkah dipilih")
     with _kunci:
@@ -102,7 +136,7 @@ def mulai(langkah: list[str], judul: str) -> str:
             raise HarianError("Masih ada proses harian yang berjalan")
         sesi = _sesi_label()
         _job = {"id": datetime.now().strftime("%H%M%S"), "judul": judul, "status": "jalan",
-                "sesi": sesi, "mulai": time.time(), "berhenti": False, "lines": [],
+                "sesi": sesi, "mulai": time.time(), "berhenti": False, "lines": [], "flag": flag,
                 "langkah": [{"nama": n, "status": "antri", "kode": None} for n in urut]}
         threading.Thread(target=_kerjakan, args=(_job, sesi), daemon=True).start()
         return _job["id"]
@@ -133,7 +167,7 @@ def _kerjakan(job: dict, sesi: str) -> None:
     for i, lg in enumerate(job["langkah"], 1):
         if job["berhenti"]:
             break
-        flag = list(FLAG[lg["nama"]])
+        flag = list(job["flag"][lg["nama"]])
         lg["status"] = "jalan"
         _tambah(job, "")
         _tambah(job, f"=== {i}/{total} {lg['nama'].upper()} ===")
