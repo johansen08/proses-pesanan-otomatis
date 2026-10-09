@@ -124,7 +124,7 @@ Program akan menampilkan menu 4 TIPE (TIPE 1-4) + Keluar seperti di
 Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`, `logs/` akan dibuat
 otomatis saat dibutuhkan.
 
-**Disarankan**: coba dulu `proses-harian-uji.bat` (mode uji, struktur menu sama seperti
+**Disarankan**: coba dulu `bat\proses-harian-uji.bat` (mode uji, struktur menu sama seperti
 `proses-harian.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
 koneksi API berhasil, sebelum menjalankan sesi di `proses-harian.bat` yang membuat
 picklist sungguhan.
@@ -173,5 +173,5 @@ Lalu jalankan semua uji offline (tanpa internet & tanpa menyentuh Jubelio sunggu
 `test_bat.py` memakai `cmd.exe` sungguhan, jadi hanya jalan di Windows. `test_rekap_master_excel.py` memakai file Excel buatan sendiri, bukan file master tim, sehingga tidak perlu file master ada di PC baru.
 
 Lalu pastikan file `.env` ada dan berisi `JUBELIO_EMAIL` + `JUBELIO_PASSWORD`
-yang benar, baru jalankan `proses-harian-uji.bat` (mode uji) sebagai tes akhir koneksi ke
+yang benar, baru jalankan `bat\proses-harian-uji.bat` (mode uji) sebagai tes akhir koneksi ke
 Jubelio.

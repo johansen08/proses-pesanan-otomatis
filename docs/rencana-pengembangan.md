@@ -28,11 +28,11 @@ implementasi).
 
 ## B. Mode khusus hari event (SPX Standard vs SPX Hemat) — **SUDAH diimplementasikan 2026-10-08**
 
-> Diimplementasikan: `proses-event.bat` / `proses-event-uji.bat`, flag `--event` /
+> Diimplementasikan: `bat\proses-event.bat` / `bat\proses-event-uji.bat`, flag `--event` /
 > `--spx-standard` / `--pagi` / `--kurir spx-hemat|spx-hemat-pagi` di `main.py`,
 > `proses_label.proses_spx_standard()` dkk, `sku_spesial.hitung_sku_spesial(kurir_hitung=...)`,
 > jenis cetak baru di `print_spesial.py`. Jadwal, urutan langkah, folder hasil, dan rencana uji
-> coba: [jadwal-proses.md](jadwal-proses.md) bagian "proses-event.bat — mode event". Bagian ini
+> coba: [jadwal-proses.md](jadwal-proses.md) bagian "bat\proses-event.bat — mode event". Bagian ini
 > dibiarkan sebagai catatan keputusan.
 
 Pemisahan **J&T vs SPX** saat pembuatan picklist sudah berjalan tiap hari lewat `--kurir` (TIPE

@@ -52,7 +52,7 @@ sesi label.
 
 **Mode uji vs sungguhan**: hampir semua alur CLI defaultnya adalah mode uji (read-only, hanya
 menampilkan rencana) kecuali diberi flag `--jalankan`, yang baru benar-benar mengubah data di
-Jubelio. `proses-harian-uji.bat` adalah kembaran `proses-harian.bat` yang selalu memakai mode
+Jubelio. `bat\proses-harian-uji.bat` adalah kembaran `proses-harian.bat` yang selalu memakai mode
 uji — pakai ini untuk mencoba perubahan sebelum menjalankan `proses-harian.bat` sungguhan.
 
 ## Arsitektur
@@ -162,7 +162,7 @@ WIB). Opsi `--kurir jnt`/`--kurir spx` pada `--label`/`--reguler` memisahkan pic
 kurir saat PEMBUATAN saja — penentuan SKU "spesial" itu sendiri selalu menggabung J&T+SPX
 (kecuali mode event di bawah).
 
-**Mode event** (hari 10.10/11.11/12.12 dst; `proses-event.bat`/`proses-event-uji.bat`, 2 pilihan
+**Mode event** (hari 10.10/11.11/12.12 dst; `bat\proses-event.bat`/`bat\proses-event-uji.bat`, 2 pilihan
 menu): J&T, SPX Hemat, SPX Standard dipisah seharian. Flag `--event` (bersama `--label`/
 `--reguler` + `--kurir jnt|spx-hemat|spx-hemat-pagi`) membuat penentuan SKU spesial dihitung PER
 KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesial — hanya
@@ -170,14 +170,14 @@ KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesi
 `--event` ditolak (`main.pesan_salah_mode_event`). Kunci kurir event TIDAK boleh ditambahkan ke
 `KURIR_LABEL_FILE` (yang menurunkan jenis cetak harian di `print_spesial.py`) — pakai
 `KURIR_LABEL_FILE_EVENT`/`KURIR_KODE_FILE_SEMUA`. Detail & jadwal:
-[docs/jadwal-proses.md](docs/jadwal-proses.md) bagian "proses-event.bat — mode event".
+[docs/jadwal-proses.md](docs/jadwal-proses.md) bagian "bat\proses-event.bat — mode event".
 
-`proses-event.bat` dan `proses-event-uji.bat` ditulis terpisah tetapi dijaga identik (selain
+`bat\proses-event.bat` dan `bat\proses-event-uji.bat` ditulis terpisah tetapi dijaga identik (selain
 `--jalankan`) oleh `tests/test_bat.py` — edit keduanya sekaligus, dan setiap perintahnya divalidasi
 argparse sungguhan oleh `tests/test_main.py` — jalankan keduanya setelah mengubah `.bat` event
 atau flag di `main.py`.
 
-`proses-harian.bat` (sungguhan) dan `proses-harian-uji.bat` (mode uji, struktur sama) adalah
+`proses-harian.bat` (sungguhan) dan `bat\proses-harian-uji.bat` (mode uji, struktur sama) adalah
 menu interaktif 4 TIPE yang masing-masing menjalankan rangkaian flag `jalankan.bat` di atas
 secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 [docs/jadwal-proses.md](docs/jadwal-proses.md).
@@ -197,6 +197,10 @@ secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
   recognized...`. Pola berkutip itu hanya aman untuk baris perintah biasa (di luar for /f).
   Bug ini sudah 3x muncul lagi karena for /f baru menyalin pola baris biasa;
   `tests/test_bat.py` sekarang menolaknya.
+- **Lokasi `.bat`**: pintu masuk harian ada di root (`buka-app`, `proses-harian`, `proses-malam`,
+  `cetak-label`, `jalankan`, `instalasi`); sisanya di `bat/` dan harus diawali `cd /d "%~dp0.."`
+  (bukan `%~dp0`) supaya `.venv\` dan `src\` tetap ketemu. `.bat` baru yang bukan pintu masuk
+  harian taruh di `bat/`. `git mv` bisa membuang CRLF — cek ulang (aturan di bawah).
 - **`.bat` WAJIB berakhiran baris CRLF, bukan LF.** Di file LF, cmd.exe salah menghitung
   posisi saat mencari label (`call :catat_waktu`, `goto menu`) sehingga eksekusi melompat ke
   baris yang salah — kejadian 2026-10-01: memilih TIPE 1 ikut menjalankan langkah TIPE 2/3/4

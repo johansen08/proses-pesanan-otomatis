@@ -92,7 +92,7 @@ Lalu:
    `C227-BRS3-2` (qty 1) → **tidak dihitung** untuk kedua SKU.
 2. **R2 dicek setelah R1.** Resi 1 baris dengan qty 2 atau lebih → gugur.
 3. **R4 digabung**, bukan per kurir (alur harian). *Pengecualian: mode event
-   (`proses-event.bat`, flag `--event`) menghitung per kurir — J&T dan SPX Hemat masing-masing
+   (`bat\proses-event.bat`, flag `--event`) menghitung per kurir — J&T dan SPX Hemat masing-masing
    minimal 3 resi, SPX Standard tidak ikut; lihat `kurir_hitung` di `hitung_sku_spesial` dan
    [jadwal-proses.md](jadwal-proses.md).* (Jika per kurir: SKU spesial bila J&T ≥ 3 **atau** SPX ≥ 3 —
    pada data contoh hasilnya menjadi 18 SKU karena `BM-LCB009` = 2 J&T + 2 SPX.)

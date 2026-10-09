@@ -453,7 +453,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                       r'src\\main\.py (.*)$')
     total = 0
     for nama in ("proses-event.bat", "proses-event-uji.bat"):
-        for baris in (ROOT / nama).read_text(encoding="utf-8").splitlines():
+        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
             cocok = pola.match(baris)
             if not cocok:
                 continue

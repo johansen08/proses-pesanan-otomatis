@@ -19,7 +19,7 @@ membuang kutip PERTAMA dan TERAKHIR, sehingga yang dijalankan jadi
 Bug ini sudah berulang kali muncul lagi tiap ada for /f baru yang menyalin pola baris
 biasa `".venv\\Scripts\\python.exe" src\\main.py ...` (yang AMAN di luar for /f). Solusinya:
 tulis path python.exe TANPA kutip di dalam for /f (path relatif tanpa spasi, aman karena
-.bat sudah `cd /d "%~dp0"`).
+.bat sudah `cd /d "%~dp0"` / `"%~dp0.."` untuk yang di bat/).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_bat.py
 """
@@ -64,6 +64,14 @@ def perintah_for_f_berkutip(baris):
     return None
 
 
+def path_bat(nama):
+    """Lokasi file .bat: di root (pintu masuk harian) atau di folder bat/ (sisanya)."""
+    for lokasi in (ROOT / nama, ROOT / "bat" / nama):
+        if lokasi.exists():
+            return lokasi
+    raise FileNotFoundError(nama)
+
+
 def semua_file_bat():
     return sorted(p for p in ROOT.rglob("*.bat") if ".venv" not in p.parts)
 
@@ -85,7 +93,7 @@ def langkah_tipe(nama_bat, tipe):
 
 def langkah_blok(nama_bat, label):
     """Argumen main.py tiap langkah di blok `:label` file .bat (sampai label berikutnya)."""
-    baris = (ROOT / nama_bat).read_text(encoding="utf-8").splitlines()
+    baris = path_bat(nama_bat).read_text(encoding="utf-8").splitlines()
     hasil = []
     for b in baris[baris.index(f":{label}") + 1:]:
         if b.startswith(":"):
@@ -103,7 +111,10 @@ def simulasikan_menu(nama_bat, masukan, batas_detik=60):
     argumen TIPE di rekap atau None, apakah cmd keluar sendiri)."""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         tmp = Path(tmp)
-        shutil.copyfile(ROOT / nama_bat, tmp / nama_bat)
+        sumber = path_bat(nama_bat)
+        lokasi_bat = tmp / sumber.relative_to(ROOT)       # bat/ ikut dipertahankan (cd /d "%~dp0..")
+        lokasi_bat.parent.mkdir(exist_ok=True)
+        shutil.copyfile(sumber, lokasi_bat)
         (tmp / ".venv" / "Scripts").mkdir(parents=True)
         shutil.copyfile(ROOT / ".venv" / "Scripts" / "python.exe",
                         tmp / ".venv" / "Scripts" / "python.exe")
@@ -114,7 +125,7 @@ def simulasikan_menu(nama_bat, masukan, batas_detik=60):
         (tmp / "masukan.txt").write_bytes(masukan.encode())
         rekap = tmp / "rekap.txt"
         with open(tmp / "masukan.txt", "rb") as stdin:
-            p = subprocess.Popen(["cmd", "/c", str(tmp / nama_bat)], stdin=stdin,
+            p = subprocess.Popen(["cmd", "/c", str(lokasi_bat)], stdin=stdin,
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             batas = time.monotonic() + batas_detik
             while p.poll() is None and not rekap.exists() and time.monotonic() < batas:
@@ -277,7 +288,7 @@ def uji_catat_waktu_benar_benar_jalan_di_cmd():
     if not bisa_simulasi_cmd():
         return
     for nama in MENU_BAT:
-        baris = (ROOT / nama).read_text(encoding="utf-8").splitlines()
+        baris = path_bat(nama).read_text(encoding="utf-8").splitlines()
         awal = baris.index(":catat_waktu")
         akhir = baris.index("exit /b 0", awal)
         isi = [

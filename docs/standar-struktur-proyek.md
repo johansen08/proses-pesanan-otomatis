@@ -10,7 +10,11 @@ Supaya root tidak berantakan, hanya boleh berisi:
 - **Folder** (semua kode, dokumentasi, dan data ada di dalam folder masing-masing,
   lihat bagian 6)
 - `.env`, `.gitignore` — file konfigurasi
-- `*.bat` — skrip batch (`proses-harian.bat`, `jalankan.bat`, `instalasi.bat`, `proses-harian-uji.bat`)
+- `*.bat` — HANYA pintu masuk yang dipakai tim tiap hari: `buka-app.bat`, `proses-harian.bat`,
+  `proses-malam.bat`, `cetak-label.bat`, `jalankan.bat` (juga dipanggil Windows Task
+  Scheduler), `instalasi.bat` (setup PC baru). Semua `.bat` lain (varian `-uji`,
+  `proses-event*`, pintasan `cetak-label-*`) ada di folder **`bat/`**; barisnya
+  `cd /d "%~dp0.."` (naik ke root), bukan `cd /d "%~dp0"` seperti `.bat` di root
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
 - `riwayat_picklist.xlsx` (+ `.csv` fallback-nya) — riwayat picklist
@@ -20,7 +24,7 @@ Supaya root tidak berantakan, hanya boleh berisi:
 
 Kode Python (`.py`) **tidak** ikut di root — semua dikumpulkan dalam folder **`src/`**
 (lihat bagian 2). File scratch/hasil uji manual yang menumpuk di root (mis. transkrip
-`proses-harian-uji.bat` yang di-redirect ke `.txt`) sebaiknya dihapus setelah selesai dipakai, bukan
+`bat\proses-harian-uji.bat` yang di-redirect ke `.txt`) sebaiknya dihapus setelah selesai dipakai, bukan
 dibiarkan menumpuk.
 
 ## 1. Folder
@@ -72,7 +76,7 @@ dibiarkan menumpuk.
     dipakai juga oleh Windows Task Scheduler untuk jadwal otomatis)
   - `proses-harian.bat` — menu interaktif **SUNGGUHAN** (4 TIPE: TIPE 1-4), mengubah data
     sungguhan di Jubelio
-  - `proses-harian-uji.bat` — kembaran `proses-harian.bat` dalam **MODE UJI** (akhiran
+  - `bat\proses-harian-uji.bat` — kembaran `proses-harian.bat` dalam **MODE UJI** (akhiran
     `-uji` menandai tidak ada perubahan apa pun di Jubelio); sengaja disamakan awalan
     nama dengan `proses-harian.bat` supaya terlihat jelas keduanya sepasang
   - Sebelumnya bernama `setup.bat`/`run.bat`/`menu.bat`/`uji.bat` — dua nama pertama
@@ -115,7 +119,7 @@ proses-pesanan-otomatis/
 ├─ .env / .gitignore              # konfigurasi
 ├─ requirements.txt               # daftar library Python
 ├─ riwayat_picklist.xlsx          # riwayat semua picklist
-├─ proses-harian.bat / jalankan.bat / instalasi.bat / proses-harian-uji.bat                  # skrip, huruf kecil
+├─ proses-harian.bat / jalankan.bat / instalasi.bat / bat\proses-harian-uji.bat                  # skrip, huruf kecil
 ├─ src/                           # semua kode, snake_case
 │  ├─ main.py
 │  ├─ jubelio.py

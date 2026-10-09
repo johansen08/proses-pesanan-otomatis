@@ -70,7 +70,7 @@ dan **TIPE 3** (lihat `proses-harian.bat`/[docs/jadwal-proses.md](docs/jadwal-pr
 dan **TIPE 4** tetap menggabung J&T+SPX.
 
 **Mode event (`--event`, hari 10.10 / 11.11 / 12.12 dst)**: J&T, **SPX Hemat**, dan **SPX
-Standard** dipisah seharian lewat `proses-event.bat` (alur harian tidak berubah). Di mode ini
+Standard** dipisah seharian lewat `bat\proses-event.bat` (alur harian tidak berubah). Di mode ini
 penentuan SKU spesial dihitung **per kurir** (bukan digabung); SPX Standard hanya dipecah per
 lantai. Lihat bagian 7 di bawah dan [docs/jadwal-proses.md](docs/jadwal-proses.md).
 
@@ -93,15 +93,15 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `proses-harian.bat` |
 | `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) — lewat antrean, ditulis sekaligus 1x per TIPE (`--tulis-excel`, lihat bagian "Rekap PICKLIST.xlsx") |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
-| `cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
-| `cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
-| `cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
-| `cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `bat\cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `bat\cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
+| `bat\cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
+| `bat\cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `cetak-label.bat` | **Menu cetak bulk** (klik 2x): HARIAN / EVENT / PER KURIR / satu jenis, termasuk **paket** (mis. SEMUA EVENT) yang mencetak beberapa jenis berurutan dengan printer dipilih sekali — semua jenis lain (per kurir, Shopee Pagi, J&T Resi Siang, SPX Hemat, SPX Standard) hanya lewat menu ini, lihat [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md) |
-| `proses-event.bat` | Menu interaktif SUNGGUHAN mode event (klik 2x): 2 pilihan (sesi biasa / tepat jam 13.00 dengan Shopee Pagi) + Keluar — lihat bagian 7 |
-| `proses-event-uji.bat` | Menu interaktif MODE UJI mode event, langkah identik dengan `proses-event.bat` — tidak ada perubahan di Jubelio |
+| `bat\proses-event.bat` | Menu interaktif SUNGGUHAN mode event (klik 2x): 2 pilihan (sesi biasa / tepat jam 13.00 dengan Shopee Pagi) + Keluar — lihat bagian 7 |
+| `bat\proses-event-uji.bat` | Menu interaktif MODE UJI mode event, langkah identik dengan `bat\proses-event.bat` — tidak ada perubahan di Jubelio |
 | `proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
-| `proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
+| `bat\proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `proses-harian.bat` - tidak ada perubahan di Jubelio |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) + akun IRESIS (`IRESIS_USERNAME`, `IRESIS_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
 | `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label) |
@@ -174,7 +174,7 @@ jalankan.bat --sampel --jalankan      # sungguhan
 ```
 
 Dijalankan sebagai langkah PERTAMA di setiap TIPE `proses-harian.bat` (TIPE 1-4), sebelum
-urgent Lazada/GTL-SiCepat. `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
+urgent Lazada/GTL-SiCepat. `bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
 
 **Format penamaan**: nomor picklist (`PICK-000xxxxxx`) dibuat otomatis oleh Jubelio sendiri,
 sama seperti alur lain — bukan sesuatu yang kita tentukan. Yang kita tentukan cuma "nama SKU
@@ -239,7 +239,7 @@ jalankan.bat --urgent --channel gtl-sicepat --jalankan      # GTL/SiCepat saja, 
 
 Dijalankan sebagai langkah kedua & ketiga di setiap TIPE `proses-harian.bat` (TIPE 1-4,
 setelah picklist sampel di bagian 0 di atas) = `jalankan.bat --urgent --channel lazada --jalankan`
-lalu `jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `proses-harian-uji.bat` = versi
+lalu `jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `bat\proses-harian-uji.bat` = versi
 mode uji (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),
@@ -307,9 +307,9 @@ proses sungguhan yang bisa "aktual".)
 `proses-harian.bat` TIPE 1/TIPE 4, langkah "SPX - J&T SPESIAL" = `jalankan.bat --label --tanpa-reguler --jalankan`;
 TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kurir jnt
 --tanpa-reguler --jalankan` / `jalankan.bat --label --kurir spx --tanpa-reguler --jalankan`
-(satu konfirmasi Y/N per TIPE). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
+(satu konfirmasi Y/N per TIPE). `bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
-- Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label").
+- Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `bat\cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label").
 - Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
   File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
 - Detail resi (1 file per sesi, langsung di folder sesi `label-pengiriman/<tanggal>/<sesi>/`,
@@ -371,7 +371,7 @@ jalankan.bat --reguler --bagian kombinasi --kurir spx --jalankan  # SPX saja
 `jalankan.bat --reguler --bagian 1qty --jalankan` / `jalankan.bat --reguler --bagian kombinasi --jalankan`
 (digabung). TIPE 2/TIPE 3, langkah "J&T 1 QTY REGULER"/"J&T KOMBINASI"/"SPX 1 QTY
 REGULER"/"SPX KOMBINASI" = perintah yang sama ditambah `--kurir jnt`/`--kurir spx`.
-`proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama. Kolom SKU di riwayat
+`bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama. Kolom SKU di riwayat
 untuk bagian 1 Qty Reguler kini per grup rak: `1QTY-REGULER-2A` / `1QTY-REGULER-3A` /
 `1QTY-REGULER-1B` / `1QTY-REGULER-2B` / `1QTY-REGULER-3B` / `1QTY-REGULER-LAINNYA` (digabung),
 atau diawali `J&T-`/`SPX-` kalau dipisah lewat `--kurir` (mis. `J&T-1QTY-REGULER-2A`). Bagian
@@ -426,7 +426,7 @@ jalankan.bat --shopee-pagi --jalankan    # sungguhan
 ```
 
 `proses-harian.bat` TIPE 2, langkah "SPX <= 12.00 (SPX RESI PAGI)" = `jalankan.bat --shopee-pagi
---jalankan` (dijalankan cukup 1x sehari, jangan diulang di TIPE 3). `proses-harian-uji.bat` = versi mode
+--jalankan` (dijalankan cukup 1x sehari, jangan diulang di TIPE 3). `bat\proses-harian-uji.bat` = versi mode
 uji (tanpa `--jalankan`). Nama file & kolom SKU di riwayat:
 `SHOPEE-PAGI-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
 `label-pengiriman/PICK-000155400_SHOPEE-PAGI-LANTAI1_...pdf`.
@@ -449,15 +449,15 @@ jalankan.bat --jnt-siang --jalankan    # sungguhan
 
 `proses-harian.bat` TIPE 4, langkah "J&T <= 15.00 (J&T RESI SIANG)" =
 `jalankan.bat --jnt-siang --jalankan` (dijalankan cukup 1x sehari, jangan diulang di siklus
-setelahnya). `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
+setelahnya). `bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`). Nama file & kolom
 SKU di riwayat: `JNT-SIANG-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`, mis.
 `label-pengiriman/PICK-000155500_JNT-SIANG-LANTAI1_...pdf`.
 
-## 7. Mode event (`--event`, `--spx-standard`, `proses-event.bat`)
+## 7. Mode event (`--event`, `--spx-standard`, `bat\proses-event.bat`)
 
 Dipakai seharian di hari event (10.10 / 11.11 / 12.12 dst) menggantikan `proses-harian.bat`;
 jadwal & urutan langkah lengkap: [docs/jadwal-proses.md](docs/jadwal-proses.md) bagian
-"proses-event.bat — mode event". Ringkasnya:
+"bat\proses-event.bat — mode event". Ringkasnya:
 
 | Kurir | Alur |
 |---|---|
@@ -501,7 +501,7 @@ jalankan.bat --recheck-stok --jalankan      # sungguhan
 ```
 
 Dijalankan sebagai langkah PERTAMA di setiap TIPE `proses-harian.bat` (TIPE 1-4), sebelum
-picklist sampel. `proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
+picklist sampel. `bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`).
 
 Alur (berdasarkan rekaman sniff, lihat `jubelio.ambil_stok_kosong()`/`jubelio.recheck_stok()`):
 
@@ -521,10 +521,10 @@ mencetak ulang PDF yang sudah ada. Pintasan harian untuk 4 jenis utama, sisanya 
 
 ```bash
 cetak-label.bat              # MENU: semua jenis & paket (EVENT, per kurir, Shopee Pagi, ...)
-cetak-label-spesial.bat      # subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1)
-cetak-label-gtl-sicepat.bat  # file GTL-SiCepat di subfolder URGENT (Alur 2)
-cetak-label-satuan.bat       # subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3, 1qty)
-cetak-label-kombinasi.bat    # subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3, kombinasi)
+bat\cetak-label-spesial.bat      # subfolder SPESIAL/JNT_SPESIAL/SPX_SPESIAL (Alur 1)
+bat\cetak-label-gtl-sicepat.bat  # file GTL-SiCepat di subfolder URGENT (Alur 2)
+bat\cetak-label-satuan.bat       # subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3, 1qty)
+bat\cetak-label-kombinasi.bat    # subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3, kombinasi)
 ```
 
 Urutan kerja (sama untuk keempat jenis): cari folder sesi `label-pengiriman/YYYY-MM-DD/N`
@@ -534,16 +534,16 @@ subfolder itu, karena nama filenya variatif dan subfoldernya sudah eksklusif per
 jenis) → tampilkan daftar printer yang terhubung ke komputer → pilih nomor printer →
 konfirmasi (Y/N) → cetak satu per satu secara berurut.
 
-Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepat.bat`):
+Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `bat\cetak-label-gtl-sicepat.bat`):
 
-- `cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder
+- `bat\cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` — pakai folder
   sesi tertentu, bukan yang terbaru.
-- `cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` — cetak dari **semua** sesi N hari
+- `bat\cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` — cetak dari **semua** sesi N hari
   terakhir (default 2: kemarin + hari ini), terlama dulu, bukan hanya yang terbaru. Untuk sesi
   malam yang menumpuk sampai pagi; label yang sudah tercetak dilewati (aman diulang). Dari menu
   `cetak-label.bat` ditanya otomatis. Detail: bagian 3.3 di
   [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md).
-- `cetak-label-gtl-sicepat.bat --file "2026-10-07\1\SPESIAL\PICK-000157494_SPESIAL_TRC1_2026-10-07_073930.pdf" --file ...`
+- `bat\cetak-label-gtl-sicepat.bat --file "2026-10-07\1\SPESIAL\PICK-000157494_SPESIAL_TRC1_2026-10-07_073930.pdf" --file ...`
   (atau `--file-dari pilihan.txt`, satu path per baris) — cetak file PDF **tertentu** saja, urutan
   cetak = urutan pilihan. Path boleh absolut atau relatif terhadap `label-pengiriman`; file harus
   ada, `.pdf`, dan di dalam `label-pengiriman` (kalau tidak: error, tidak ada yang dicetak). Yang
@@ -571,11 +571,11 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `cetak-label-gtl-sicepa
   Satu chip per printer di bilah bawah menunjukkan progres (klik untuk catatannya). Printer yang
   sama tidak bisa dipakai dua job sekaligus (tombol Cetak nonaktif), dan file yang sedang dicetak
   satu printer tidak bisa dikirim ke printer lain.
-- `cetak-label-gtl-sicepat.bat --printer "NAMA PRINTER"` — nama printer persis seperti di Windows;
+- `bat\cetak-label-gtl-sicepat.bat --printer "NAMA PRINTER"` — nama printer persis seperti di Windows;
   melewati tanya pilih printer (dipakai UI desktop).
-- `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
+- `bat\cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` — lewati tanya Y/N sebelum mulai cetak
   (tetap tanya pilih printer).
-- `cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
+- `bat\cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` — cetak
   ULANG hanya file dari daftar gagal sebelumnya (lihat bagian "Kertas habis" &
   "Kalau ada yang gagal" di [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md)),
   tanpa mencari ulang folder sesi.

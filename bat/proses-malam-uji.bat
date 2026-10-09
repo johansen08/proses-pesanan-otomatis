@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 rem Proses MALAM (MODE UJI, kembaran proses-malam.bat tanpa --jalankan): Urgent Lazada, Urgent GTL & SiCepat, lalu SPX - J&T (J&T+SPX digabung).
 rem Tanpa menu & tanpa subrutin/label (hindari bug lompat label cmd). IRESIS tidak ikut.

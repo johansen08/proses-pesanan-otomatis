@@ -6,8 +6,8 @@ dan cara pakai fiturnya sehari-hari. Semua `.bat` cetak menjalankan `src/print_s
 - **`cetak-label.bat`** — **MENU** (HARIAN / EVENT / PER KURIR / satu jenis); pilih jenis atau
   paket, lalu printer dipilih **sekali** untuk semua yang dicetak. Ini yang dipakai untuk hari
   event dan untuk semua jenis selain empat pintasan di bawah.
-- **Pintasan harian** `cetak-label-spesial.bat` / `cetak-label-gtl-sicepat.bat` /
-  `cetak-label-satuan.bat` / `cetak-label-kombinasi.bat` — klik 2x langsung mencetak 1 jenis
+- **Pintasan harian** `bat\cetak-label-spesial.bat` / `bat\cetak-label-gtl-sicepat.bat` /
+  `bat\cetak-label-satuan.bat` / `bat\cetak-label-kombinasi.bat` — klik 2x langsung mencetak 1 jenis
   (`--jenis <jenis>`), tanpa menu.
 
 ## 1. Apa fitur ini
@@ -21,17 +21,17 @@ perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya 
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
 |---|---|---|---|
-| `spesial` | `cetak-label-spesial.bat` | `SPESIAL`, `JNT_SPESIAL`, `SPX_SPESIAL` — hanya file bertanda `_SPESIAL_` | `--label` (Alur 1, SKU spesial) |
-| `gtl-sicepat` | `cetak-label-gtl-sicepat.bat` | `URGENT` (tanpa varian kurir) — hanya file `GTL-SICEPAT-*` | `--urgent --channel gtl-sicepat` (Alur 2) |
-| `satuan` | `cetak-label-satuan.bat` | `SATUAN`, `JNT_SATUAN`, `SPX_SATUAN` — semua PDF | `--reguler --bagian 1qty` (Alur 3) |
+| `spesial` | `bat\cetak-label-spesial.bat` | `SPESIAL`, `JNT_SPESIAL`, `SPX_SPESIAL` — hanya file bertanda `_SPESIAL_` | `--label` (Alur 1, SKU spesial) |
+| `gtl-sicepat` | `bat\cetak-label-gtl-sicepat.bat` | `URGENT` (tanpa varian kurir) — hanya file `GTL-SICEPAT-*` | `--urgent --channel gtl-sicepat` (Alur 2) |
+| `satuan` | `bat\cetak-label-satuan.bat` | `SATUAN`, `JNT_SATUAN`, `SPX_SATUAN` — semua PDF | `--reguler --bagian 1qty` (Alur 3) |
 | `spesial-jnt` / `spesial-spx` | menu: PER KURIR | `JNT_SPESIAL` / `SPX_SPESIAL` saja (TIPE 2 & 3) | `--label --kurir jnt/spx` |
 | `satuan-jnt` / `satuan-spx` | menu: PER KURIR | `JNT_SATUAN` / `SPX_SATUAN` saja | `--reguler --bagian 1qty --kurir jnt/spx` |
 | `kombinasi-jnt` / `kombinasi-spx` | menu: PER KURIR | `JNT_KOMBINASI` / `SPX_KOMBINASI` saja | `--reguler --bagian kombinasi --kurir jnt/spx` |
 | `spx-pagi` | menu: HARIAN | `SPX_PAGI` (Shopee Pagi, `SHOPEE-PAGI-LANTAI*`) — sesi lama (sebelum 2026-10-07) masih di root folder sesi, tidak ikut | `--shopee-pagi` |
 | `jnt-siang` | menu: HARIAN | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
-| `kombinasi` | `cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
+| `kombinasi` | `bat\cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
-**Mode event** (`proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst — lihat
+**Mode event** (`bat\proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst — lihat
 [jadwal-proses.md](jadwal-proses.md)) punya jenis sendiri; jenis gabungan di atas (`spesial`,
 `satuan`, `kombinasi`) **tidak** ikut mencetak folder event. J&T mode event memakai jenis
 `*-jnt` yang sudah ada (foldernya sama dengan harian).
@@ -99,7 +99,7 @@ C:\Program Files (x86)\SumatraPDF\SumatraPDF.exe
 
 Kalau install lewat installer default, biasanya langsung ketemu tanpa setting
 tambahan. Cek dengan menjalankan salah satu `.bat` cetak bulk (mis.
-`cetak-label-spesial.bat`) — kalau SumatraPDF **tidak** ditemukan, program berhenti
+`bat\cetak-label-spesial.bat`) — kalau SumatraPDF **tidak** ditemukan, program berhenti
 dengan pesan:
 
 ```
@@ -163,10 +163,10 @@ cetak-label.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"  # cetak ulang 
 Klik 2x langsung mencetak satu jenis harian:
 
 ```bash
-cetak-label-spesial.bat
-cetak-label-gtl-sicepat.bat
-cetak-label-satuan.bat
-cetak-label-kombinasi.bat
+bat\cetak-label-spesial.bat
+bat\cetak-label-gtl-sicepat.bat
+bat\cetak-label-satuan.bat
+bat\cetak-label-kombinasi.bat
 ```
 
 Urutan kerja program (sama untuk semua jenis & paket):
@@ -193,7 +193,7 @@ cetak-label.bat --paket jnt --semua-sesi --hari 3   # 3 hari terakhir
 
 Dari menu `cetak-label.bat`, setelah memilih jenis/paket muncul pertanyaan **"Cetak dari sesi
 mana?"**: `1` = sesi terbaru saja (default, Enter), `2` = semua sesi 2 hari terakhir. Pintasan
-harian (`cetak-label-spesial.bat` dst) tidak bertanya; tambahkan `--semua-sesi` di belakangnya.
+harian (`bat\cetak-label-spesial.bat` dst) tidak bertanya; tambahkan `--semua-sesi` di belakangnya.
 
 - Urutan cetak: sesi **terlama → terbaru** (tanggal lalu nomor sesi sebagai angka), di dalam
   tiap sesi mengikuti urutan jenis. Printer dan konfirmasi Y/N tetap **sekali** untuk semuanya.
@@ -206,15 +206,15 @@ harian (`cetak-label-spesial.bat` dst) tidak bertanya; tambahkan `--semua-sesi` 
 
 ### Pilihan tambahan
 
-Berlaku sama untuk keempat `.bat` (contoh pakai `cetak-label-gtl-sicepat.bat`, ganti
+Berlaku sama untuk keempat `.bat` (contoh pakai `bat\cetak-label-gtl-sicepat.bat`, ganti
 nama `.bat`-nya sesuai jenis yang mau dicetak):
 
 | Perintah | Kegunaan |
 |---|---|
-| `cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` | Pakai folder sesi tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya) |
-| `cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` | Cetak dari **semua** sesi N hari terakhir (default 2), bukan hanya yang terbaru — lihat bagian 3.3 |
-| `cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` | Lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer) |
-| `cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` | Cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian 4), tanpa mencari ulang folder sesi |
+| `bat\cetak-label-gtl-sicepat.bat --folder "label-pengiriman\2026-10-01\3"` | Pakai folder sesi tertentu, bukan yang terbaru (mis. mau cetak ulang sesi sebelumnya) |
+| `bat\cetak-label-gtl-sicepat.bat --semua-sesi [--hari N]` | Cetak dari **semua** sesi N hari terakhir (default 2), bukan hanya yang terbaru — lihat bagian 3.3 |
+| `bat\cetak-label-gtl-sicepat.bat --tanpa-konfirmasi` | Lewati tanya Y/N sebelum mulai cetak (tetap tanya pilih printer) |
+| `bat\cetak-label-gtl-sicepat.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"` | Cetak ULANG hanya file dari daftar gagal sebelumnya (lihat bagian 4), tanpa mencari ulang folder sesi |
 
 ## 4. Kertas habis / printer bermasalah di tengah cetak
 

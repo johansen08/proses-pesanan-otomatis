@@ -5,9 +5,9 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
-**Revisi 2026-10-08**: tambah **mode event** (`proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst)
+**Revisi 2026-10-08**: tambah **mode event** (`bat\proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst)
 — J&T, SPX Hemat, dan SPX Standard dipisah sepanjang hari. `proses-harian.bat` **tidak berubah**
-sama sekali; lihat bagian "proses-event.bat — mode event" di bawah.
+sama sekali; lihat bagian "bat\proses-event.bat — mode event" di bawah.
 
 **Revisi 2026-10-06**: tambah langkah **Recheck Stok** (`--recheck-stok`) sebagai langkah
 PALING PERTAMA di tiap TIPE 1-4 (sebelum Sampel TikTok) — cek ulang stok SEMUA pesanan
@@ -316,12 +316,12 @@ jam 16.00; guard akan menanyakan konfirmasi kalau TIPE 1 dipilih sebelum
 jam 16.00, tim cukup jawab Y karena itu memang urutan yang benar (TIPE 4
 baru saja selesai).
 
-## proses-event.bat — mode event (10.10, 11.11, 12.12, dst)
+## bat\proses-event.bat — mode event (10.10, 11.11, 12.12, dst)
 
 Dipakai **seharian penuh** di hari event (tanggal kembar / promo besar) **menggantikan**
 `proses-harian.bat`. Beda utamanya: J&T, SPX Hemat, dan SPX Standard **dipisah sepanjang hari**
 (bukan bergantian digabung/dipisah per TIPE). Alur harian tidak disentuh — kalau ada masalah di
-hari event, tim langsung kembali ke `proses-harian.bat`. `proses-event-uji.bat` = versi mode uji
+hari event, tim langsung kembali ke `proses-harian.bat`. `bat\proses-event-uji.bat` = versi mode uji
 (tanpa `--jalankan`, tanpa konfirmasi, tanpa pertanyaan), langkahnya dijaga identik dengan versi
 sungguhan oleh `tests/test_bat.py`.
 
@@ -444,10 +444,10 @@ Shopee Pagi baru masuk akal setelah jam 12.00). Pilihan 1 tidak punya jendela ja
 
 1. Di hari biasa, buka web Jubelio (Siap Proses) dan cek: jumlah filter kurir `spx hemat` +
    `spx standard` **sama dengan** `spx`. Kalau tidak sama, ada varian lain yang belum tertangani.
-2. Jalankan `proses-event-uji.bat` pilihan 1 dan 2 (mode uji, hanya baca). Cek log: SPX Standard
+2. Jalankan `bat\proses-event-uji.bat` pilihan 1 dan 2 (mode uji, hanya baca). Cek log: SPX Standard
    muncul hanya per lantai; SPX Hemat muncul sebagai spesial/satuan/kombinasi; tidak ada pesanan
    SPX kilat; jumlah per kelompok masuk akal terhadap angka di web Jubelio.
-3. Di hari event jalankan lagi `proses-event-uji.bat` dulu, baru `proses-event.bat`. Setelah
+3. Di hari event jalankan lagi `bat\proses-event-uji.bat` dulu, baru `bat\proses-event.bat`. Setelah
    langkah pertama selesai, cek folder `label-pengiriman/<tanggal>/<sesi>/` dan hasil cetaknya
    (`cetak-label-*-spx-hemat.bat` dst) sebelum meneruskan sesi berikutnya.
 4. Cadangan: `proses-harian.bat` tidak berubah dan tetap bisa dipakai kapan saja.
@@ -507,7 +507,7 @@ pengawasan.
   yang dipakai. `--kurir` di TIPE 2/TIPE 3 hanya membatasi resi kurir mana
   yang benar-benar dipicklist saat proses SKU spesial itu berjalan — bukan
   mengubah daftar SKU spesial itu sendiri. **Satu-satunya pengecualian**
-  adalah mode event (`proses-event.bat`, flag `--event`): di sana hitungan
+  adalah mode event (`bat\proses-event.bat`, flag `--event`): di sana hitungan
   dilakukan per kurir (J&T dan SPX Hemat terpisah, SPX Standard tidak ikut).
   Pengecualian ini tidak pernah aktif tanpa `--event`.
 

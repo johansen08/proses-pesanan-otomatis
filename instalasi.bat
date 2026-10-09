@@ -86,7 +86,7 @@ echo   SETUP SELESAI
 echo ==================================================================
 echo Langkah selanjutnya:
 echo   1. Pastikan file .env sudah berisi JUBELIO_EMAIL dan JUBELIO_PASSWORD yang benar.
-echo   2. Jalankan proses-harian-uji.bat dulu untuk tes login/koneksi (tidak mengubah apa pun di Jubelio).
-echo   3. Kalau proses-harian-uji.bat berhasil, jalankan proses-harian.bat untuk proses sungguhan.
+echo   2. Jalankan bat\proses-harian-uji.bat dulu untuk tes login/koneksi (tidak mengubah apa pun di Jubelio).
+echo   3. Kalau bat\proses-harian-uji.bat berhasil, jalankan proses-harian.bat untuk proses sungguhan.
 echo.
 pause
