@@ -13,6 +13,13 @@ Dulu langkah MANUAL tim setelah proses pesanan selesai. Alur (berdasarkan rekama
         -> {"code":200,"data":{"status":"selesai","persen":100,...}}
 Upload ulang file yang sama aman: IRESIS melewati baris yang tidak berubah.
 
+Laporan Total Picklist (sniff 09-10-2026 08:12, menu Laporan > tab "Laporan Total Picklist"):
+  POST <IRESIS_URL>/report/get-receipt-report-data-tab1  (DataTables server-side, form-urlencoded:
+        draw, start, length, order[0][column]=2, start_date=YYYY-MM-DD HH:MM:SS, end_date=..)
+        -> {"recordsTotal":92,"data":[["1.","2026-10-09","158725","30"],...],"grandTotal":"3352"}
+     tiap baris = [no, tanggal, nomor picklist (angka), total resi]. Dipakai mengisi kolom SCAN
+     di PICKLIST.xlsx (rekap_master_excel.isi_scan).
+
 Konfigurasi lewat .env: IRESIS_URL (bawaan https://192.168.3.37/new-iresis), IRESIS_USERNAME,
 IRESIS_PASSWORD, opsional IRESIS_NAMA_PK (bawaan SRV-1), IRESIS_CA_BUNDLE (path sertifikat
 server; kalau kosong verifikasi SSL dimatikan karena sertifikat server lokal self-signed).
@@ -20,6 +27,7 @@ server; kalau kosong verifikasi SSL dimatikan karena sertifikat server lokal sel
 import logging
 import os
 import time
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
@@ -145,3 +153,33 @@ def unggah(file: Path, username: str, password: str) -> str:
     if not token:
         return str(hasil.get("message", ""))   # tanpa token tidak ada progres untuk dipantau
     return tunggu_selesai(sesi, token) or str(hasil.get("message", ""))
+
+
+def ambil_total_picklist(sesi: requests.Session, dari: date, sampai: datetime,
+                         timeout: int = 60, per_halaman: int = 500) -> dict[int, int]:
+    """Laporan Total Picklist IRESIS -> {nomor picklist (angka): total resi}, untuk picklist yang
+    tanggalnya di rentang `dari` 00:00 s.d. `sampai`."""
+    dasar = _url_dasar()
+    hasil: dict[int, int] = {}
+    mulai = 0
+    while True:
+        form = {"draw": mulai // per_halaman + 1, "order[0][column]": 2, "order[0][dir]": "asc",
+                "start": mulai, "length": per_halaman, "search[value]": "",
+                "search[regex]": "false",
+                "start_date": f"{dari:%Y-%m-%d} 00:00:00",
+                "end_date": f"{sampai:%Y-%m-%d %H:%M:%S}"}
+        r = _kirim(sesi.post, f"{dasar}/report/get-receipt-report-data-tab1", timeout=timeout,
+                   headers={"X-Requested-With": "XMLHttpRequest", "Referer": f"{dasar}/"},
+                   data=form)
+        data = _json(r, "Ambil laporan total picklist IRESIS")
+        baris = data.get("data")
+        if not isinstance(baris, list):
+            raise IresisError(f"Laporan total picklist: format tak dikenal: {str(data)[:200]}")
+        for b in baris:
+            try:
+                hasil[int(b[2])] = int(b[3])
+            except (IndexError, ValueError, TypeError) as e:
+                raise IresisError(f"Laporan total picklist: baris tak dikenal {b!r}") from e
+        mulai += per_halaman
+        if not baris or mulai >= int(data.get("recordsFiltered") or 0):
+            return hasil

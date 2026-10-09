@@ -6,6 +6,8 @@ master "PICK LIST - EXCEL ... MASTER" - program TIDAK PERNAH membuka/menulis fil
 (dulu salinan ~51 ribu baris: buka ~48 detik + simpan ~67 detik per proses, lihat riwayat
 insiden 2026-10-06). Template dibuat ulang lewat src/buat_template_picklist.py.
 
+Kolom P (SCAN) diisi terpisah oleh isi_scan() setelah upload IRESIS (total resi per picklist).
+
 Kolom yang diisi (nilainya saja, rumus bawaan template dibiarkan): F=operator (konstan
 "PUTRI"), G=tanggal, H=jam (desimal gaya "HH.MM", mis. 18.53 = jam 18:53, BUKAN pecahan jam
 sungguhan), L=nomor picklist (angka saja), M=Total Pesanan, N=Resi Keluar, T=label alur
@@ -48,6 +50,7 @@ OPERATOR = "PUTRI"
 BARIS_DATA_AWAL = 6            # baris rumus contoh di template; data mulai di sini
 KOLOM_F_OPR, KOLOM_G_TGL, KOLOM_H_JAM = 6, 7, 8
 KOLOM_L_PICKLIST, KOLOM_M_LOLOS, KOLOM_N_PRINT, KOLOM_O_MINUS = 12, 13, 14, 15
+KOLOM_P_SCAN = 16
 KOLOM_T_JENIS, KOLOM_U_CATATAN = 20, 21
 KOLOM_TERAKHIR = 27            # AA - kolom terjauh yang berformat di template
 KOLOM_FILL_AWAL, KOLOM_FILL_AKHIR = 2, 21      # B..U - lihat baris kuning "PICKLIST CANCEL"
@@ -144,6 +147,32 @@ def selesai() -> None:
             if buku.dicatat:
                 log.info("%d picklist ditulis ke %s", buku.dicatat, buku.file)
                 buku.dicatat = 0
+
+
+# ============================================================== scan IRESIS
+def isi_scan(folder_sesi: Path, total_resi: dict[int, int]) -> int:
+    """Isi kolom P (SCAN) tiap baris picklist di PICKLIST.xlsx `folder_sesi` dari laporan Total
+    Picklist IRESIS (`total_resi`: nomor picklist -> total resi). Dicocokkan lewat kolom L.
+    File yang belum ada tidak dibuat. Mengembalikan jumlah sel yang berubah (kolom Q/CTRL
+    otomatis lewat rumus template)."""
+    file = Path(folder_sesi) / NAMA_FILE
+    if not file.exists():
+        return 0
+    with _lock:
+        buku = _buka(Path(folder_sesi))
+        if buku is None:
+            return 0
+        ws, berubah = buku.ws, 0
+        for r in range(BARIS_DATA_AWAL, buku.baris_berikut):
+            nomor = ws.cell(r, KOLOM_L_PICKLIST).value
+            baru = total_resi.get(nomor) if isinstance(nomor, int) else None
+            if baru is not None and ws.cell(r, KOLOM_P_SCAN).value != baru:
+                ws.cell(r, KOLOM_P_SCAN, baru)
+                berubah += 1
+        if berubah:
+            buku.kotor = True
+            _simpan(buku, peringatan_terakhir=True)
+        return berubah
 
 
 # ============================================================== simpan

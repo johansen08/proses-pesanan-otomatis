@@ -151,7 +151,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat
   `main.py --upload-iresis [--jalankan]` — langkah paling akhir tiap TIPE `bat\proses-harian.bat`. Mengunggah 2 file: faktur (`reference=invoice`, 2 hari) lalu pesanan (`reference=order`, 4 hari; sniff 2026-10-07 14:12).
-  Kegagalan tidak menghentikan TIPE (cetak_bermasalah + rekap waktu). Butuh `IRESIS_USERNAME`/
+  Sesudah upload, `ambil_total_picklist()` mengambil laporan "Total Picklist" IRESIS (sniff 2026-10-09) lalu `rekap_master_excel.isi_scan()` mengisi kolom P (SCAN) `PICKLIST.xlsx` folder sesi hari-hari terakhir, dicocokkan lewat nomor picklist di kolom L. Kegagalan tidak menghentikan TIPE (cetak_bermasalah + rekap waktu). Butuh `IRESIS_USERNAME`/
   `IRESIS_PASSWORD` di `.env`.
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,

@@ -822,6 +822,7 @@ def upload_faktur_iresis(log: logging.Logger, args) -> int:
                ("Pesanan", jubelio.ambil_url_pesanan, getattr(args, "hari_pesanan", 4),
                 "daftar_penjualan_pesanan")]
     gagal = False
+    upload_ok = False
     token = None
     for nama, ambil_url, hari, awalan in laporan:
         # tiap laporan berdiri sendiri: gagalnya faktur tidak membatalkan upload pesanan
@@ -845,7 +846,35 @@ def upload_faktur_iresis(log: logging.Logger, args) -> int:
             gagal = True
             continue
         log.info("IRESIS (%s): %s", nama.lower(), ringkasan)
+        upload_ok = True
+    if upload_ok:
+        gagal = isi_scan_picklist(log, username, password, args.hari, hari_ini) or gagal
     return 1 if gagal else 0
+
+
+def isi_scan_picklist(log: logging.Logger, username: str, password: str, hari: int,
+                      hari_ini) -> bool:
+    """Setelah upload: isi kolom P (SCAN) PICKLIST.xlsx dari laporan Total Picklist IRESIS untuk
+    folder sesi `hari` hari terakhir. Mengembalikan True kalau GAGAL (tidak menghentikan TIPE)."""
+    import iresis
+
+    dari = hari_ini - timedelta(days=max(hari, 1) - 1)
+    try:
+        total = iresis.ambil_total_picklist(iresis.login(username, password), dari,
+                                            datetime.now())
+        berubah = 0
+        for h in range(max(hari, 1)):
+            folder_tgl = FOLDER_LABEL / str(dari + timedelta(days=h))
+            for folder in sorted(folder_tgl.glob("*")) if folder_tgl.is_dir() else []:
+                berubah += rekap_master_excel.isi_scan(folder, total)
+        log.info("IRESIS: kolom SCAN PICKLIST.xlsx diisi/diperbarui di %d baris (laporan %d "
+                 "picklist)", berubah, len(total))
+        return False
+    except Exception as e:   # noqa: BLE001 - jangan hentikan TIPE
+        log.exception("GAGAL mengisi SCAN dari IRESIS: %s", e)
+        cetak_bermasalah([{"SKU": "UPLOAD IRESIS", "Catatan": f"GAGAL (isi SCAN picklist): {e}"}],
+                         "PERHATIAN: UPLOAD IRESIS GAGAL")
+        return True
 
 
 if __name__ == "__main__":

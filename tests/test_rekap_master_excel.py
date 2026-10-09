@@ -225,6 +225,22 @@ def uji_cepat_puluhan_picklist():
     print(f"  60 picklist ditulis langsung (simpan tiap picklist) dalam {detik:.1f} detik")
 
 
+def uji_isi_scan_dari_iresis():
+    _reset()
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        assert rme.isi_scan(folder, {157401: 5}) == 0 and not (folder / rme.NAMA_FILE).exists()
+        rme.catat(folder, _baris(157401))
+        rme.catat(folder, _baris(157403), [157402])
+        assert rme.isi_scan(folder, {157401: 5, 157403: 7, 999: 1}) == 2
+        ws = _muat(folder)[1]
+        assert [ws.cell(r, 16).value for r in (6, 7, 8)] == [5, None, 7]     # P=SCAN; cancel kosong
+        assert ws["Q6"].value == '=IF(P6="","",M6-P6)'
+        assert rme.isi_scan(folder, {157401: 5, 157403: 7}) == 0              # tak berubah
+        assert rme.isi_scan(folder, {157401: 6}) == 1 and _muat(folder)[1]["P6"].value == 6
+    print("  isi_scan(): kolom P diisi dari total resi IRESIS per nomor picklist, idempoten")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

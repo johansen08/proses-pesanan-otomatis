@@ -5,7 +5,7 @@ Jalankan:  .venv\Scripts\python tests\test_iresis.py
 """
 import sys
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
@@ -173,6 +173,29 @@ def uji_url_pesanan():
     k = s.log[0][2]
     assert k["params"]["reference"] == "order"
     assert k["params"]["date_from"] == "Sun Oct 04 2026 00:00:00 GMT+0700 (Western Indonesia Time)"
+
+
+def uji_total_picklist_banyak_halaman():
+    def baris(a, b):
+        return [[f"{i}.", "2026-10-09", str(158000 + i), str(i)] for i in range(a, b)]
+
+    sesi = Sesi({("POST", "/report/get-receipt-report-data-tab1"): [
+        Resp(200, {"recordsTotal": 5, "recordsFiltered": 5, "data": baris(1, 4)}),
+        Resp(200, {"recordsTotal": 5, "recordsFiltered": 5, "data": baris(4, 6)})]})
+    hasil = iresis.ambil_total_picklist(sesi, date(2026, 10, 8), datetime(2026, 10, 9, 8, 13, 12),
+                                        per_halaman=3)
+    assert hasil == {158001: 1, 158002: 2, 158003: 3, 158004: 4, 158005: 5}, hasil
+    f = sesi.log[0][2]["data"]
+    assert f["start_date"] == "2026-10-08 00:00:00" and f["end_date"] == "2026-10-09 08:13:12"
+    assert [x[2]["data"]["start"] for x in sesi.log] == [0, 3]
+    try:
+        iresis.ambil_total_picklist(Sesi({("POST", "/get-receipt-report-data-tab1"): [
+            Resp(200, {"data": [["1.", "x", "abc", "2"]], "recordsFiltered": 1})]}), date.today(),
+            datetime.now())
+    except iresis.IresisError as e:
+        assert "tak dikenal" in str(e)
+    else:
+        raise AssertionError
 
 
 if __name__ == "__main__":
