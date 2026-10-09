@@ -690,7 +690,7 @@ async function initCetak(){
     try{const dd=await muatData();tgl=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0);
       const p=await api('/api/printer');$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');
       try{const jj=(await api('/api/jobs')).jobs;Object.keys(jj).forEach(n=>{if(jj[n].status==='jalan')lacak(n,jj[n].total)})}catch(e){}
-      $('#mode').textContent='Tersambung ke printer & label sungguhan';$('#mode').className='pill ok';
+      $('#mode').style.display='none';
     }catch(e){toast('Server UI error: '+e.message)}
   }else{$('#mode').textContent='Mode contoh (data tiruan) — jalankan src/server_ui.py untuk data sungguhan';$('#mode').className='pill warn'}
   gambarCetak();
