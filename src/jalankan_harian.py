@@ -201,6 +201,8 @@ def info() -> dict:
                          ("gagal", peringatan_gagal)):
         modul.atur_folder(FOLDER_LOG)
         hasil[kunci] = modul.baca_sejak(awal_hari)
+    # picklist TERHENTI sudah punya bagian sendiri (bisa di-download ulang) - jangan dobel
+    hasil["gagal"] = [m for m in hasil["gagal"] if ": TERHENTI" not in m]
     return {"jam_ok": {judul: bool(main.dalam_jam_menu(m)) for judul, m in MENU_JAM.items()},
             "peringatan": hasil,
             "berjalan": bool(_job and _job["status"] == "jalan")}

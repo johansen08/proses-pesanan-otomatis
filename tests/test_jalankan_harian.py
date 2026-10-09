@@ -181,6 +181,24 @@ def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
     print(f"  {len(jh.KATALOG)} langkah KATALOG: diterima argparse main.py & ada padanannya di .bat")
 
 
+def uji_info_tidak_menggandakan_picklist_terhenti():
+    """Peringatan 'gagal' di UI tidak memuat picklist TERHENTI (sudah punya bagian Gagal unduh
+    PDF yang bisa di-download ulang); kegagalan lain tetap tampil."""
+    import tempfile
+    import peringatan_gagal as pg
+
+    with tempfile.TemporaryDirectory() as tmp, mock.patch.object(jh, "FOLDER_LOG", Path(tmp)):
+        pg.atur_folder(Path(tmp))
+        pg.catat("PICK-000000001: TERHENTI: timeout unduh. Lanjutkan: .\\jalankan.bat --lanjut x")
+        pg.catat("UPLOAD IRESIS: GAGAL (faktur): koneksi putus")
+        try:
+            gagal = jh.info()["peringatan"]["gagal"]
+        finally:
+            pg._file_peringatan = None
+    assert len(gagal) == 1 and "IRESIS" in gagal[0], gagal
+    print("  info(): picklist TERHENTI disaring dari 'gagal', kegagalan lain tetap")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):
