@@ -21,6 +21,9 @@ API (JSON):
                                  (SUNGGUHAN: lihat jalankan_harian.py; 409 kalau masih berjalan)
   GET  /api/harian/job?dari=N    status per langkah + baris log ke-N dst
   POST /api/harian/hentikan      matikan langkah berjalan & batalkan sisanya
+  GET  /api/terhenti             picklist terhenti (mis. gagal unduh PDF) + status job download ulang
+  POST /api/terhenti/jalankan    {"picklist": ["PICK-...", ...]} -> `main.py --lanjut` berurutan
+                                 (SUNGGUHAN; 409 kalau download ulang/proses harian masih berjalan)
 Jenis yang ditampilkan: spesial, satuan, kombinasi, gtl-sicepat (JENIS_UI). Jenis lain
 (spx-pagi, jnt-siang, event, dst) tetap lewat cetak-label.bat.
 """
@@ -124,6 +127,70 @@ def mulai_cetak(files: list[str], printer: str, ulang: bool = False) -> str:
         return job["id"]
 
 
+_lanjut: dict | None = None      # job "Download ulang" picklist terhenti (satu sekaligus)
+
+
+def info_terhenti() -> dict:
+    """Picklist yang masih terhenti (gagal unduh PDF dsb) + keadaan job download ulang."""
+    import peringatan_gagal
+    peringatan_gagal.atur_folder(jh.FOLDER_LOG)
+    j = _lanjut
+    return {"daftar": peringatan_gagal.daftar_terhenti(),
+            "job": None if not j else {"status": j["status"], "lines": j["lines"],
+                                       "total": j["total"], "maju": j["maju"],
+                                       "gagal": j["gagal"]}}
+
+
+def mulai_lanjut(picklist: list[str]) -> None:
+    """Jalankan `main.py --lanjut ... --jalankan` BERURUTAN untuk picklist terhenti yang dipilih
+    (proses terpisah per picklist, SUNGGUHAN: mengubah data di Jubelio). Melempar RuntimeError
+    kalau masih ada job lanjut / proses harian berjalan, ValueError kalau pilihan tidak valid."""
+    global _lanjut
+    import peringatan_gagal
+    peringatan_gagal.atur_folder(jh.FOLDER_LOG)
+    ada = {d["picklist"]: d for d in peringatan_gagal.daftar_terhenti()}
+    if not isinstance(picklist, list) or not picklist or not all(isinstance(x, str) and x in ada for x in picklist):
+        raise ValueError("Pilihan tidak ada di daftar picklist terhenti")
+    pilih = [ada[p] for p in dict.fromkeys(picklist)]
+    with _kunci:
+        if _lanjut and _lanjut["status"] == "jalan":
+            raise RuntimeError("Download ulang sebelumnya masih berjalan")
+        if jh.keadaan()["status"] == "jalan":
+            raise RuntimeError("Masih ada proses harian yang berjalan")
+        _lanjut = {"status": "jalan", "lines": [], "total": len(pilih), "maju": 0, "gagal": 0}
+        threading.Thread(target=_kerjakan_lanjut, args=(_lanjut, pilih), daemon=True).start()
+
+
+def _perintah_lanjut(d: dict) -> list[str]:
+    p = [sys.executable, str(Path(__file__).with_name("main.py")), "--lanjut", d["picklist"],
+         "--nama", d["nama"]]
+    if d.get("tag"):
+        p += ["--tag", d["tag"]]
+    if d.get("subfolder"):
+        p += ["--subfolder", d["subfolder"]]
+    return p + ["--sesi", d["sesi"], "--jalankan"]
+
+
+def _kerjakan_lanjut(job: dict, pilih: list[dict]) -> None:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+    for i, d in enumerate(pilih, 1):
+        job["lines"].append(f"=== {i}/{len(pilih)} {d['picklist']} ({d['nama']}) ===")
+        try:
+            p = jh._luncurkan(_perintah_lanjut(d), env)
+            for baris in p.stdout:
+                job["lines"].append(baris.rstrip())
+                del job["lines"][:-BARIS_LOG_MAKS]
+            kode = p.wait()
+        except OSError as e:
+            job["lines"].append(f"GAGAL menjalankan: {e}")
+            kode = -1
+        if kode != 0:
+            job["gagal"] += 1
+            job["lines"].append(f"GAGAL: {d['picklist']} masih terhenti")
+        job["maju"] = i
+    job["status"] = "gagal" if job["gagal"] else "selesai"
+
+
 def _publik(job: dict | None) -> dict:
     """Job tanpa daftar path internal (untuk JSON)."""
     if not job:
@@ -182,6 +249,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/jobs":     # ringkasan semua printer (UI memulihkan status setelah refresh)
                 return self._kirim(200, {"jobs": {n: {"status": j["status"], "total": j["total"],
                                                       "id": j["id"]} for n, j in _jobs.items()}})
+            if url.path == "/api/terhenti":
+                return self._kirim(200, info_terhenti())
             if url.path == "/api/harian/info":
                 return self._kirim(200, jh.info())
             if url.path == "/api/harian/job":
@@ -196,10 +265,18 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._kirim(403, {"error": "host ditolak"})
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
-        if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan")                 or "application/json" not in (self.headers.get("Content-Type") or ""):
+        if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan",
+                             "/api/terhenti/jalankan") \
+                or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
             data = json.loads(corpus or b"{}")
+            if self.path == "/api/terhenti/jalankan":
+                try:
+                    mulai_lanjut(data.get("picklist"))
+                except ValueError as e:
+                    return self._kirim(400, {"error": str(e)})
+                return self._kirim(200, {"mulai": True})
             if self.path == "/api/harian/hentikan":
                 return self._kirim(200, {"dihentikan": jh.hentikan()})
             if self.path == "/api/harian/jalankan":

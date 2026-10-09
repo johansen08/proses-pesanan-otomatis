@@ -242,6 +242,8 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
       <div id="pTerlompat"></div>
       <div class="sec" style="font-size:13px">Pesanan tanpa resi <i class="i l" data-tip="Sudah Picking > Selesai tapi tidak dapat nomor resi. Biasanya ada request cancel — infokan ke tim admin/CS.">i</i></div>
       <div id="pResi"></div>
+      <div class="sec" style="font-size:13px">Gagal unduh PDF <span class="pill bad" id="tJum">0</span> <i class="i l" data-tip="Picklist yang terhenti (mis. timeout unduh label PDF). Pilih semua atau sebagian lalu Download ulang — picklist dilanjutkan dari langkah yang gagal dan PDF masuk ke folder sesi asalnya.">i</i></div>
+      <div id="pTerhenti"></div>
       <div class="sec" style="font-size:13px">Proses gagal <i class="i l" data-tip="Langkah yang terhenti, mis. timeout unduh label PDF.">i</i></div>
       <div id="pMasalah"></div>
     </details>
@@ -622,7 +624,52 @@ async function muatPeringatan(){
  const d=await api('/api/harian/info');HINFO=d;const P=d.peringatan;
  isiPeringatan('#pTerlompat',P.picklist,'warn');isiPeringatan('#pResi',P.resi,'warn');isiPeringatan('#pMasalah',P.gagal,'bad');
  jumP=P.picklist.length+P.resi.length+P.gagal.length+1;kurangiP();   // set badge
+ await muatTerhenti().catch(()=>{});
  return d;
+}
+/* ---------- gagal unduh PDF: kumpulkan, pilih, download ulang ---------- */
+let TERHENTI=[];const pilT=new Set();let pollT=null;
+function drawTerhenti(){
+ const el=$('#pTerhenti');$('#tJum').textContent=TERHENTI.length;
+ if(!TERHENTI.length){el.innerHTML='<div class="emp" style="padding:8px">Tidak ada</div>';return;}
+ const semua=pilT.size===TERHENTI.length;
+ el.innerHTML=`<div class="row"><span class="b ${semua?'on':pilT.size?'mix':''}" data-pt="*" style="cursor:pointer">${ic('check')}</span><span class="tx"><b>Pilih semua</b><small>${pilT.size} dari ${TERHENTI.length} dipilih</small></span><button class="btn" id="tUlang" ${pilT.size?'':'disabled'}>Download ulang${pilT.size?' ('+pilT.size+')':''}</button></div>`
+  +TERHENTI.map(d=>`<div class="row" data-pt="${esc(d.picklist)}" style="cursor:pointer"><span class="b ${pilT.has(d.picklist)?'on':''}">${ic('check')}</span><span class="tx"><b class="mono">${esc(d.picklist)}</b> <span style="color:var(--mut)">· ${esc(d.nama)} · ${esc(d.waktu||'')}</span><small>${esc(d.alasan||'')}</small></span></div>`).join('');
+ $$('#pTerhenti [data-pt]').forEach(n=>n.onclick=()=>{const k=n.dataset.pt;
+  if(k==='*'){if(pilT.size===TERHENTI.length)pilT.clear();else TERHENTI.forEach(d=>pilT.add(d.picklist));}
+  else if(pilT.has(k))pilT.delete(k);else pilT.add(k);drawTerhenti();});
+ $('#tUlang').onclick=e=>{e.stopPropagation();konfirmasiUlang();};
+}
+async function muatTerhenti(){
+ const d=await api('/api/terhenti');TERHENTI=d.daftar;
+ [...pilT].forEach(k=>{if(!TERHENTI.some(x=>x.picklist===k))pilT.delete(k)});
+ drawTerhenti();return d;
+}
+function konfirmasiUlang(){
+ const pilih=[...pilT];
+ konfirmasi(`<h2>Download ulang ${pilih.length} picklist?</h2><p>Picklist dilanjutkan berurutan dari langkah yang gagal (picking → resi → unduh label PDF) dan dicatat di Jubelio. PDF masuk ke folder sesi asalnya.</p><div class="chips">${pilih.map(p=>`<span class="chip">${esc(p)}</span>`).join('')}</div>
+  <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" id="yaUlang">Ya, jalankan</button></div>`);
+ $('#yaUlang').onclick=async()=>{
+  try{await api('/api/terhenti/jalankan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({picklist:pilih})});}
+  catch(e){tutup();return toast('Gagal mulai: '+e.message);}
+  tampilUlang();};
+}
+function tampilUlang(){
+ konfirmasi(`<h2 id="uT">Download ulang…</h2><div class="bar"><i id="uBar"></i></div>
+  <pre id="uLog" class="log" style="max-height:260px;min-height:120px;white-space:pre-wrap"></pre>
+  <div class="acts"><button class="btn" id="uTutup" disabled>Tutup</button></div>`);
+ $('#uTutup').onclick=()=>{clearInterval(pollT);tutup();};
+ clearInterval(pollT);pollT=setInterval(tickUlang,1500);tickUlang();
+}
+async function tickUlang(){
+ try{const d=await muatTerhenti(),j=d.job;if(!j||!$('#uT'))return;
+  const run=j.status==='jalan';
+  $('#uT').textContent=run?`Download ulang — ${j.maju}/${j.total}`:(j.status==='selesai'?'Selesai ✓ semua berhasil':`Selesai — ${j.gagal} masih gagal`);
+  $('#uBar').style.width=Math.round(j.maju/Math.max(1,j.total)*100)+'%';
+  $('#uLog').textContent=j.lines.slice(-80).join('\n');$('#uLog').scrollTop=1e6;
+  $('#uTutup').disabled=run;
+  if(!run){clearInterval(pollT);muatPeringatan().catch(()=>{});}
+ }catch(e){}
 }
 function logApi(t){const l=$('#rLog');const c=/ERROR|GAGAL|Traceback/i.test(t)?'e':/WARNING|PERHATIAN|!!!|DILEWATI|DIHENTIKAN/i.test(t)?'w':/^===/.test(t)?'ok':'';
  l.insertAdjacentHTML('beforeend',`<div class="${c}">${esc(t)||'&nbsp;'}</div>`);}

@@ -98,6 +98,7 @@ from zoneinfo import ZoneInfo
 import requests
 
 import jubelio
+import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 import rekap_master_excel
@@ -744,6 +745,8 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
             baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": label,
                      "No Picklist": pno, "Total Pesanan": len(ids_pakai),
                      "Catatan": f"TERHENTI: {e}. Lanjutkan: {lanjut}"}
+            peringatan_gagal.catat_terhenti(pno, label_file or label, folder_label, str(e),
+                                            subfolder=subfolder)
         baris["Durasi"] = durasi(time.monotonic() - mulai)
         catat_riwayat(file_riwayat, baris)
         rekap_master_excel.catat(baris, nomor_terlompat)
@@ -2143,6 +2146,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             log.exception("  TERHENTI di %s: %s", pno, e)
             baris["Catatan"] = (f"TERHENTI: {e}. Lanjutkan: "
                                 f"{perintah_lanjut(pno, folder_label, sku, tag=tag)}")
+            peringatan_gagal.catat_terhenti(pno, sku, folder_label, str(e), tag=tag)
         return idx, mulai, nomor_terlompat, baris
 
     if tugas:
@@ -2194,4 +2198,5 @@ def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path
     baris["Durasi"] = durasi(time.monotonic() - mulai)
     catat_riwayat(file_riwayat, baris)
     rekap_master_excel.catat(baris)
+    peringatan_gagal.tandai_selesai(p["picklist_no"])
     return baris

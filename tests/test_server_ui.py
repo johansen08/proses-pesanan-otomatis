@@ -241,6 +241,64 @@ def uji_server_ui_dua_printer_berbeda_bersamaan():
     print("  server_ui: printer berbeda mencetak bersamaan, printer sama/file sama ditolak 409, status per printer")
 
 
+def uji_server_ui_download_ulang_picklist_terhenti():
+    """Picklist terhenti dikumpulkan terstruktur (peringatan_gagal), UI memilih sebagian/semua,
+    server menjalankan `main.py --lanjut` berurutan dengan argumen asalnya."""
+    import jalankan_harian as jh
+    import peringatan_gagal as pg
+
+    with tempfile.TemporaryDirectory() as tmp:
+        log_dir = Path(tmp) / "logs"
+        log_dir.mkdir()
+        sesi = Path(tmp) / "label-pengiriman" / "2026-10-09" / "2"
+        panggilan = []
+
+        def luncur_palsu(argumen, env):
+            panggilan.append(argumen)
+            return subprocess.Popen([sys.executable, "-c", "print('lanjut palsu')"], stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+        jh._job = None
+        su._lanjut = None
+        with mock.patch.object(jh, "FOLDER_LOG", log_dir), mock.patch.object(jh, "_luncurkan", luncur_palsu):
+            pg.atur_folder(log_dir)
+            pg.catat_terhenti("PICK-000000001", "SPX-A", sesi, "timeout unduh", tag="SPX_SPESIAL")
+            pg.catat_terhenti("PICK-000000002", "GTL", sesi, "410 Expired", subfolder="URGENT")
+            pg.catat_terhenti("PICK-000000003", "X", sesi, "gagal")
+            pg.tandai_selesai("PICK-000000003")
+            assert [d["picklist"] for d in pg.daftar_terhenti()] == ["PICK-000000002", "PICK-000000001"]
+            server = su.Server(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                kode, d = _panggil(port, "/api/terhenti")
+                assert kode == 200 and len(d["daftar"]) == 2 and d["job"] is None, d
+                # pilihan tidak ada di daftar / kosong / bukan daftar -> 400, tidak ada proses
+                assert _panggil(port, "/api/terhenti/jalankan", {"picklist": ["PICK-000000003"]})[0] == 400
+                assert _panggil(port, "/api/terhenti/jalankan", {"picklist": []})[0] == 400
+                assert _panggil(port, "/api/terhenti/jalankan", {"picklist": "PICK-000000001"})[0] == 400
+                assert _panggil(port, "/api/terhenti/jalankan", {"picklist": ["PICK-000000001"]}, host="evil.example.com")[0] == 403
+                assert panggilan == []
+                kode, _ = _panggil(port, "/api/terhenti/jalankan", {"picklist": ["PICK-000000001", "PICK-000000002"]})
+                assert kode == 200
+                for _ in range(100):
+                    j = _panggil(port, "/api/terhenti")[1]["job"]
+                    if j["status"] != "jalan":
+                        break
+                    time.sleep(0.1)
+                assert j["status"] == "selesai" and j["maju"] == 2 and j["gagal"] == 0, j
+                assert len(panggilan) == 2
+                a, b = panggilan
+                assert a[a.index("--lanjut") + 1] == "PICK-000000001" and "--tag" in a and "SPX_SPESIAL" in a
+                assert b[b.index("--lanjut") + 1] == "PICK-000000002" and b[b.index("--subfolder") + 1] == "URGENT"
+                assert a[a.index("--sesi") + 1] == "2026-10-09/2" and a[-1] == "--jalankan"
+            finally:
+                server.shutdown()
+                su._lanjut = None
+                pg._file_peringatan = None
+    print("  server_ui: picklist terhenti dikumpulkan, validasi pilihan, download ulang berurutan dengan argumen asal")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):
