@@ -65,7 +65,7 @@ echo === 7/8 Uji SPX - J^&T KOMBINASI ===
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 8/8 Uji UPLOAD FAKTUR & PESANAN KE IRESIS ===
+echo === 8/8 Uji UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis
 call :catat_waktu TF_AKHIR
 echo.
@@ -132,7 +132,7 @@ echo === 11/12 Uji SPX KOMBINASI ===
 call :catat_waktu T9_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 12/12 Uji UPLOAD FAKTUR & PESANAN KE IRESIS ===
+echo === 12/12 Uji UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis
 call :catat_waktu TF_AKHIR
 echo.
@@ -194,7 +194,7 @@ echo === 10/11 Uji SPX KOMBINASI ===
 call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 11/11 Uji UPLOAD FAKTUR & PESANAN KE IRESIS ===
+echo === 11/11 Uji UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis
 call :catat_waktu TF_AKHIR
 echo.
@@ -246,7 +246,7 @@ echo === 8/9 Uji SPX - J^&T KOMBINASI ===
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 9/9 Uji UPLOAD FAKTUR & PESANAN KE IRESIS ===
+echo === 9/9 Uji UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis
 call :catat_waktu TF_AKHIR
 echo.
