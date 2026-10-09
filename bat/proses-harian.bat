@@ -1,6 +1,6 @@
 @echo off
 setlocal
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 rem Sesi folder label dihitung SEKALI di sini (bertahan selama proses-harian.bat ini berjalan).
 rem Ditutup lalu dijalankan ulang -> sesi baru (angka lanjut dari yang terbesar hari ini).

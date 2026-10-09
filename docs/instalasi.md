@@ -1,7 +1,7 @@
 # Panduan Instalasi di PC Baru
 
 Panduan ini untuk memindahkan proyek **proses-pesanan-otomatis** ke PC/laptop lain
-(Windows) agar `proses-harian.bat` bisa langsung jalan.
+(Windows) agar `bat\proses-harian.bat` bisa langsung jalan.
 
 > Jika Claude Code yang membaca file ini di PC baru: jalankan langkah-langkah di
 > bagian **"Langkah instalasi"** secara berurutan lewat terminal (PowerShell/CMD),
@@ -84,7 +84,7 @@ Ini akan menginstall 6 library dari `requirements.txt`:
 
 Hanya diperlukan jika Anda akan menjalankan `sniff\run_sniff_jubel.bat` (alat
 perekam ulang alur Jubelio, dipakai kalau Jubelio mengubah tampilan/API-nya).
-**Tidak diperlukan** untuk pemakaian normal lewat `proses-harian.bat`.
+**Tidak diperlukan** untuk pemakaian normal lewat `bat\proses-harian.bat`.
 
 ```bash
 .venv\Scripts\python -m playwright install chromium
@@ -111,10 +111,10 @@ Ganti dengan email & password akun Jubelio yang sebenarnya. Baris
 
 ## 6. Jalankan program
 
-Klik dua kali `proses-harian.bat`, atau dari terminal:
+Klik dua kali `bat\proses-harian.bat`, atau dari terminal:
 
 ```bash
-proses-harian.bat
+bat\proses-harian.bat
 ```
 
 Program akan menampilkan menu 4 TIPE (TIPE 1-4) + Keluar seperti di
@@ -123,22 +123,22 @@ Folder `data/` (isi `laporan-siap-proses/`, `laporan-faktur/`, `laporan-sku-spes
 otomatis saat dibutuhkan.
 
 **Disarankan**: coba dulu `bat\proses-harian-uji.bat` (mode uji, struktur menu sama seperti
-`proses-harian.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
-koneksi API berhasil, sebelum menjalankan sesi di `proses-harian.bat` yang membuat
+`bat\proses-harian.bat` — tidak mengubah apa pun di Jubelio) untuk memastikan login &
+koneksi API berhasil, sebelum menjalankan sesi di `bat\proses-harian.bat` yang membuat
 picklist sungguhan.
 
 ## 7. (Opsional) Install SumatraPDF untuk fitur cetak bulk label
 
 Hanya diperlukan jika akan memakai salah satu `cetak-label-*.bat` (cetak ulang bulk
 label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI lewat printer, tanpa buka PDF satu-satu).
-**Tidak** diperlukan untuk alur `proses-harian.bat`/`jalankan.bat` biasa. Panduan
+**Tidak** diperlukan untuk alur `bat\proses-harian.bat`/`bat\jalankan.bat` biasa. Panduan
 download, install, dan setup lengkap: [cetak-bulk-label.md](cetak-bulk-label.md)
 bagian 2.
 
 ## 8. (Opsional) Jadwal otomatis via Windows Task Scheduler
 
 Kalau di PC lama ada jadwal otomatis (Task Scheduler) yang menjalankan
-`jalankan.bat`, buat ulang di PC baru:
+`bat\jalankan.bat`, buat ulang di PC baru:
 
 *Create Basic Task* → pilih jadwal → *Start a program*:
 - Program: `C:\proses-pesanan-otomatis\jalankan.bat` (sesuaikan path)

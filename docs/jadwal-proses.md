@@ -6,7 +6,7 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 tidak perlu ubah program.
 
 **Revisi 2026-10-08**: tambah **mode event** (`bat\proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst)
-— J&T, SPX Hemat, dan SPX Standard dipisah sepanjang hari. `proses-harian.bat` **tidak berubah**
+— J&T, SPX Hemat, dan SPX Standard dipisah sepanjang hari. `bat\proses-harian.bat` **tidak berubah**
 sama sekali; lihat bagian "bat\proses-event.bat — mode event" di bawah.
 
 **Revisi 2026-10-06**: tambah langkah **Recheck Stok** (`--recheck-stok`) sebagai langkah
@@ -15,7 +15,7 @@ berstatus stok kosong (`EMPTY_STOCK`, biasanya bekas picklist sebelumnya yang ga
 stok tidak ada) sekaligus, supaya pesanan yang stoknya sudah tersedia lagi ikut terhitung di
 langkah-langkah berikutnya TIPE yang sama. Lihat bagian "Recheck stok" di bawah.
 
-**Revisi 2026-10-01**: `proses-harian.bat` memakai **4 TIPE** (menggantikan
+**Revisi 2026-10-01**: `bat\proses-harian.bat` memakai **4 TIPE** (menggantikan
 penamaan "SESI PAGI/JAM 13.00/SESI SORE/JAM 15.00" sebelumnya yang kurang
 jelas) — **TIPE 1**, **TIPE 2**, **TIPE 3**, **TIPE 4**, dijalankan **1 kali
 klik + 1 konfirmasi Y/N** per tipe. TIPE 1 & TIPE 4 menggabung J&T+SPX;
@@ -24,13 +24,13 @@ TIPE 2 & TIPE 3 memisahnya (`--kurir jnt`/`--kurir spx`). TIPE 2 (tepat jam
 (tepat jam 15.00) menghabiskan wajib keluar TikTok Shop (J&T Resi Siang,
 ≤ 15.00). **TIPE 1 juga dipakai di sore hari, 16.00–17.00** — dulu
 jendelanya terus sampai 07.00 keesokan harinya, kini dibatasi sampai 17.00;
-setelah itu malam/dini hari memakai `proses-malam.bat` (Urgent + SPX-J&T). Penentuan SKU mana yang "spesial" (dari Excel) **tidak
+setelah itu malam/dini hari memakai `bat\proses-malam.bat` (Urgent + SPX-J&T). Penentuan SKU mana yang "spesial" (dari Excel) **tidak
 berubah** di semua tipe, tetap menggabung J&T+SPX; `--kurir` cuma
 membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 
-## Istilah tim → proses-harian.bat / perintah program
+## Istilah tim → bat\proses-harian.bat / perintah program
 
-| Istilah tim | Perintah (`jalankan.bat ...`) |
+| Istilah tim | Perintah (`bat\jalankan.bat ...`) |
 |---|---|
 | Recheck stok | `--recheck-stok --jalankan` |
 | Sampel TikTok (nilai 0/kosong) | `--sampel --jalankan` |
@@ -48,7 +48,7 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 | SPX 1 SKU 1 qty reguler (dipisah) | `--reguler --bagian 1qty --kurir spx --jalankan` |
 | SPX kombinasi reguler (dipisah) | `--reguler --bagian kombinasi --kurir spx --jalankan` |
 
-## proses-harian.bat — 4 TIPE
+## bat\proses-harian.bat — 4 TIPE
 
 ```
 1. TIPE 1 - GABUNG J&T+SPX              (07.00-12.00 / 16.00-17.00)
@@ -64,8 +64,8 @@ tiap tipe (lihat pembahasan lebih lanjut di bawah), lalu picklist sampel
 (TikTok Shop nilai 0/kosong) **selalu** dicek setelahnya (dilewati kalau
 tidak ada pesanannya), lalu picklist urgent (Lazada, GTL/SiCepat) **selalu**
 ikut setelahnya — tidak ada lagi cara memicunya sendirian lewat menu (masih
-bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
-...`/`jalankan.bat --urgent ...` kalau perlu).
+bisa manual lewat `bat\jalankan.bat --recheck-stok ...`/`bat\jalankan.bat --sampel
+...`/`bat\jalankan.bat --urgent ...` kalau perlu).
 
 ### TIPE 1 — gabung J&T+SPX (07.00-12.00, dan 16.00-17.00)
 
@@ -81,7 +81,7 @@ bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore **16.00-17.00** — begitu TIPE 4 selesai (jam 15.00-an), TIPE 1
 menggantikannya sampai jam 17.00. Setelah 17.00 sampai TIPE 1 lagi besok
-pagi jam 07.00 (malam/dini hari), pakai `proses-malam.bat` (lihat di
+pagi jam 07.00 (malam/dini hari), pakai `bat\proses-malam.bat` (lihat di
 bawah), bukan TIPE 1.
 
 ### TIPE 2 — dipisah + SPX Resi Pagi (TEPAT jam 13.00)
@@ -121,7 +121,7 @@ jadwal.
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
-dipakai lagi** di luar rentang ini (malam hari pakai `proses-malam.bat`, lihat
+dipakai lagi** di luar rentang ini (malam hari pakai `bat\proses-malam.bat`, lihat
 di bawah).
 
 ### TIPE 4 — gabung lagi + J&T Resi Siang (TEPAT jam 15.00)
@@ -144,7 +144,7 @@ setelah J&T Resi Siang selesai tidak ada lagi alasan bisnis untuk memisah
 J&T/SPX hari itu. Setelah TIPE 4 selesai, lanjut ke **TIPE 1** (lihat di
 atas) sampai jam 17.00.
 
-### proses-malam.bat (tanpa menu)
+### bat\proses-malam.bat (tanpa menu)
 
 Satu klik + 1 konfirmasi Y/N, tanpa cek jam & tanpa Recheck Stok/Sampel/IRESIS: 1. Urgent Lazada,
 2. Urgent GTL & SiCepat (tanpa `--lewati-malam`, jadi tidak ditahan), 3. SPX - J&T SPESIAL,
@@ -167,11 +167,11 @@ Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IR
   `IRESIS_NAMA_PK`, `IRESIS_CA_BUNDLE`); PC harus satu LAN dengan server IRESIS.
 - **Revisi 2026-10-08**: jam **20.00-04.59** semua yang terkait IRESIS (unduh faktur/pesanan +
   upload) **dilewati otomatis** (`jam_tanpa_iresis()` di `src/main.py`; langkah di `.bat` tetap
-  tampil tapi langsung selesai). Paksa manual: `jalankan.bat --upload-iresis --jalankan --paksa`.
+  tampil tapi langsung selesai). Paksa manual: `bat\jalankan.bat --upload-iresis --jalankan --paksa`.
 - Upload ulang aman (IRESIS melewati baris yang tidak berubah).
 - Gagal (server mati/login salah/respons aneh): TIPE tetap selesai, peringatan "UPLOAD IRESIS
   GAGAL" dicetak mencolok & muncul lagi di rekap waktu; upload ulang manual dengan
-  `jalankan.bat --upload-iresis --jalankan`.
+  `bat\jalankan.bat --upload-iresis --jalankan`.
 
 ### Rekap PICKLIST.xlsx (per sesi)
 
@@ -187,7 +187,7 @@ proses berjalan (gap sebelum picklist pertama proses hanya diperingatkan). Lihat
 
 **Revisi 2026-10-02**: pesanan urgent yang jam pesannya (WIB) masih jauh dari waktu proses
 tidak buru-buru dipicklist — ditahan dulu, baru dilanjutkan otomatis begitu urgent dijalankan
-lagi setelah jam 16.00 (lewat `proses-malam.bat`):
+lagi setelah jam 16.00 (lewat `bat\proses-malam.bat`):
 
 | | Urgent Lazada | Urgent GTL/SiCepat |
 |---|---|---|
@@ -195,9 +195,9 @@ lagi setelah jam 16.00 (lewat `proses-malam.bat`):
 | Dilanjutkan otomatis setelah | jam 16.00 | jam 16.00 |
 
 Berlaku di setiap TIPE (07.00-15.00): pesanan yang jam pesannya di atas jam tunda hari itu
-TIDAK ikut picklist saat itu — bukan dibuang, cuma ditahan sampai `proses-malam.bat`
+TIDAK ikut picklist saat itu — bukan dibuang, cuma ditahan sampai `bat\proses-malam.bat`
 dijalankan SETELAH jam 16.00, lalu otomatis ikut tanpa batas jam lagi (batas tunda diabaikan
-sepenuhnya setelah jam 16.00). `proses-malam.bat` tidak punya penjaga jam dan tidak berjalan
+sepenuhnya setelah jam 16.00). `bat\proses-malam.bat` tidak punya penjaga jam dan tidak berjalan
 otomatis: kalau dijalankan sebelum 16.00 pesanan masih tertahan, kalau tidak dijalankan sama
 sekali urgent baru terambil lagi di TIPE 1 pagi berikutnya. Implementasi kode:
 `JAM_CUTOFF_URGENT_LAZADA`/`JAM_CUTOFF_URGENT_GTL_SICEPAT`/`JAM_LANJUT_URGENT` &
@@ -207,9 +207,9 @@ sekali urgent baru terambil lagi di TIPE 1 pagi berikutnya. Implementasi kode:
 langkah 3 & 4 (Urgent Lazada, Urgent GTL & SiCepat) lewat `--urgent ... --lewati-malam`
 (`jam_malam()` di `src/main.py`) — sebelumnya pesanan yang ditahan ikut terambil begitu jam 16.00.
 TIPE 1 pagi (07.00-12.00) tetap menjalankan urgent. Pesanan urgent yang tertahan tidak hilang:
-diproses di `proses-malam.bat` (urgent tanpa `--lewati-malam`, jadi tidak ditahan) yang
+diproses di `bat\proses-malam.bat` (urgent tanpa `--lewati-malam`, jadi tidak ditahan) yang
 dijalankan setelah jam 16.00, atau di TIPE 1 pagi / TIPE 2-4 berikutnya, atau manual lewat
-`jalankan.bat --urgent`.
+`bat\jalankan.bat --urgent`.
 
 ### Recheck stok
 
@@ -271,15 +271,15 @@ Urutan dalam tiap TIPE tidak saling bergantung secara teknis (kecuali
 spesial harus tahu SKU spesial hari itu, sudah ditangani lewat baca ulang
 Excel di setiap langkah), tapi urgent dijalankan **lebih dulu** supaya
 pesanan yang sudah "diambil" urgent tidak ikut terhitung sebagai kandidat
-SKU spesial (kebijakan operasional tim, `proses-harian.bat` sudah mengikuti
+SKU spesial (kebijakan operasional tim, `bat\proses-harian.bat` sudah mengikuti
 urutan ini).
 
 Detail masing-masing alur & opsi `--kurir`: lihat [README.md](../README.md).
 
 ### Penjaga jam (`dalam_jam_menu()`) — sanity check, bukan validasi urutan
 
-`proses-harian.bat` menanyakan konfirmasi ekstra (Y/N) kalau TIPE dipilih
-di luar jendela jam yang wajar untuknya (`cek_jam` di `proses-harian.bat`,
+`bat\proses-harian.bat` menanyakan konfirmasi ekstra (Y/N) kalau TIPE dipilih
+di luar jendela jam yang wajar untuknya (`cek_jam` di `bat\proses-harian.bat`,
 `dalam_jam_menu()` di `src/main.py`):
 
 | TIPE | Jendela | Catatan |
@@ -308,9 +308,9 @@ baru saja selesai).
 ## bat\proses-event.bat — mode event (10.10, 11.11, 12.12, dst)
 
 Dipakai **seharian penuh** di hari event (tanggal kembar / promo besar) **menggantikan**
-`proses-harian.bat`. Beda utamanya: J&T, SPX Hemat, dan SPX Standard **dipisah sepanjang hari**
+`bat\proses-harian.bat`. Beda utamanya: J&T, SPX Hemat, dan SPX Standard **dipisah sepanjang hari**
 (bukan bergantian digabung/dipisah per TIPE). Alur harian tidak disentuh — kalau ada masalah di
-hari event, tim langsung kembali ke `proses-harian.bat`. `bat\proses-event-uji.bat` = versi mode uji
+hari event, tim langsung kembali ke `bat\proses-harian.bat`. `bat\proses-event-uji.bat` = versi mode uji
 (tanpa `--jalankan`, tanpa konfirmasi, tanpa pertanyaan), langkahnya dijaga identik dengan versi
 sungguhan oleh `tests/test_bat.py`.
 
@@ -377,7 +377,7 @@ sekitar jam 15.00, cukup 1x sehari. Di pilihan 2 tidak ditanya. Di versi uji sel
 
 ### Istilah tim → perintah program
 
-| Istilah tim | Perintah (`jalankan.bat ...`) |
+| Istilah tim | Perintah (`bat\jalankan.bat ...`) |
 |---|---|
 | J&T spesial (event) | `--label --event --kurir jnt --tanpa-reguler --jalankan` |
 | J&T 1 qty reguler (event) | `--reguler --event --kurir jnt --bagian 1qty --jalankan` |
@@ -401,10 +401,10 @@ Tiap kelompok punya subfolder (di dalam folder sesi `label-pengiriman/<tanggal>/
 jenis cetak sendiri. Jenis cetak harian gabungan (`spesial`, `satuan`, `kombinasi`) **tidak**
 ikut mencetak folder event.
 
-**Cara mencetak di hari event: jalankan `cetak-label.bat` → `2. EVENT`.** Di sana ada paket
+**Cara mencetak di hari event: jalankan `bat\cetak-label.bat` → `2. EVENT`.** Di sana ada paket
 **SEMUA EVENT** (berurutan J&T → SPX Hemat Pagi → SPX Hemat → SPX Standard, printer & konfirmasi
 cukup sekali) dan paket per kelompok (J&T / SPX Hemat Pagi / SPX Hemat / SPX Standard). Langsung
-tanpa menu: `cetak-label.bat --paket event-semua`. Kolom terakhir tabel berikut = jenis di menu.
+tanpa menu: `bat\cetak-label.bat --paket event-semua`. Kolom terakhir tabel berikut = jenis di menu.
 
 | Hasil | Subfolder | `print_spesial.py --jenis` | `.bat` cetak |
 |---|---|---|---|
@@ -437,7 +437,7 @@ Shopee Pagi baru masuk akal setelah jam 12.00). Pilihan 1 tidak punya jendela ja
 3. Di hari event jalankan lagi `bat\proses-event-uji.bat` dulu, baru `bat\proses-event.bat`. Setelah
    langkah pertama selesai, cek folder `label-pengiriman/<tanggal>/<sesi>/` dan hasil cetaknya
    (`cetak-label-*-spx-hemat.bat` dst) sebelum meneruskan sesi berikutnya.
-4. Cadangan: `proses-harian.bat` tidak berubah dan tetap bisa dipakai kapan saja.
+4. Cadangan: `bat\proses-harian.bat` tidak berubah dan tetap bisa dipakai kapan saja.
 
 ## Jadwal harian (sudah berjalan pakai program)
 
@@ -445,7 +445,7 @@ Dijalankan tim setiap hari, siklus 2 jam di jam kerja (jam bulat, lalu
 diulang lagi setelah proses transfer bank/pembayaran selesai) dan 1x per
 jam di luar jam kerja:
 
-| Jam | Yang dijalankan | TIPE proses-harian.bat |
+| Jam | Yang dijalankan | TIPE bat\proses-harian.bat |
 |---|---|---|
 | 07.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, SPX & J&T spesial, 1 qty reguler, kombinasi reguler (**digabung**) | 1 |
 | 07.xx (setelah transfer) | (ulang) | 1 |
@@ -459,7 +459,7 @@ jam di luar jam kerja:
 | 15.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), Urgent Lazada, Urgent GTL/SiCepat, **J&T ≤ 15.00 (J&T Resi Siang)**, lalu SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung lagi**) | 4 |
 | 16.00 | Recheck stok, Sampel TikTok (nilai 0/kosong), ~~Urgent Lazada, Urgent GTL/SiCepat~~ (**dilewati** 16.00-06.59, lihat catatan di bawah), SPX-J&T spesial, 1 qty reguler, kombinasi (**digabung**, tanpa J&T Resi Siang lagi - sudah selesai jam 15.00) | 1 |
 | 16.xx (setelah transfer, sebelum 17.00) | (ulang) | 1 |
-| 17.00-06.xx (malam & dini hari) | Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T (**digabung**), 1x per jam bila ada pesanan masuk | `proses-malam.bat` |
+| 17.00-06.xx (malam & dini hari) | Urgent Lazada, Urgent GTL/SiCepat, SPX-J&T (**digabung**), 1x per jam bila ada pesanan masuk | `bat\proses-malam.bat` |
 
 **Catatan jam 13.00**: hanya siklus ini yang menyertakan SPX Resi Pagi
 (langkah 5 di TIPE 2 — channel Shopee, jam pesan WIB maksimal 12.00 siang
@@ -473,8 +473,8 @@ pakai TIPE 1 (gabung) — bukan TIPE 3 (dipisah) lagi, karena alasan bisnis
 pemisahan J&T/SPX (TIPE 2 & TIPE 3) sudah tidak berlaku setelah J&T Resi
 Siang selesai.
 
-**Jadwal malam & dini hari (17.00-07.00)** memakai `proses-malam.bat`
-(lihat bagian "proses-malam.bat" di atas), bukan lagi siklus TIPE 1. Kalau belum pernah dicoba pakai program di luar jam kerja normal
+**Jadwal malam & dini hari (17.00-07.00)** memakai `bat\proses-malam.bat`
+(lihat bagian "bat\proses-malam.bat" di atas), bukan lagi siklus TIPE 1. Kalau belum pernah dicoba pakai program di luar jam kerja normal
 (mis. tengah malam), jalankan dulu manual dan cek hasilnya di Jubelio
 (jumlah picklist, resi, label PDF) sebelum mempercayakannya tanpa
 pengawasan.
@@ -489,7 +489,7 @@ pengawasan.
   lihat bagian 3 [README.md](../README.md)). Setiap pengembangan baru wajib
   mempertahankan aturan ini.
 - **Penentuan SKU "spesial"** (dari Excel, `hitung_sku_spesial` di
-  `sku_spesial.py`) di **alur harian** (`proses-harian.bat`) **selalu**
+  `sku_spesial.py`) di **alur harian** (`bat\proses-harian.bat`) **selalu**
   menggabung resi J&T+SPX (minimal 3 resi sejenis), terlepas dari TIPE mana
   yang dipakai. `--kurir` di TIPE 2/TIPE 3 hanya membatasi resi kurir mana
   yang benar-benar dipicklist saat proses SKU spesial itu berjalan — bukan

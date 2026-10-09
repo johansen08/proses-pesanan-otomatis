@@ -3,7 +3,7 @@
 Panduan lengkap fitur **cetak bulk label**: cara install SumatraPDF (syarat wajib fitur ini)
 dan cara pakai fiturnya sehari-hari. Semua `.bat` cetak menjalankan `src/print_spesial.py`:
 
-- **`cetak-label.bat`** — **MENU** (HARIAN / EVENT / PER KURIR / satu jenis); pilih jenis atau
+- **`bat\cetak-label.bat`** — **MENU** (HARIAN / EVENT / PER KURIR / satu jenis); pilih jenis atau
   paket, lalu printer dipilih **sekali** untuk semua yang dicetak. Ini yang dipakai untuk hari
   event dan untuk semua jenis selain empat pintasan di bawah.
 - **Pintasan harian** `bat\cetak-label-spesial.bat` / `bat\cetak-label-gtl-sicepat.bat` /
@@ -16,7 +16,7 @@ Mencetak ulang semua label pengiriman yang sudah ada di subfolder tertentu folde
 sesi `label-pengiriman/<tanggal>/<sesi>/`, secara **bulk dan berurut** (nomor PICK
 terkecil/paling dulu dibuat, duluan dicetak), langsung ke printer pilihan, tanpa
 perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya pintasan
-`.bat` sendiri, semuanya (termasuk sisanya) bisa dipilih lewat menu `cetak-label.bat`
+`.bat` sendiri, semuanya (termasuk sisanya) bisa dipilih lewat menu `bat\cetak-label.bat`
 (kolom `.bat` di tabel di bawah = pintasan, atau "menu" bila hanya lewat menu):
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
@@ -124,7 +124,7 @@ environment variable baru terbaca.
 ### 3.1 Lewat menu (disarankan, wajib untuk hari event)
 
 ```bash
-cetak-label.bat
+bat\cetak-label.bat
 ```
 
 ```
@@ -153,9 +153,9 @@ dihitung gabungan semua jenis yang dipilih.
 Tanpa menu (langsung), argumen diteruskan apa adanya:
 
 ```bash
-cetak-label.bat --paket event-semua
-cetak-label.bat --jenis spesial-jnt,satuan-jnt,kombinasi-jnt     # beberapa jenis dipisah koma
-cetak-label.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"  # cetak ulang yang gagal
+bat\cetak-label.bat --paket event-semua
+bat\cetak-label.bat --jenis spesial-jnt,satuan-jnt,kombinasi-jnt     # beberapa jenis dipisah koma
+bat\cetak-label.bat --ulang "logs\gagal_cetak_2026-10-01_153000.txt"  # cetak ulang yang gagal
 ```
 
 ### 3.2 Pintasan harian (tanpa menu)
@@ -187,11 +187,11 @@ Secara default program hanya mengambil **satu** folder sesi, yang terbaru. Kalau
 malam tidak ikut tercetak. Gunakan `--semua-sesi`:
 
 ```bash
-cetak-label.bat --paket jnt --semua-sesi            # sesi kemarin + hari ini
-cetak-label.bat --paket jnt --semua-sesi --hari 3   # 3 hari terakhir
+bat\cetak-label.bat --paket jnt --semua-sesi            # sesi kemarin + hari ini
+bat\cetak-label.bat --paket jnt --semua-sesi --hari 3   # 3 hari terakhir
 ```
 
-Dari menu `cetak-label.bat`, setelah memilih jenis/paket muncul pertanyaan **"Cetak dari sesi
+Dari menu `bat\cetak-label.bat`, setelah memilih jenis/paket muncul pertanyaan **"Cetak dari sesi
 mana?"**: `1` = sesi terbaru saja (default, Enter), `2` = semua sesi 2 hari terakhir. Pintasan
 harian (`bat\cetak-label-spesial.bat` dst) tidak bertanya; tambahkan `--semua-sesi` di belakangnya.
 

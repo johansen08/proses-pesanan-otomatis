@@ -33,6 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MENU_BAT = ("proses-harian.bat", "proses-harian-uji.bat")
+BAT_DI_ROOT = ["proses-pesanan.bat"]      # satu-satunya .bat yang boleh di root
 MENU_EVENT = ("proses-event.bat", "proses-event-uji.bat")
 # Langkah J&T Resi Siang di proses-event.bat dijalankan bersyarat (jawaban Y/N di awal):
 # barisnya diawali `if /i "%JNT_SIANG%"=="Y" ` - awalan itu dibuang saat mengekstrak argumen.
@@ -146,6 +147,18 @@ def uji_semua_bat_berakhiran_crlf():
         "file .bat berakhiran baris LF, WAJIB CRLF (cmd.exe salah lompat label di file LF): "
         + ", ".join(salah) + " - ubah ke CRLF, mis. di VS Code klik 'LF' di status bar -> 'CRLF'")
     print(f"  {len(files)} file .bat dicek: semua berakhiran baris CRLF")
+
+
+def uji_root_hanya_berisi_proses_pesanan_bat():
+    """Aturan struktur: satu-satunya .bat di root = proses-pesanan.bat (buka app); sisanya bat/."""
+    ada = sorted(f.name for f in ROOT.glob("*.bat"))
+    assert ada == BAT_DI_ROOT, ada
+    for nama in ("proses-harian", "proses-malam", "cetak-label", "jalankan", "instalasi"):
+        assert (ROOT / "bat" / f"{nama}.bat").exists(), nama
+    for f in (ROOT / "bat").glob("*.bat"):
+        assert 'cd /d "%~dp0.."' in f.read_text(encoding="utf-8"), f.name
+    assert 'cd /d "%~dp0"' in (ROOT / "proses-pesanan.bat").read_text(encoding="utf-8")
+    print("  root hanya proses-pesanan.bat; semua .bat lain di bat/ dengan cd /d \"%~dp0..\"")
 
 
 def uji_gitattributes_paksa_crlf_untuk_bat():

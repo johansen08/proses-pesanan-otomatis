@@ -10,11 +10,11 @@ Supaya root tidak berantakan, hanya boleh berisi:
 - **Folder** (semua kode, dokumentasi, dan data ada di dalam folder masing-masing,
   lihat bagian 6)
 - `.env`, `.gitignore` — file konfigurasi
-- `*.bat` — HANYA pintu masuk yang dipakai tim tiap hari: `buka-app.bat`, `proses-harian.bat`,
-  `proses-malam.bat`, `cetak-label.bat`, `jalankan.bat` (juga dipanggil Windows Task
-  Scheduler), `instalasi.bat` (setup PC baru). Semua `.bat` lain (varian `-uji`,
-  `proses-event*`, pintasan `cetak-label-*`) ada di folder **`bat/`**; barisnya
-  `cd /d "%~dp0.."` (naik ke root), bukan `cd /d "%~dp0"` seperti `.bat` di root
+- `proses-pesanan.bat` — satu-satunya `.bat` di root (tombol buka app, dulu `buka-app.bat`).
+  SEMUA `.bat` lain (`proses-harian`, `proses-malam`, `cetak-label`, `jalankan` — juga dipanggil
+  Windows Task Scheduler —, `instalasi`, varian `-uji`, `proses-event*`, pintasan `cetak-label-*`)
+  ada di folder **`bat/`**; barisnya `cd /d "%~dp0.."` (naik ke root), bukan
+  `cd /d "%~dp0"` seperti `proses-pesanan.bat`
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
 - `data/` — semua data hasil program yang bukan label/log: `laporan-siap-proses/`, `laporan-faktur/`,
@@ -72,14 +72,14 @@ dibiarkan menumpuk.
 ## 4. Skrip batch (`.bat`)
 
 - Huruf kecil, kebab-case, nama menjelaskan FUNGSI (bukan istilah teknis generik):
-  - `instalasi.bat` — setup sekali di awal (buat venv, install library, buat `.env`)
-  - `jalankan.bat` — wrapper generik ke `src/main.py` (terima semua opsi CLI lewat `%*`,
+  - `bat\instalasi.bat` — setup sekali di awal (buat venv, install library, buat `.env`)
+  - `bat\jalankan.bat` — wrapper generik ke `src/main.py` (terima semua opsi CLI lewat `%*`,
     dipakai juga oleh Windows Task Scheduler untuk jadwal otomatis)
-  - `proses-harian.bat` — menu interaktif **SUNGGUHAN** (4 TIPE: TIPE 1-4), mengubah data
+  - `bat\proses-harian.bat` — menu interaktif **SUNGGUHAN** (4 TIPE: TIPE 1-4), mengubah data
     sungguhan di Jubelio
-  - `bat\proses-harian-uji.bat` — kembaran `proses-harian.bat` dalam **MODE UJI** (akhiran
+  - `bat\proses-harian-uji.bat` — kembaran `bat\proses-harian.bat` dalam **MODE UJI** (akhiran
     `-uji` menandai tidak ada perubahan apa pun di Jubelio); sengaja disamakan awalan
-    nama dengan `proses-harian.bat` supaya terlihat jelas keduanya sepasang
+    nama dengan `bat\proses-harian.bat` supaya terlihat jelas keduanya sepasang
   - Sebelumnya bernama `setup.bat`/`run.bat`/`menu.bat`/`uji.bat` — dua nama pertama
     diganti karena bahasa Inggris (tidak konsisten dengan sisa project yang berbahasa
     Indonesia), dua terakhir diganti karena "menu"/"uji" saja belum menjelaskan ini
@@ -119,7 +119,8 @@ proses-pesanan-otomatis/
 ├─ README.md                      # halaman utama, tetap di root
 ├─ .env / .gitignore              # konfigurasi
 ├─ requirements.txt               # daftar library Python
-├─ proses-harian.bat / jalankan.bat / instalasi.bat / bat\proses-harian-uji.bat                  # skrip, huruf kecil
+├─ proses-pesanan.bat             # satu-satunya .bat di root (buka app)
+├─ bat/                           # semua .bat lain (proses-harian, jalankan, instalasi, varian -uji, ...)
 ├─ src/                           # semua kode, snake_case
 │  ├─ main.py
 │  ├─ jubelio.py

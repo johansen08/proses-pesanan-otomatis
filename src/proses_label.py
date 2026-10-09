@@ -1990,7 +1990,7 @@ def perintah_lanjut(picklist_no: str, folder_label: Path, nama: str,
     def _kutip(s: str) -> str:
         return f'"{s}"' if " " in s else s
 
-    bagian = [r".\jalankan.bat", "--lanjut", picklist_no, "--nama", _kutip(nama)]
+    bagian = [r".\bat\jalankan.bat", "--lanjut", picklist_no, "--nama", _kutip(nama)]
     if tag:
         bagian += ["--tag", tag]
     if subfolder:

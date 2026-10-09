@@ -460,7 +460,8 @@ def uji_bat_cetak_tinggal_menu_dan_empat_pintasan_harian():
     harus disengaja (ubah daftar ini), bukan menumpuk lagi satu per jenis."""
     import re
 
-    ada = sorted(f.name for f in [*ROOT.glob("cetak-label*.bat"), *(ROOT / "bat").glob("cetak-label*.bat")])
+    assert not list(ROOT.glob("cetak-label*.bat")), "semua .bat cetak harus di bat/"
+    ada = sorted(f.name for f in (ROOT / "bat").glob("cetak-label*.bat"))
     assert ada == ["cetak-label-gtl-sicepat.bat", "cetak-label-kombinasi.bat",
                    "cetak-label-satuan.bat", "cetak-label-spesial.bat",
                    "cetak-label.bat"], ada
@@ -472,7 +473,7 @@ def uji_bat_cetak_tinggal_menu_dan_empat_pintasan_harian():
         panggil = re.findall(r"--jenis\s+(\S+)", (ROOT / "bat" / nama).read_text(encoding="utf-8"))
         assert panggil == [jenis] and jenis in ps.JENIS_LABEL, (nama, panggil)
     # menu: memanggil print_spesial.py tanpa --jenis/--paket (-> menu) dan meneruskan argumen (%*)
-    isi = (ROOT / "cetak-label.bat").read_text(encoding="utf-8")
+    isi = (ROOT / "bat" / "cetak-label.bat").read_text(encoding="utf-8")
     baris = [b for b in isi.splitlines() if b.startswith('".venv')]
     assert len(baris) == 1 and "print_spesial.py %*" in baris[0], baris
     assert "--jenis" not in baris[0] and "--paket" not in baris[0], baris

@@ -11,7 +11,7 @@ rencana ke depan program jalan otomatis dengan logika:
 
 1. Cek jumlah pesanan "Siap Proses" setiap **5 menit**.
 2. Begitu totalnya **≥ 200**, mulai proses (urutan sama seperti TIPE
-   `proses-harian.bat` yang berlaku saat itu: urgent → spesial → reguler).
+   `bat\proses-harian.bat` yang berlaku saat itu: urgent → spesial → reguler).
 3. **Tunggu sampai proses itu benar-benar selesai** sebelum melakukan
    pengecekan berikutnya — proses bisa saja butuh waktu **lebih dari 5
    menit**, jadi pengecekan selanjutnya **tidak boleh mulai** kalau proses
@@ -112,7 +112,7 @@ mengabaikan yang tidak berubah, jadi upload ulang aman (idempoten: "Data Tidak B
    Opsi `--hari N` (default 2) untuk rentang tanggal.
 4. **`.env`** — `IRESIS_URL`, `IRESIS_USERNAME`, `IRESIS_PASSWORD`, opsional `IRESIS_NAMA_PK`
    (jangan dikomit; tambahkan contoh di `docs/instalasi.md`).
-5. **Penempatan di alur** — langkah terakhir tiap TIPE `proses-harian.bat` (setelah
+5. **Penempatan di alur** — langkah terakhir tiap TIPE `bat\proses-harian.bat` (setelah
    langkah picklist terakhir), karena data faktur baru lengkap setelah resi tercetak. Kegagalan
    upload **tidak boleh** menggagalkan TIPE: cukup `cetak_bermasalah()` + simpan ke
    `peringatan_gagal.py` agar muncul lagi di rekap waktu. Update `test_bat.py` (urutan langkah)

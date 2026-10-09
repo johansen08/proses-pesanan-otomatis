@@ -163,7 +163,7 @@ def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
     pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
     himpunan_bat = set()
     for nama in ("proses-harian.bat", "proses-malam.bat"):
-        for baris in (ROOT / nama).read_text(encoding="utf-8").splitlines():
+        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
             cocok = pola.match(baris)
             if cocok:
                 token = [t for t in shlex.split(cocok.group(1), posix=False) if t not in ("--jalankan", "--lewati-malam")]

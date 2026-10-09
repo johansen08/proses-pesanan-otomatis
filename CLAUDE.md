@@ -25,8 +25,8 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 
 # Jalankan alur utama (lihat --help untuk semua opsi; lihat juga README.md per-alur)
-jalankan.bat
-jalankan.bat --label --sku <SKU> --jalankan
+bat\jalankan.bat
+bat\jalankan.bat --label --sku <SKU> --jalankan
 
 # Uji tanpa akses internet (server Jubelio / requests ditiru di dalam test)
 .venv\Scripts\python tests\test_proses_label.py
@@ -52,8 +52,8 @@ sesi label.
 
 **Mode uji vs sungguhan**: hampir semua alur CLI defaultnya adalah mode uji (read-only, hanya
 menampilkan rencana) kecuali diberi flag `--jalankan`, yang baru benar-benar mengubah data di
-Jubelio. `bat\proses-harian-uji.bat` adalah kembaran `proses-harian.bat` yang selalu memakai mode
-uji — pakai ini untuk mencoba perubahan sebelum menjalankan `proses-harian.bat` sungguhan.
+Jubelio. `bat\proses-harian-uji.bat` adalah kembaran `bat\proses-harian.bat` yang selalu memakai mode
+uji — pakai ini untuk mencoba perubahan sebelum menjalankan `bat\proses-harian.bat` sungguhan.
 
 ## Arsitektur
 
@@ -76,7 +76,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   tidak ada cetak bulk Lazada.
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
-  membuat picklist/label baru. Punya 19 jenis; `cetak-label.bat` = MENU (grup HARIAN/EVENT/
+  membuat picklist/label baru. Punya 19 jenis; `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
   Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
   mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,
@@ -84,7 +84,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   PDF TERTENTU saja (untuk UI pilih-per-file): path harus ada, `.pdf`, dan di dalam
   `label-pengiriman` (kalau tidak, error sebelum cetak apa pun); dedupe sama; tidak bisa digabung
   `--jenis`/`--paket`/`--folder`/`--semua-sesi`/`--ulang`.
-  Hanya `cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
+  Hanya `bat\cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
@@ -94,7 +94,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
   server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
   satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
-  Peluncurnya `buka-app.bat` (`--buka --menu harian`; `--menu cetak` membuka Cetak dulu); server kedua
+  Peluncurnya `proses-pesanan.bat` (`--buka --menu harian`; `--menu cetak` membuka Cetak dulu); server kedua
   dicegah (`Server.allow_reuse_address = False` — di Windows SO_REUSEADDR membolehkan bind ganda ke
   port yang sama), klik kedua hanya membuka tampilan. Job cetak dikunci PER PRINTER (`_jobs[printer]`):
   printer berbeda boleh mencetak bersamaan, printer sama/file sama yang sedang dicetak -> 409. Supaya
@@ -106,14 +106,14 @@ project secara umum, root tidak boleh berisi file `.py`):
   Jubelio): tiap langkah di `KATALOG` = satu proses `main.py <flag> --jalankan` berurutan (BUKAN
   memanggil fungsi langsung), lalu `rekap_waktu.py`. Meniru `.bat`: `LABEL_SESI_DIR` dihitung sekali
   per hari, langkah gagal tidak menghentikan berikutnya, `--lewati-malam` hanya judul TIPE 1/KUSTOM.
-  `KATALOG` HARUS tetap sama dengan perintah di `proses-harian.bat`/`proses-malam.bat` (dikunci
+  `KATALOG` HARUS tetap sama dengan perintah di `bat\proses-harian.bat`/`bat\proses-malam.bat` (dikunci
   `tests/test_jalankan_harian.py`: tiap flag diterima argparse `main.py` & punya padanan di `.bat`) —
   ubah langkah/flag di `.bat` berarti ubah `KATALOG` juga (dan nama langkah di UI). Jangan pernah
   menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
-  di bawah rekap waktu `src/rekap_waktu.py` (akhir tiap TIPE `proses-harian.bat`).
+  di bawah rekap waktu `src/rekap_waktu.py` (akhir tiap TIPE `bat\proses-harian.bat`).
 - `src/peringatan_resi.py` — pola yang sama dengan `peringatan_picklist.py`, tapi untuk
   pesanan yang sudah Picking > Selesai namun tidak kunjung dapat nomor resi sampai batas
   tunggu `minta_resi()` di `proses_label.py` habis (dan bukan berstatus batal) — biasanya
@@ -150,7 +150,7 @@ project secara umum, root tidak boleh berisi file `.py`):
 - `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat
-  `main.py --upload-iresis [--jalankan]` — langkah paling akhir tiap TIPE `proses-harian.bat`. Mengunggah 2 file: faktur (`reference=invoice`, 2 hari) lalu pesanan (`reference=order`, 4 hari; sniff 2026-10-07 14:12).
+  `main.py --upload-iresis [--jalankan]` — langkah paling akhir tiap TIPE `bat\proses-harian.bat`. Mengunggah 2 file: faktur (`reference=invoice`, 2 hari) lalu pesanan (`reference=order`, 4 hari; sniff 2026-10-07 14:12).
   Kegagalan tidak menghentikan TIPE (cetak_bermasalah + rekap waktu). Butuh `IRESIS_USERNAME`/
   `IRESIS_PASSWORD` di `.env`.
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
@@ -183,8 +183,8 @@ KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesi
 argparse sungguhan oleh `tests/test_main.py` — jalankan keduanya setelah mengubah `.bat` event
 atau flag di `main.py`.
 
-`proses-harian.bat` (sungguhan) dan `bat\proses-harian-uji.bat` (mode uji, struktur sama) adalah
-menu interaktif 4 TIPE yang masing-masing menjalankan rangkaian flag `jalankan.bat` di atas
+`bat\proses-harian.bat` (sungguhan) dan `bat\proses-harian-uji.bat` (mode uji, struktur sama) adalah
+menu interaktif 4 TIPE yang masing-masing menjalankan rangkaian flag `bat\jalankan.bat` di atas
 secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 [docs/jadwal-proses.md](docs/jadwal-proses.md).
 
@@ -203,10 +203,11 @@ secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
   recognized...`. Pola berkutip itu hanya aman untuk baris perintah biasa (di luar for /f).
   Bug ini sudah 3x muncul lagi karena for /f baru menyalin pola baris biasa;
   `tests/test_bat.py` sekarang menolaknya.
-- **Lokasi `.bat`**: pintu masuk harian ada di root (`buka-app`, `proses-harian`, `proses-malam`,
-  `cetak-label`, `jalankan`, `instalasi`); sisanya di `bat/` dan harus diawali `cd /d "%~dp0.."`
-  (bukan `%~dp0`) supaya `.venv\` dan `src\` tetap ketemu. `.bat` baru yang bukan pintu masuk
-  harian taruh di `bat/`. `git mv` bisa membuang CRLF — cek ulang (aturan di bawah).
+- **Lokasi `.bat`**: di root HANYA `proses-pesanan.bat` (tombol buka app, dulu `buka-app.bat`,
+  yang diawali `cd /d "%~dp0"`); SEMUA `.bat` lain (`proses-harian`, `proses-malam`, `cetak-label`,
+  `jalankan`, `instalasi`, varian `-uji`, event, pintasan cetak) ada di `bat/` dan harus diawali
+  `cd /d "%~dp0.."` (bukan `%~dp0`) supaya `.venv\` dan `src\` tetap ketemu. `.bat` baru taruh di
+  `bat/`; JANGAN menambah `.bat` lain di root (dikunci `tests/test_bat.py`). `git mv` bisa membuang CRLF — cek ulang (aturan di bawah).
 - **`.bat` WAJIB berakhiran baris CRLF, bukan LF.** Di file LF, cmd.exe salah menghitung
   posisi saat mencari label (`call :catat_waktu`, `goto menu`) sehingga eksekusi melompat ke
   baris yang salah — kejadian 2026-10-01: memilih TIPE 1 ikut menjalankan langkah TIPE 2/3/4

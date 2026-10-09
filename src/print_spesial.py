@@ -953,7 +953,7 @@ def main() -> int:
             print(f"  {f.name}")
         print(f"Daftar disimpan di: {file_daftar_gagal}")
         print("Rekomendasi: cetak ULANG hanya file yang gagal ini lewat:")
-        print(f'  cetak-label.bat --ulang "{file_daftar_gagal}"')
+        print(f'  bat\\cetak-label.bat --ulang "{file_daftar_gagal}"')
 
         if args.tanpa_konfirmasi:
             return 1
@@ -972,7 +972,7 @@ def main() -> int:
             lagi = input("Coba ulang lagi sekarang? (Y/N): ").strip().lower()
             if lagi != "y":
                 print("Rekomendasi: jalankan ulang berikut setelah masalah diperbaiki:")
-                print(f'  cetak-label.bat --ulang "{file_daftar_gagal}"')
+                print(f'  bat\\cetak-label.bat --ulang "{file_daftar_gagal}"')
                 return 1
         log.info("Semua file berhasil dicetak setelah diulang.")
         print("\nSemua file berhasil dicetak setelah diulang.")

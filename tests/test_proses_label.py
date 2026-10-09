@@ -1847,7 +1847,7 @@ def uji_perintah_lanjut_di_catatan_terhenti():
     folder = Path("label-pengiriman") / "2026-10-06" / "12"
     p = pl.perintah_lanjut("PICK-000157269", folder, "KOMBINASI-REGULER-LANTAI2",
                            subfolder="KOMBINASI")
-    assert p == (r".\jalankan.bat --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 "
+    assert p == (r".\bat\jalankan.bat --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 "
                  "--subfolder KOMBINASI --sesi 2026-10-06/12 --jalankan"), p
     p = pl.perintah_lanjut("PICK-000157391", folder, "TRC1", tag="SPX_SPESIAL")
     assert "--nama TRC1 --tag SPX_SPESIAL --sesi 2026-10-06/12" in p and "--subfolder" not in p, p
@@ -1885,7 +1885,7 @@ def uji_perintah_lanjut_di_catatan_terhenti():
         pl.lanjutkan_picklist = asli
     catatan = hasil[0]["Catatan"]
     assert catatan.startswith("TERHENTI: report documents gagal (HTTP 410)"), catatan
-    assert catatan.endswith(r"Lanjutkan: .\jalankan.bat --lanjut PICK-000157269 --nama "
+    assert catatan.endswith(r"Lanjutkan: .\bat\jalankan.bat --lanjut PICK-000157269 --nama "
                             "KOMBINASI-REGULER-LANTAI2 --subfolder KOMBINASI --sesi 2026-10-06/12 "
                             "--jalankan"), catatan
     assert "run.bat" not in catatan, "run.bat sudah lama diganti jalankan.bat"
