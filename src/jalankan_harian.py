@@ -48,6 +48,8 @@ KATALOG: list[tuple[str, list[str]]] = [
 FLAG = dict(KATALOG)
 JUDUL_VALID = {"TIPE 1", "TIPE 2", "TIPE 3", "TIPE 4", "MALAM", "KUSTOM"}
 JUDUL_LEWATI_MALAM = {"TIPE 1", "KUSTOM"}
+LANGKAH_IRESIS = "Upload faktur & pesanan ke IRESIS"
+JUDUL_TANPA_IRESIS = {"MALAM"}     # IRESIS hanya di jaringan lokal kantor: menu malam tidak boleh menyentuhnya
 MENU_JAM = {"TIPE 1": "1", "TIPE 2": "2", "TIPE 3": "3", "TIPE 4": "4"}   # untuk dalam_jam_menu()
 BARIS_MAKS = 50000
 
@@ -90,6 +92,8 @@ def mulai(langkah: list[str], judul: str) -> str:
     asing = [x for x in langkah if x not in FLAG]
     if asing:
         raise HarianError("Langkah tidak dikenal: " + ", ".join(asing))
+    if judul in JUDUL_TANPA_IRESIS and LANGKAH_IRESIS in langkah:
+        raise HarianError(f"Langkah IRESIS tidak boleh dipakai di {judul} (IRESIS hanya di jaringan lokal)")
     urut = [nama for nama, _ in KATALOG if nama in set(langkah)]
     if not urut:
         raise HarianError("Tidak ada langkah dipilih")

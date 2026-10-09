@@ -67,6 +67,20 @@ def uji_validasi_pilihan():
     print("  mulai(): judul/langkah tak dikenal, kosong, bukan daftar -> ditolak, tidak ada job")
 
 
+def uji_malam_menolak_langkah_iresis():
+    _reset()
+    palsu = Palsu()
+    with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
+        try:
+            jh.mulai(["Urgent Lazada", "Upload faktur & pesanan ke IRESIS"], "MALAM")
+        except jh.HarianError as e:
+            assert "IRESIS" in str(e)
+        else:
+            raise AssertionError("MALAM harus menolak langkah IRESIS")
+    assert jh._job is None and not palsu.panggilan
+    print("  MALAM: langkah IRESIS ditolak sebelum proses apa pun jalan")
+
+
 def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
     _reset()
     palsu = Palsu()
