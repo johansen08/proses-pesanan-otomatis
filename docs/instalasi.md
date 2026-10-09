@@ -146,6 +146,15 @@ Kalau di PC lama ada jadwal otomatis (Task Scheduler) yang menjalankan
 
 ---
 
+## 9. (Opsional) Dipakai bergantian di 2 perangkat (PC siang, laptop malam)
+
+Kalau PC ini dipakai bergantian dengan perangkat lain, data kerja (`logs/`, `label-pengiriman/`,
+`data/riwayat_picklist.xlsx`) disinkronkan lewat Google Drive dan perangkat diberi nama di `.env`
+(`PERANGKAT=...`). Langkah lengkapnya ada di
+[panduan-sinkron-google-drive.md](panduan-sinkron-google-drive.md).
+
+---
+
 ## Cek hasil instalasi
 
 Jalankan urutan berikut untuk memastikan semua terpasang benar:
