@@ -67,7 +67,7 @@ def _rel(f: Path) -> str:
 
 def data_sesi(hari_ini: date | None = None) -> dict:
     """Sesi label HARI_UI hari terakhir (terlama -> terbaru di dalam tiap hari), tiap jenis
-    berisi file PDF urut nomor PICK. Jenis tanpa file tidak dimasukkan."""
+    berisi file PDF urut nomor PICK; PDF di luar jenis itu ikut per nama subfolder. Kosong tidak dimasukkan."""
     hari_ini = hari_ini or date.today()
     sudah = ps.baca_sudah_dicetak()
     per_tanggal: dict[str, list[dict]] = {}
@@ -85,6 +85,22 @@ def data_sesi(hari_ini: date | None = None) -> dict:
                               "done": str(f.resolve()) in sudah})
             if files:
                 jenis_out.append({"nama": nama, "files": files})
+        # Semua PDF lain di sesi (subfolder JNT_SIANG/SPX_PAGI/URGENT/event/dst atau langsung di
+        # folder sesi) ikut tampil per nama subfolder, supaya tidak ada PDF yang tidak bisa dicetak.
+        sisa: dict[str, list[Path]] = {}
+        for f in sorted(folder.rglob("*.pdf"), key=lambda p: (p.parent.name, p.name)):
+            if f in terpakai or not f.is_file():
+                continue
+            rel_dir = f.parent.relative_to(folder).as_posix()
+            sisa.setdefault(rel_dir if rel_dir != "." else "(folder sesi)", []).append(f)
+        for nama, daftar in sisa.items():
+            files = []
+            for f in daftar:
+                st = f.stat()
+                waktu.append(st.st_mtime)
+                files.append({"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
+                              "done": str(f.resolve()) in sudah})
+            jenis_out.append({"nama": nama, "files": files})
         if not jenis_out:
             continue   # sesi tanpa label jenis yang ditampilkan (mis. baru dibuat/kosong)
         per_tanggal.setdefault(folder.parent.name, []).append({
