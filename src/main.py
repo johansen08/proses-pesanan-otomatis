@@ -645,21 +645,44 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
                                          lantai_dari_excel=lantai_dari_excel, batas=batas)
         return 0
 
-    hasil, lama_proses = [], 0.0
-    if resi_per_sku:
-        log.info("MEMPROSES %d SKU spesial per rak sampai label PDF", len(resi_per_sku))
-        mulai = time.monotonic()
-        hasil = proses_label.proses(k, resi_per_sku, FOLDER_LABEL_SESI, FILE_RIWAYAT, rak_per_sku,
-                                    args.kurir, batas)
-        lama_proses = time.monotonic() - mulai
+    # Gelombang bersama: semua picklist (spesial dulu, lalu reguler) dibuat SERIAL di sini, tapi
+    # langkah tunggu picking/resi/PDF tiap picklist langsung jalan di latar belakang - picklist
+    # reguler tidak perlu menunggu PDF SKU spesial selesai. Urutan pembuatan (dan deteksi nomor
+    # picklist terlompat) sama seperti sebelumnya.
+    gelombang = proses_label.Gelombang()
+    hasil, hasil_reguler, lama_proses = [], [], 0.0
+    mulai = time.monotonic()
+    try:
+        if resi_per_sku:
+            log.info("MEMPROSES %d SKU spesial per rak sampai label PDF", len(resi_per_sku))
+            hasil = proses_label.proses(k, resi_per_sku, FOLDER_LABEL_SESI, FILE_RIWAYAT,
+                                        rak_per_sku, args.kurir, batas, gelombang=gelombang)
+        else:
+            log.info("Tidak ada SKU spesial untuk diproses")
 
+        if not args.sku and not args.tanpa_reguler:
+            # Sisa reguler (TikTok Shop & Shopee, bukan SKU spesial) baru bisa dipisah dengan
+            # benar SETELAH tahu daftar SKU spesial hari itu -> dijalankan di sini, bukan sebelum
+            # download seperti urgent. Dilewati kalau --sku dipakai (proses cuma sebagian SKU,
+            # daftar SKU spesial belum lengkap utk pengecualian), atau --tanpa-reguler (SKU
+            # spesial saja).
+            resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values()
+                                  for no in daftar}
+            log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
+            hasil_reguler = proses_label.proses_reguler(
+                k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI, kurir=args.kurir,
+                grup_dari_excel=grup_dari_excel, lantai_dari_excel=lantai_dari_excel,
+                batas=batas, gelombang=gelombang)
+    finally:
+        gelombang.tunggu()      # catat riwayat/PICKLIST.xlsx semua picklist, walau ada error
+    lama_proses = time.monotonic() - mulai
+
+    if hasil:
         log.info("RINGKASAN (urut rak):")
         for h in hasil:
             log.info("  %-8s %-14s %-16s pesanan %-3s resi %-3s %-18s %s", h["Rak"], h["SKU"],
                      h.get("No Picklist", "-"), h.get("Total Pesanan", "-"), h.get("Resi Keluar", "-"),
                      h["Durasi"], h.get("Catatan", ""))
-    else:
-        log.info("Tidak ada SKU spesial untuk diproses")
 
     # PDF dibuat SETELAH proses, dari hasil AKTUAL (SKU yang benar-benar berhasil dipicklist),
     # bukan dari daftar kandidat -> total di PDF selalu sama dengan yang benar-benar diproses.
@@ -675,21 +698,6 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     buat_pdf(tabel_aktual, ringkasan_aktual, pdf, waktu)
     log.info("SELESAI: %d SKU spesial (benar-benar diproses), %d resi -> %s",
              ringkasan_aktual["total_sku_spesial"], ringkasan_aktual["total_resi_spesial"], pdf)
-
-    hasil_reguler = []
-    if not args.sku and not args.tanpa_reguler:
-        # Sisa reguler (TikTok Shop & Shopee, bukan SKU spesial) baru bisa dipisah dengan
-        # benar SETELAH tahu daftar SKU spesial hari itu -> dijalankan di sini, bukan sebelum
-        # download seperti urgent. Dilewati kalau --sku dipakai (proses cuma sebagian SKU,
-        # daftar SKU spesial belum lengkap utk pengecualian), atau --tanpa-reguler (SKU
-        # spesial saja).
-        resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
-        log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
-        hasil_reguler = proses_label.proses_reguler(k, resi_spesial_semua, FILE_RIWAYAT,
-                                                     FOLDER_LABEL_SESI, kurir=args.kurir,
-                                                     grup_dari_excel=grup_dari_excel,
-                                                     lantai_dari_excel=lantai_dari_excel,
-                                                     batas=batas)
 
     diproses = [h["detik"] for h in hasil if h.get("No Picklist")]
     log.info("Waktu buat daftar resi spesial : %s", durasi(lama_daftar))

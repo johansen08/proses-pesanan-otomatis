@@ -707,6 +707,31 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
                      _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
 
 
+class Gelombang:
+    """Pool paralel BERSAMA untuk langkah 3-6 (tunggu picking, minta resi, unduh PDF). Tugas
+    dikirim lewat kirim() begitu picklist-nya dibuat (pembuatan picklist TETAP serial di thread
+    pemanggil), dan langsung jalan di latar belakang - jadi pemanggil boleh lanjut membuat
+    picklist alur berikutnya (mis. reguler) selagi SKU spesial masih menunggu resi/PDF. `pasca`
+    (pencatatan riwayat/PICKLIST.xlsx dsb) SELALU dijalankan di thread yang memanggil tunggu(),
+    berurutan sesuai urutan kirim(). Pakai try/finally: tunggu() aman dipanggil berulang."""
+
+    def __init__(self):
+        self._ex = ThreadPoolExecutor(max_workers=MAKS_WORKER_PARALEL)
+        self._item: list = []
+
+    def kirim(self, fn, pasca) -> None:
+        self._item.append((self._ex.submit(fn), pasca))
+
+    def tunggu(self) -> None:
+        item, self._item = self._item, []
+        try:
+            for masa_depan, pasca in item:
+                pasca(masa_depan.result())
+        finally:
+            self._ex.shutdown(wait=True)
+            self._ex = ThreadPoolExecutor(max_workers=MAKS_WORKER_PARALEL)
+
+
 class _AntreanTugas(list):
     """list tugas picklist yang sudah dibuat + `galat` (error yang menghentikan pembuatan
     picklist berikutnya di kelompok yang sama, None kalau lancar)."""
@@ -748,13 +773,17 @@ def _antre_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
     return tugas
 
 
-def _jalankan_antrean(k: Klien, tugas: list[dict], file_riwayat: Path,
-                      folder_label: Path) -> list[dict]:
+def _jalankan_antrean(k: Klien, tugas: list[dict], file_riwayat: Path, folder_label: Path,
+                      gelombang: Gelombang | None = None,
+                      keluar: list[dict] | None = None) -> list[dict]:
     """FASE 2 (paralel): langkah 3-6 (tunggu picking, minta resi, unduh PDF - lihat
-    lanjutkan_picklist()) semua `tugas` BERSAMAAN lewat ThreadPoolExecutor (MAKS_WORKER_PARALEL),
+    lanjutkan_picklist()) semua `tugas` BERSAMAAN lewat Gelombang (maks MAKS_WORKER_PARALEL),
     karena di situlah waktu TUNGGU terbanyak - sama dengan proses() untuk SKU spesial. Pencatatan
-    riwayat/PICKLIST.xlsx tetap di thread utama, berurutan sesuai urutan tugas. Hasil urut sama
-    dengan `tugas`. Kegagalan 1 tugas tidak menghentikan yang lain."""
+    riwayat/PICKLIST.xlsx tetap di thread yang memanggil tunggu(), berurutan sesuai urutan
+    tugas. Kegagalan 1 tugas tidak menghentikan yang lain. Tanpa `gelombang`, fungsi ini
+    membuat Gelombang sendiri dan menunggunya sampai habis (hasil lengkap saat return). Dengan
+    `gelombang` dari pemanggil, tugas hanya dikirim: hasil BARU masuk ke `keluar` (list yang
+    sama dengan yang dikembalikan) saat pemanggil memanggil gelombang.tunggu()."""
     def _lanjutkan(t: dict) -> dict:
         try:
             baris = lanjutkan_picklist(k, t["pid"], t["pno"], t["jumlah"], t["label"],
@@ -771,16 +800,18 @@ def _jalankan_antrean(k: Klien, tugas: list[dict], file_riwayat: Path,
                                             folder_label, str(e), subfolder=t["subfolder"])
         return baris
 
-    hasil = []
-    if not tugas:
-        return hasil
-    with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(tugas))) as ex:
-        for t, baris in zip(tugas, ex.map(_lanjutkan, tugas)):
+    hasil = keluar if keluar is not None else []
+    g = gelombang or Gelombang()
+    for t in tugas:
+        def _pasca(baris: dict, t=t) -> None:
             baris["Durasi"] = durasi(time.monotonic() - t["mulai"])
             catat_riwayat(file_riwayat, baris)
             rekap_master_excel.catat(folder_label, baris, t["nomor_terlompat"])
             log.info("  Selesai %s dalam %s", baris.get("No Picklist"), baris["Durasi"])
             hasil.append(baris)
+        g.kirim(lambda t=t: _lanjutkan(t), _pasca)
+    if gelombang is None:
+        g.tunggu()
     return hasil
 
 
@@ -1237,7 +1268,8 @@ def _label_lantai(lantai: str) -> str:
 
 def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, list[dict]],
                         file_riwayat: Path, folder_label: Path, kurir: str | None,
-                        prefix: str = "Reguler", subfolder: str | None = None) -> list[dict]:
+                        prefix: str = "Reguler", subfolder: str | None = None,
+                        gelombang: Gelombang | None = None) -> list[dict]:
     """Proses tiap sub-kelompok (grup rak utk 1qty, lantai utk kombinasi/urgent GTL-SiCepat -
     key subkelompok dipakai apa adanya di nama/label, pemanggil yang format tampilannya, lihat
     _label_lantai()) lewat _proses_channel_batch() - kegagalan 1 sub-kelompok tidak
@@ -1246,7 +1278,9 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
     (proses_shopee_pagi()/proses_jnt_siang()) melewatkan prefix sama sekali (nama skenarionya
     sendiri sudah jelas tanpa awalan). `subfolder`: diteruskan apa adanya ke
     _proses_channel_batch() (lihat lanjutkan_picklist()) - sama untuk semua sub-kelompok di
-    sini (grup rak/lantai TIDAK ikut memecah subfolder, hanya nama file/label)."""
+    sini (grup rak/lantai TIDAK ikut memecah subfolder, hanya nama file/label). `gelombang`:
+    lihat _jalankan_antrean() - kalau diisi, fungsi kembali begitu semua picklist DIBUAT dan
+    list hasil terisi lengkap setelah gelombang.tunggu()."""
     antrean, gagal = [], []     # gagal: baris GAGAL dari pembuatan picklist sub-kelompok
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
@@ -1265,7 +1299,9 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
                           "SKU": _label_kurir(label_x, kurir), "Catatan": f"GAGAL: {e}"})
     # Semua picklist semua sub-kelompok dibuat dulu, lalu langkah 3-6 SEMUANYA paralel
     # (dulu tiap sub-kelompok/batch menunggu PDF sebelumnya selesai).
-    return _jalankan_antrean(k, antrean, file_riwayat, folder_label) + gagal
+    hasil = list(gagal)
+    _jalankan_antrean(k, antrean, file_riwayat, folder_label, gelombang, keluar=hasil)
+    return hasil
 
 
 def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None = None,
@@ -1299,7 +1335,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
                    kurir: str | None = None,
                    grup_dari_excel: dict[str, str] | None = None,
                    lantai_dari_excel: dict[str, str] | None = None,
-                   batas: datetime | None = None) -> list[dict]:
+                   batas: datetime | None = None,
+                   gelombang: Gelombang | None = None) -> list[dict]:
     """Picklist "sisa reguler" (bukan SKU spesial) channel TikTok Shop & Shopee, kurir J&T/SPX
     (atau 1 kurir saja - lihat cari_pesanan(), dipakai TIPE 2 & TIPE 3): (1) 1 SKU 1 qty yang
     tidak spesial - dipecah per grup rak (lihat _kelompok_1qty_per_rak(), GRUP_RAK), (2)
@@ -1311,7 +1348,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
     pisah_satu_qty_per_rak()/pisah_kombinasi_per_lantai() (fallback khusus SKU bundling).
     Bagian "1qty" disimpan di subfolder SUBFOLDER_SATUAN ("SATUAN"), bagian "kombinasi" di
     SUBFOLDER_KOMBINASI ("KOMBINASI") - kalau --kurir dipakai, subfolder disisipi awalan
-    JNT_/SPX_ (lihat _gabung_kurir()). `batas`: lihat cari_pesanan()."""
+    JNT_/SPX_ (lihat _gabung_kurir()). `batas`: lihat cari_pesanan(). `gelombang`: lihat
+    _proses_subkelompok()."""
     kelompok = pisah_reguler(ambil_pesanan_reguler(k, kurir, batas), resi_spesial_semua)
     hasil = []
     for kunci, (nama, label, idx, subfolder) in _BAGIAN_REGULER.items():
@@ -1323,7 +1361,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
             per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
             subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
         hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat, folder_label,
-                                     kurir, subfolder=_gabung_kurir(subfolder, kurir))
+                                     kurir, subfolder=_gabung_kurir(subfolder, kurir),
+                                     gelombang=gelombang)
     return hasil
 
 
@@ -2155,13 +2194,18 @@ def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
 
 def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
            file_riwayat: Path, rak_per_sku: dict[str, str] | None = None,
-           kurir: str | None = None, batas: datetime | None = None) -> list[dict]:
+           kurir: str | None = None, batas: datetime | None = None,
+           gelombang: Gelombang | None = None) -> list[dict]:
     """Proses SKU sesuai urutan resi_per_sku (urut rak). Tiap hasil berisi Rak, Durasi & detik.
     `kurir`, `batas`: lihat cari_pesanan(). Picklist (langkah 1-2) dibuat berurutan untuk tiap SKU
     (perlu urutan pasti demi peringatan_picklist.ambil_nomor_hilang()), tapi langkah 3-6
     (tunggu picking, minta resi, unduh PDF - lihat lanjutkan_picklist()) untuk SKU yang
     picklist-nya berhasil dibuat dijalankan BERSAMAAN lewat ThreadPoolExecutor
-    (lihat MAKS_WORKER_PARALEL) karena di situlah waktu TUNGGU paling banyak terpakai."""
+    (lihat MAKS_WORKER_PARALEL) karena di situlah waktu TUNGGU paling banyak terpakai.
+    `gelombang`: pool dari pemanggil (lihat Gelombang) - kalau diisi, proses() kembali begitu
+    semua picklist DIBUAT (langkah 3-6 jalan di latar belakang) dan isi list hasil baru lengkap
+    setelah gelombang.tunggu(); dipakai main.py supaya picklist reguler bisa dibuat selagi
+    SKU spesial masih menunggu resi/PDF."""
     rak_per_sku = rak_per_sku or {}
     hasil: list[dict] = []
     tugas = []     # (indeks di hasil, mulai, pid, pno, jumlah, sku, nomor_terlompat)
@@ -2205,16 +2249,21 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             peringatan_gagal.catat_terhenti(pno, sku, folder_label, str(e), tag=tag)
         return idx, mulai, nomor_terlompat, baris
 
-    if tugas:
-        with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(tugas))) as ex:
-            for idx, mulai, nomor_terlompat, baris in ex.map(_lanjutkan, tugas):
-                rak = hasil[idx]["Rak"]
-                detik = time.monotonic() - mulai
-                baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
-                catat_riwayat(file_riwayat, baris)
-                rekap_master_excel.catat(folder_label, baris, nomor_terlompat)
-                log.info("  Selesai SKU %s dalam %s", baris["SKU"], baris["Durasi"])
-                hasil[idx] = baris
+    g = gelombang or Gelombang()
+    for t in tugas:
+        def _pasca(res: tuple) -> None:
+            idx, mulai, nomor_terlompat, baris = res
+            rak = hasil[idx]["Rak"]
+            detik = time.monotonic() - mulai
+            baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
+            catat_riwayat(file_riwayat, baris)
+            rekap_master_excel.catat(folder_label, baris, nomor_terlompat)
+            log.info("  Selesai SKU %s dalam %s", baris["SKU"], baris["Durasi"])
+            hasil[idx] = baris
+            hasil[idx].pop("mulai", None)
+        g.kirim(lambda t=t: _lanjutkan(t), _pasca)
+    if gelombang is None:
+        g.tunggu()
 
     for h in hasil:
         h.pop("mulai", None)

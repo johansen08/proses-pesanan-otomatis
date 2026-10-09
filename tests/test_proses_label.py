@@ -2260,6 +2260,46 @@ def uji_proses_channel_batch_picklist_serial_tunggu_paralel():
           "paralel; 1 TERHENTI tidak menghentikan yang lain")
 
 
+def uji_gelombang_bersama_reguler_dibuat_selagi_spesial_menunggu():
+    import time
+
+    asli = (pl.buat_picklist_channel, pl.lanjutkan_picklist, pl.catat_riwayat,
+            pl.rekap_master_excel.catat, pl.peringatan_picklist.ambil_nomor_hilang)
+    peristiwa, dicatat = [], []
+
+    def buat(k, ids):
+        peristiwa.append(f"buat{ids[0]}")
+        return ids[0], f"PICK-{ids[0]}", ids
+
+    def lanjut(k, pid, pno, jumlah, sku, folder, nama_file=None, tag=None, subfolder=None):
+        time.sleep(0.4)
+        peristiwa.append(f"selesai{pid}")
+        return {"Waktu": "x", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": "f.pdf", "Catatan": ""}
+
+    pl.buat_picklist_channel, pl.lanjutkan_picklist = buat, lanjut
+    pl.catat_riwayat = lambda f, b: dicatat.append(b["No Picklist"])
+    pl.rekap_master_excel.catat = lambda *a, **kw: None
+    pl.peringatan_picklist.ambil_nomor_hilang = lambda: []
+    try:
+        g = pl.Gelombang()
+        h1 = pl._proses_subkelompok(None, "A", "A", {"x": [{"salesorder_id": 1}]},
+                                    Path("r.xlsx"), Path("sesi"), None, gelombang=g)
+        h2 = pl._proses_subkelompok(None, "B", "B", {"x": [{"salesorder_id": 2}]},
+                                    Path("r.xlsx"), Path("sesi"), None, gelombang=g)
+        assert peristiwa[:2] == ["buat1", "buat2"], peristiwa   # picklist ke-2 dibuat sebelum ke-1 selesai
+        assert h1 == [] and h2 == [] and dicatat == []          # belum dicatat sebelum tunggu()
+        g.tunggu()
+        g.tunggu()                                              # aman dipanggil ulang
+    finally:
+        (pl.buat_picklist_channel, pl.lanjutkan_picklist, pl.catat_riwayat,
+         pl.rekap_master_excel.catat, pl.peringatan_picklist.ambil_nomor_hilang) = asli
+    assert [b["No Picklist"] for b in h1 + h2] == ["PICK-1", "PICK-2"]
+    assert dicatat == ["PICK-1", "PICK-2"], dicatat
+    print("  Gelombang bersama: picklist alur berikutnya dibuat selagi alur sebelumnya masih "
+          "menunggu; pencatatan baru saat tunggu(); tunggu() ganda aman")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 if __name__ == "__main__":
