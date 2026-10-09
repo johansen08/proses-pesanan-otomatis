@@ -91,7 +91,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
 | `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
 | `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `bat\proses-harian.bat` |
-| `src/rekap_master_excel.py` | Catat tiap picklist ke `PICKLIST.xlsx` per sesi (di folder sesi label, dari `template/picklist-form-kosong.xlsx`) — langsung ditulis, siap di-copy-paste manual ke file master (lihat bagian "Rekap PICKLIST.xlsx") |
+| `src/rekap_master_excel.py` | Catat tiap picklist ke `PICKLIST.xlsx` per sesi (di folder sesi label, dari `data/template/picklist-form-kosong.xlsx`) — langsung ditulis, siap di-copy-paste manual ke file master (lihat bagian "Rekap PICKLIST.xlsx") |
 | `bat\jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `bat\cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `bat\cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
@@ -397,7 +397,7 @@ satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 
 Tiap picklist yang dibuat langsung ditulis ke **`PICKLIST.xlsx` di folder sesi label**
 (`label-pengiriman/YYYY-MM-DD/N/PICKLIST.xlsx`), dibuat dari template
-`template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim, rumus & format
+`data/template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim, rumus & format
 sama persis). Tim tinggal verifikasi lalu copy-paste baris-barisnya ke file master — program
 tidak pernah membuka file master (dulu salinan ±51 ribu baris yang makan ±2 menit per proses).
 Tidak ada lagi langkah/flag `--tulis-excel`. Penulisan ±60 ms per picklist.
@@ -554,7 +554,7 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `bat\cetak-label-gtl-si
   sudah tercatat tercetak dilewati (`--cetak-ulang-semua` untuk memaksa). Tidak bisa digabung
   `--jenis`/`--paket`/`--folder`/`--semua-sesi`/`--ulang`.
 - **UI desktop (prototype)**: `.venv\Scripts\python src\server_ui.py --buka` membuka
-  `prototype-desktop/index.html` di `http://127.0.0.1:8765/` (hanya komputer ini). Menu **Cetak**-nya
+  `data/prototype-desktop/index.html` di `http://127.0.0.1:8765/` (hanya komputer ini). Menu **Cetak**-nya
   memilih tanggal (hari ini, kemarin, 2 hari lalu) → sesi → jenis → file PDF dari `label-pengiriman`
   sungguhan, lalu mencetak pilihan lewat `print_spesial.py --file-dari ... --printer ...` (aturan
   cetak, dedupe `sudah_dicetak.txt`, dan pantau printer sama dengan CLI). Hanya jenis spesial/satuan/

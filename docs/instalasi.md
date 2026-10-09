@@ -31,7 +31,7 @@ harus disiapkan/disalin manual sendiri di PC baru:
   membuat riwayat baru dari nol)
 - `PICK LIST - EXCEL 2022 - 2024 - MASTER - TERBARU NEW.xlsx` — file master kerja tim, dikelola
   manual (tidak dibuka program). Program mencatat tiap picklist ke `PICKLIST.xlsx` di folder
-  sesi label dari `template/picklist-form-kosong.xlsx` (ikut repo, tidak perlu disalin); tim
+  sesi label dari `data/template/picklist-form-kosong.xlsx` (ikut repo, tidak perlu disalin); tim
   copy-paste manual ke master.
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang

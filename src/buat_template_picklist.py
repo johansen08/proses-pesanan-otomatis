@@ -1,4 +1,4 @@
-"""Buat ulang template/picklist-form-kosong.xlsx dari sheet "HARI IN - FORM KOSONG" di
+"""Buat ulang data/template/picklist-form-kosong.xlsx dari sheet "HARI IN - FORM KOSONG" di
 PICKLIST.xlsx (salinan master tim). Dijalankan MANUAL, jarang (cuma kalau tim mengubah
 format/rumus form di master) - membuka file ~51 ribu baris itu makan beberapa menit.
 
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SHEET = "HARI IN - FORM KOSONG"
 KOLOM_TERAKHIR = 27         # AA
 BARIS_TERAKHIR = 6          # 1-5 judul/header, 6 = baris rumus contoh (rekap_master_excel.BARIS_DATA_AWAL)
-TUJUAN = ROOT / "template" / "picklist-form-kosong.xlsx"
+TUJUAN = ROOT / "data" / "template" / "picklist-form-kosong.xlsx"
 
 
 def buat(sumber: Path, tujuan: Path = TUJUAN) -> None:

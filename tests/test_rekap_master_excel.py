@@ -1,4 +1,4 @@
-"""Uji rekap_master_excel.py: PICKLIST.xlsx per sesi dari template/picklist-form-kosong.xlsx.
+"""Uji rekap_master_excel.py: PICKLIST.xlsx per sesi dari data/template/picklist-form-kosong.xlsx.
 Tidak menyentuh file master tim sama sekali (modulnya memang tidak pernah membukanya).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_rekap_master_excel.py

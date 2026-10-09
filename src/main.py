@@ -89,7 +89,7 @@ supaya pesanan yang pulih ikut terhitung di langkah-langkah berikutnya:
     python src/main.py --recheck-stok --jalankan
 
 Rekap PICKLIST.xlsx (rekap_master_excel.py): otomatis, tiap picklist langsung ditulis ke
-PICKLIST.xlsx di folder sesi label (dari template/picklist-form-kosong.xlsx) - tidak ada langkah
+PICKLIST.xlsx di folder sesi label (dari data/template/picklist-form-kosong.xlsx) - tidak ada langkah
 atau flag terpisah.
 
 Upload faktur ke IRESIS (iresis.py; dulu manual setelah proses pesanan selesai):
@@ -118,7 +118,7 @@ from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_
                          sku_bundle_per_pesanan)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
-FOLDER_DATA = ROOT / "data"       # laporan hasil unduh & riwayat picklist (tidak dikomit)
+FOLDER_DATA = ROOT / "data"       # laporan hasil unduh & riwayat picklist (tidak dikomit); template/ & prototype-desktop/ di dalamnya dikomit
 FOLDER_EXCEL = FOLDER_DATA / "laporan-siap-proses"
 FOLDER_FAKTUR = FOLDER_DATA / "laporan-faktur"
 FOLDER_PDF = FOLDER_DATA / "laporan-sku-spesial"

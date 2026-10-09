@@ -177,7 +177,7 @@ Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IR
 
 **Revisi 2026-10-09**: tidak ada lagi langkah **TULIS PICKLIST.XLSX** (`--tulis-excel`, antrean
 `logs/antrian_picklist_excel.jsonl`) di tiap TIPE. Tiap picklist langsung ditulis ke
-`PICKLIST.xlsx` di folder sesi label (dari `template/picklist-form-kosong.xlsx`), file kecil
+`PICKLIST.xlsx` di folder sesi label (dari `data/template/picklist-form-kosong.xlsx`), file kecil
 yang disimpan ±60 ms. File master tidak pernah dibuka lagi — tim copy-paste manual dari file
 sesi. Sel MINUS (O) > 0 kuning; "PICKLIST CANCEL" hanya untuk nomor yang terlompat selama
 proses berjalan (gap sebelum picklist pertama proses hanya diperingatkan). Lihat README bagian

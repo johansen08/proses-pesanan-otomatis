@@ -2,7 +2,9 @@
 .venv/
 sniff_*.json
 logs/
-data/
+data/*
+!data/template/
+!data/prototype-desktop/
 __pycache__/
 .pytest_cache/
 *.cookies.json

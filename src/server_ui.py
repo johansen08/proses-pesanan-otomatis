@@ -1,4 +1,4 @@
-"""Server lokal untuk UI desktop (prototype-desktop/index.html) - menu CETAK.
+"""Server lokal untuk UI desktop (data/prototype-desktop/index.html) - menu CETAK.
 
 Hanya melayani 127.0.0.1 (komputer ini saja). UI membaca daftar sesi/file label sungguhan
 dari folder label-pengiriman dan mencetak file pilihan lewat
@@ -46,7 +46,7 @@ import jalankan_harian as jh
 import print_spesial as ps
 
 ROOT = ps.ROOT
-HTML_UI = ROOT / "prototype-desktop" / "index.html"
+HTML_UI = ROOT / "data" / "prototype-desktop" / "index.html"
 HARI_UI = 3                      # hari ini, kemarin, 2 hari lalu
 JENIS_UI = [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
             ("GTL-SiCepat", "gtl-sicepat")]

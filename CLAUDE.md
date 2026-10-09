@@ -88,7 +88,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
-  `prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
+  `data/prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
   API `/api/sesi` (3 hari, jenis spesial/satuan/kombinasi/gtl-sicepat, file PDF + status tercetak),
   `/api/printer`, `/api/cetak`, `/api/job`. Cetak SELALU lewat proses terpisah
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
@@ -130,7 +130,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   dibaca kalau cuma scroll ke rekap paling bawah (insiden 2026-10-06).
 - `src/rekap_master_excel.py` — catat tiap picklist ke `PICKLIST.xlsx` PER SESI, langsung di
   folder sesi (`label-pengiriman/YYYY-MM-DD/N/PICKLIST.xlsx`), dibuat dari
-  `template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim: rumus B/E/O/Q/W
+  `data/template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim: rumus B/E/O/Q/W
   & format sama, supaya baris-barisnya mudah di-copy-paste manual ke file master). Program TIDAK
   PERNAH membuka/menulis file master (dulu salinan ~51 ribu baris: buka ~48 detik + simpan ~67
   detik per proses, insiden 2026-10-06 -> antrean + `--tulis-excel`; sekarang dibuang). Kolom

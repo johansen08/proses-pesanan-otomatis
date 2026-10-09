@@ -18,8 +18,10 @@ Supaya root tidak berantakan, hanya boleh berisi:
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
 - `data/` — semua data hasil program yang bukan label/log: `laporan-siap-proses/`, `laporan-faktur/`,
-  `laporan-sku-spesial/`, dan `riwayat_picklist.xlsx` (+ `.csv` fallback-nya). Tidak dikomit.
-- `template/picklist-form-kosong.xlsx` — template PICKLIST per sesi (dikomit; dibuat ulang lewat
+  `laporan-sku-spesial/`, dan `riwayat_picklist.xlsx` (+ `.csv` fallback-nya) — TIDAK dikomit.
+  Dua sub-folder lain DIKOMIT (dikecualikan di `.gitignore` lewat `data/*` + `!data/...`):
+  `data/prototype-desktop/` (UI desktop, `index.html`) dan `data/template/`.
+- `data/template/picklist-form-kosong.xlsx` — template PICKLIST per sesi (dikomit; dibuat ulang lewat
   `src/buat_template_picklist.py`). Hasilnya `PICKLIST.xlsx` (+ `.menulis` sementara) ada di
   folder sesi `label-pengiriman/YYYY-MM-DD/N/`, bukan di root.
 
@@ -138,12 +140,13 @@ proses-pesanan-otomatis/
 │  └─ pep-8.md
 ├─ tests/                         # kasus uji
 ├─ sniff/                         # perekam alur Jubelio (tools dev)
-├─ data/                          # hasil program, tidak dikomit (dibuat otomatis)
+├─ data/                          # data program (hasil unduh tidak dikomit, dibuat otomatis)
 │  ├─ laporan-siap-proses/        # Excel hasil download Jubelio
 │  ├─ laporan-faktur/             # Excel faktur & pesanan untuk upload IRESIS
 │  ├─ laporan-sku-spesial/        # PDF ringkasan SKU spesial
-│  └─ riwayat_picklist.xlsx       # riwayat semua picklist
-├─ template/                      # template PICKLIST per sesi (dikomit)
+│  ├─ riwayat_picklist.xlsx       # riwayat semua picklist
+│  ├─ template/                   # template PICKLIST per sesi (dikomit)
+│  └─ prototype-desktop/          # UI desktop index.html (dikomit)
 ├─ label-pengiriman/              # PDF label pengiriman per picklist (dibuat otomatis)
 └─ logs/                          # log tiap eksekusi (dibuat otomatis)
 ```

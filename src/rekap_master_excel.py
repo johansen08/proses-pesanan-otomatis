@@ -1,6 +1,6 @@
 """Catat tiap picklist ke PICKLIST.xlsx PER SESI - file kecil di folder sesi label
 (`label-pengiriman/YYYY-MM-DD/N/PICKLIST.xlsx`) yang dibuat dari template
-`template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim, lengkap dengan
+`data/template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim, lengkap dengan
 rumus & format). Tim memverifikasinya lalu meng-copy-paste baris-barisnya MANUAL ke file
 master "PICK LIST - EXCEL ... MASTER" - program TIDAK PERNAH membuka/menulis file master
 (dulu salinan ~51 ribu baris: buka ~48 detik + simpan ~67 detik per proses, lihat riwayat
@@ -41,7 +41,7 @@ import peringatan_gagal
 
 log = logging.getLogger("sku-spesial")
 
-TEMPLATE = Path(__file__).resolve().parent.parent / "template" / "picklist-form-kosong.xlsx"
+TEMPLATE = Path(__file__).resolve().parent.parent / "data" / "template" / "picklist-form-kosong.xlsx"
 NAMA_FILE = "PICKLIST.xlsx"
 NAMA_SEMENTARA = "PICKLIST.xlsx.menulis"         # lihat _simpan()
 OPERATOR = "PUTRI"
