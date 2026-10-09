@@ -255,7 +255,7 @@ JEDA_RESI_S = 3.5                       # jeda polling resi (sama dengan web)
 # 2026-10-06: dulu ditunggu 180 detik lalu HTML5 180 detik lagi di client/node yang SAMA =
 # 6 menit sia-sia per picklist, menahan seluruh langkah urgent/reguler yang berurutan) ->
 # unduh_label() mengulang dari awal dengan client baru, sama seperti 410 Expired.
-TUNGGU_PDF_S = 60
+TUNGGU_PDF_S = 45
 TUNGGU_INFO_DOKUMEN_S = 30              # batas 1 request cek status dokumen (biasanya instan)
 TUNGGU_UNDUH_PDF_S = 30                 # batas tunggu request unduh dokumen PDF itu sendiri
 TUNGGU_LABEL_S = 240                    # batas total coba ulang label (410 Expired/dokumen macet)
