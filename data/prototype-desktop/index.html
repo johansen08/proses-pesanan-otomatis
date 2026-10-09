@@ -242,7 +242,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
   <section class="view two" id="v-event"></section>
 
   <section class="view cetak" id="v-cetak">
-    <div class="bar"><div class="bar" id="hari"></div><span class="pill m" id="mode"></span><div class="sp"></div>
+    <div class="bar"><div class="bar" id="hari"></div><div class="sp"></div>
       <input type="search" id="cari" placeholder="Cari file, SKU, atau PICK…">
       <label class="sw on" id="swBelum"><i></i>Sembunyikan yang sudah dicetak</label></div>
     <div class="bar"><label class="allrow" id="allRow"><span class="cb" id="allCb"><svg><use href="#check"/></svg></span>Pilih semua sesi</label><span class="pill m" id="cTot"></span></div>
@@ -690,9 +690,9 @@ async function initCetak(){
     try{const dd=await muatData();tgl=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0);
       const p=await api('/api/printer');$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');
       try{const jj=(await api('/api/jobs')).jobs;Object.keys(jj).forEach(n=>{if(jj[n].status==='jalan')lacak(n,jj[n].total)})}catch(e){}
-      $('#mode').style.display='none';
+      
     }catch(e){toast('Server UI error: '+e.message)}
-  }else{$('#mode').textContent='Mode contoh (data tiruan) — jalankan src/server_ui.py untuk data sungguhan';$('#mode').className='pill warn'}
+  }
   gambarCetak();
 }
 
