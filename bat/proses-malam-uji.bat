@@ -18,35 +18,30 @@ set /p "yakin=Lanjutkan uji proses malam? (Y/N): "
 if /i not "%yakin%"=="Y" exit /b 0
 echo.
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T1_AWAL=%%t"
-echo === 1/6 URGENT LAZADA ===
+echo === 1/5 URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T1_AKHIR=%%t"
 echo.
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T2_AWAL=%%t"
-echo === 2/6 URGENT GTL ^& SICEPAT ===
+echo === 2/5 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T2_AKHIR=%%t"
 echo.
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T3_AWAL=%%t"
-echo === 3/6 SPX - J^&T SPESIAL ===
+echo === 3/5 SPX - J^&T SPESIAL ===
 ".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T3_AKHIR=%%t"
 echo.
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T4_AWAL=%%t"
-echo === 4/6 SPX - J^&T 1 QTY REGULER ===
+echo === 4/5 SPX - J^&T 1 QTY REGULER ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T4_AKHIR=%%t"
 echo.
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T5_AWAL=%%t"
-echo === 5/6 SPX - J^&T KOMBINASI ===
+echo === 5/5 SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi
 for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "T5_AKHIR=%%t"
 echo.
-for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "TX_AWAL=%%t"
-echo === 6/6 TULIS PICKLIST.XLSX ===
-".venv\Scripts\python.exe" src\main.py --tulis-excel
-for /f "delims=" %%t in ('.venv\Scripts\python.exe -c "import time; print(time.time())"') do set "TX_AKHIR=%%t"
-echo.
 echo Proses malam selesai.
-".venv\Scripts\python.exe" src\rekap_waktu.py "MALAM" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "SPX - J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%" "TULIS PICKLIST.XLSX:%TX_AWAL%:%TX_AKHIR%"
+".venv\Scripts\python.exe" src\rekap_waktu.py "MALAM" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "SPX - J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%"
 pause

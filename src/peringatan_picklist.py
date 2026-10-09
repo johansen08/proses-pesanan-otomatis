@@ -29,10 +29,12 @@ _file_terakhir: Path | None = None
 _file_peringatan: Path | None = None
 _sesi: list[str] = []      # peringatan yang muncul di proses python ini
 _hilang_terakhir: list[int] = []   # nomor terlompat dari periksa_nomor() PALING TERAKHIR
+_sudah_ada_picklist = False        # sudah ada picklist yang dibuat di proses python ini?
 
 
 def atur_folder(folder_log: Path) -> None:
-    global _file_terakhir, _file_peringatan
+    global _file_terakhir, _file_peringatan, _sudah_ada_picklist
+    _sudah_ada_picklist = False
     _file_terakhir = folder_log / "picklist_terakhir.txt"
     _file_peringatan = folder_log / "picklist_terlompat.jsonl"
 
@@ -63,7 +65,7 @@ def periksa_nomor(picklist_no: str) -> str | None:
     """Panggil tiap kali picklist baru berhasil dibuat. Mengembalikan pesan peringatan
     kalau ada nomor yang terlompat sejak picklist terakhir yang dicatat, selain itu None.
     Nomor yang terlompat (kalau ada) juga disimpan utk ambil_nomor_hilang()."""
-    global _hilang_terakhir
+    global _hilang_terakhir, _sudah_ada_picklist
     n = _angka(picklist_no)
     if n is None:
         return None
@@ -71,8 +73,13 @@ def periksa_nomor(picklist_no: str) -> str | None:
     pesan = None
     _hilang_terakhir = []
     if terakhir is not None and n > terakhir + 1:
-        _hilang_terakhir = list(range(terakhir + 1, n))
-        hilang = [f"PICK-{i:09d}" for i in _hilang_terakhir]
+        hilang_nomor = list(range(terakhir + 1, n))
+        # Gap sebelum picklist PERTAMA proses ini hanya diperingatkan, tidak masuk
+        # ambil_nomor_hilang() (=> tidak ditulis "PICKLIST CANCEL" di PICKLIST.xlsx): terjadi
+        # sebelum program jalan, bisa jadi dibuat orang lain di PC lain.
+        if _sudah_ada_picklist:
+            _hilang_terakhir = hilang_nomor
+        hilang = [f"PICK-{i:09d}" for i in hilang_nomor]
         daftar = ", ".join(hilang[:MAKS_NOMOR_DITAMPILKAN])
         if len(hilang) > MAKS_NOMOR_DITAMPILKAN:
             daftar += f", ... (+{len(hilang) - MAKS_NOMOR_DITAMPILKAN} lagi)"
@@ -81,6 +88,7 @@ def periksa_nomor(picklist_no: str) -> str | None:
                  f"gagal dibuat karena Jubelio error (atau dibuat orang lain di Jubelio) - "
                  f"cek nomor tsb di Jubelio dan informasikan ke tim resi.")
         catat(pesan)
+    _sudah_ada_picklist = True
     if _file_terakhir and (terakhir is None or n > terakhir):
         try:
             _file_terakhir.write_text(str(n))
@@ -91,8 +99,9 @@ def periksa_nomor(picklist_no: str) -> str | None:
 
 def ambil_nomor_hilang() -> list[int]:
     """Nomor picklist yang terlompat dari periksa_nomor() PALING TERAKHIR (kosong kalau tidak
-    ada gap) - dipakai rekap_master_excel.catat() utk menandai baris kuning "PICKLIST CANCEL"
-    di PICKLIST.xlsx, meniru pola manual yang sudah ada di file master (row 29, 05-10-2026).
+    ada gap, atau gap itu terjadi SEBELUM picklist pertama proses ini) - dipakai
+    rekap_master_excel.catat() utk menandai baris kuning "PICKLIST CANCEL" di PICKLIST.xlsx
+    sesi, meniru pola manual yang sudah ada di file master (row 29, 05-10-2026).
     Panggil SEGERA setelah periksa_nomor() dipanggil utk picklist yang baru dibuat - sebelum
     periksa_nomor() dipanggil lagi untuk picklist berikutnya (nilainya ditimpa tiap panggilan)."""
     return _hilang_terakhir

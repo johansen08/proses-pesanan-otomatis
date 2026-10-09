@@ -72,15 +72,15 @@ def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
     palsu = Palsu()
     with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="2026-10-08/7"):
         # dikirim acak: urutan harus mengikuti KATALOG
-        jh.mulai(["Tulis PICKLIST.xlsx", "SPX-J&T Spesial", "Urgent Lazada", "Recheck stok"], "TIPE 1")
+        jh.mulai(["Upload faktur & pesanan ke IRESIS", "SPX-J&T Spesial", "Urgent Lazada", "Recheck stok"], "TIPE 1")
         j = _tunggu()
     assert j["status"] == "selesai", j
-    assert [x["nama"] for x in j["langkah"]] == ["Recheck stok", "Urgent Lazada", "SPX-J&T Spesial", "Tulis PICKLIST.xlsx"]
+    assert [x["nama"] for x in j["langkah"]] == ["Recheck stok", "Urgent Lazada", "SPX-J&T Spesial", "Upload faktur & pesanan ke IRESIS"]
     assert palsu.flag_main() == [
         ["--recheck-stok", "--jalankan"],
         ["--urgent", "--channel", "lazada", "--jalankan", "--lewati-malam"],   # TIPE 1 -> lewati malam
         ["--label", "--tanpa-reguler", "--jalankan"],
-        ["--tulis-excel", "--jalankan"]], palsu.flag_main()
+        ["--upload-iresis", "--jalankan"]], palsu.flag_main()
     assert all(env["LABEL_SESI_DIR"] == "2026-10-08/7" for _, env in palsu.panggilan)
     rekap = palsu.panggilan[-1][0]
     assert Path(rekap[1]).name == "rekap_waktu.py" and rekap[2] == "TIPE 1", rekap
@@ -103,11 +103,11 @@ def uji_langkah_gagal_tidak_menghentikan_berikutnya():
     _reset()
     palsu = Palsu(gagal=["--sampel"])
     with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
-        jh.mulai(["Recheck stok", "Sampel TikTok (nilai 0)", "Tulis PICKLIST.xlsx"], "KUSTOM")
+        jh.mulai(["Recheck stok", "Sampel TikTok (nilai 0)", "Upload faktur & pesanan ke IRESIS"], "KUSTOM")
         j = _tunggu()
     status = [(x["nama"], x["status"]) for x in j["langkah"]]
     assert status == [("Recheck stok", "selesai"), ("Sampel TikTok (nilai 0)", "gagal"),
-                      ("Tulis PICKLIST.xlsx", "selesai")], status
+                      ("Upload faktur & pesanan ke IRESIS", "selesai")], status
     assert j["status"] == "gagal" and len(palsu.flag_main()) == 3
     assert any("ERROR palsu" in l for l in j["lines"])
     print("  langkah gagal: berikutnya tetap jalan (seperti .bat), status job 'gagal', log tersimpan")

@@ -43,7 +43,6 @@ KATALOG: list[tuple[str, list[str]]] = [
     ("SPX Spesial", ["--label", "--kurir", "spx", "--tanpa-reguler"]),
     ("SPX 1 qty reguler", ["--reguler", "--bagian", "1qty", "--kurir", "spx"]),
     ("SPX Kombinasi", ["--reguler", "--bagian", "kombinasi", "--kurir", "spx"]),
-    ("Tulis PICKLIST.xlsx", ["--tulis-excel"]),
     ("Upload faktur & pesanan ke IRESIS", ["--upload-iresis"]),
 ]
 FLAG = dict(KATALOG)

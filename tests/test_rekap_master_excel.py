@@ -1,12 +1,11 @@
-"""Uji rekap_master_excel.py (PICKLIST.xlsx) TANPA pernah menyentuh file master asli - dipakai
-workbook kecil tiruan yang mereplikasi struktur sheet "HARI INI" (formula di kolom B/E, baris
-hari ini di-pre-fill OPR/TANGGAL ke depan, 1 contoh baris kuning "PICKLIST CANCEL") sesuai
-verifikasi struktur file master (06-10-2026).
+"""Uji rekap_master_excel.py: PICKLIST.xlsx per sesi dari template/picklist-form-kosong.xlsx.
+Tidak menyentuh file master tim sama sekali (modulnya memang tidak pernah membukanya).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_rekap_master_excel.py
 """
 import sys
 import tempfile
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -14,335 +13,216 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import rekap_master_excel as rme  # noqa: E402
+import peringatan_gagal  # noqa: E402
 
-TARGET = "2026-10-06"
-TARGET_DT = datetime(2026, 10, 6)
+KUNING = "FFFFFF00"
 
 
 def _reset():
-    rme._wb = rme._ws = None
-    rme._baris_cari_mulai = rme.BARIS_DATA_AWAL
+    rme._buku.clear()
+    rme._simpan_pernah_gagal = False
+    peringatan_gagal._file = None
 
 
-def _buat_master(folder: Path) -> Path:
-    from openpyxl import Workbook
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = rme.SHEET
-    ws.append(["" for _ in range(27)])                                    # baris 1 (dilewati)
-    ws.append(["" for _ in range(27)])                                    # baris 2
-    ws.append(["" for _ in range(27)])                                    # baris 3
-    ws.append(["", "CODE", "", "", "NO", "OPR", "TGL PROSES", "JAM"])     # baris 4: header
-    ws.append(["" for _ in range(27)])                                    # baris 5
-    # baris 6-7: data historis lama (tanggal lain, L sudah terisi) - formula B/E spt asli
-    for r in (6, 7):
-        ws.cell(r, 2, f'=IF(L{r}="","",I{r}&"-"&J{r})')
-        ws.cell(r, 5, f'=IF(L{r}="","",IF(G{r}=G{r - 1},E{r - 1}+1,1))')
-        ws.cell(r, 6, "SELVI")
-        ws.cell(r, 7, datetime(2026, 10, 5))
-        ws.cell(r, 12, 157000 + r)
-    # baris 8: PRE-FILL hari ini (TARGET) - OPR/TANGGAL sudah diisi ke depan, L masih kosong
-    ws.cell(8, 2, '=IF(L8="","",I8&"-"&J8)')
-    ws.cell(8, 5, '=IF(L8="","",IF(G8=G7,E7+1,1))')
-    ws.cell(8, 6, "PUTRI")
-    ws.cell(8, 7, TARGET_DT)
-    # baris 9: benar-benar kosong (belum ada pre-fill apa pun) - utk kasus fallback
-    file_master = folder / rme.NAMA_MASTER
-    wb.save(file_master)
-    return file_master
-
-
-def uji_salinan_dibuat_dari_master_kalau_belum_ada():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        assert not (folder / rme.NAMA_SALINAN).exists()
-        rme.catat({"Waktu": f"06-10-2026 09:15", "SKU": "AKS28", "No Picklist": "PICK-000157361",
-                  "Total Pesanan": 10, "Resi Keluar": 10})
-        rme.terapkan()
-        assert (folder / rme.NAMA_SALINAN).exists()
-    print("  PICKLIST.xlsx dibuat dari master kalau belum ada")
-
-
-def uji_catat_isi_baris_pre_fill_tanpa_ganggu_formula():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat({"Waktu": "06-10-2026 09:15", "SKU": "AKS28", "No Picklist": "PICK-000157361",
-                  "Total Pesanan": 10, "Resi Keluar": 9, "Tanpa Resi": ["SO123"]})
-        rme.terapkan()
-
-        from openpyxl import load_workbook
-        wb = load_workbook(folder / rme.NAMA_SALINAN)
-        ws = wb[rme.SHEET]
-        assert ws.cell(8, rme.KOLOM_L_PICKLIST).value == 157361
-        assert ws.cell(8, rme.KOLOM_F_OPR).value == "PUTRI"
-        assert ws.cell(8, rme.KOLOM_H_JAM).value == 9.15
-        assert ws.cell(8, rme.KOLOM_M_LOLOS).value == 10
-        assert ws.cell(8, rme.KOLOM_N_PRINT).value == 9
-        assert ws.cell(8, rme.KOLOM_T_JENIS).value == "AKS28"
-        assert ws.cell(8, rme.KOLOM_U_CATATAN).value == "SO123"
-        assert ws.cell(8, 2).value == '=IF(L8="","",I8&"-"&J8)'          # formula B utuh
-        assert ws.cell(8, 5).value == '=IF(L8="","",IF(G8=G7,E7+1,1))'  # formula E utuh
-        assert ws.cell(8, rme.KOLOM_L_PICKLIST).fill.patternType is None    # tidak kuning
-    print("  catat(): isi baris pre-fill hari ini (F/G sudah ada), formula B/E tidak disentuh")
-
-
-def uji_catat_fallback_baris_kosong_kalau_belum_ada_pre_fill():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        # tanggal 07-10-2026 belum di-pre-fill di master tiruan -> harus jatuh ke baris 9 (kosong)
-        rme.catat({"Waktu": "07-10-2026 08:00", "SKU": "PTAA", "No Picklist": "PICK-000157400",
-                  "Total Pesanan": 5, "Resi Keluar": 5})
-        rme.terapkan()
-
-        from openpyxl import load_workbook
-        wb = load_workbook(folder / rme.NAMA_SALINAN)
-        ws = wb[rme.SHEET]
-        assert ws.cell(9, rme.KOLOM_F_OPR).value == "PUTRI"
-        assert ws.cell(9, rme.KOLOM_G_TGL).value == datetime(2026, 10, 7)
-        assert ws.cell(9, rme.KOLOM_L_PICKLIST).value == 157400
-    print("  catat(): fallback ke baris kosong & isi F/G sendiri kalau belum ada pre-fill")
-
-
-def uji_nomor_terlompat_jadi_baris_kuning_sebelum_baris_utama():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat({"Waktu": "06-10-2026 10:00", "SKU": "BSCT", "No Picklist": "PICK-000157363",
-                  "Total Pesanan": 3, "Resi Keluar": 3}, nomor_terlompat=[157362])
-        rme.terapkan()
-
-        from openpyxl import load_workbook
-        wb = load_workbook(folder / rme.NAMA_SALINAN)
-        ws = wb[rme.SHEET]
-        # baris 8 (pre-fill) dipakai utk nomor yang terlompat, baris 9 (fallback kosong) utk picklist asli
-        assert ws.cell(8, rme.KOLOM_L_PICKLIST).value == 157362
-        assert ws.cell(8, rme.KOLOM_T_JENIS).value == "PICKLIST CANCEL"
-        for c in range(rme.KOLOM_FILL_AWAL, rme.KOLOM_FILL_AKHIR + 1):
-            assert ws.cell(8, c).fill.fgColor.rgb == rme.WARNA_KUNING
-        assert ws.cell(9, rme.KOLOM_L_PICKLIST).value == 157363
-        assert ws.cell(9, rme.KOLOM_T_JENIS).value == "BSCT"
-        assert ws.cell(9, rme.KOLOM_L_PICKLIST).fill.patternType is None
-    print("  nomor_terlompat: baris kuning PICKLIST CANCEL ditulis sebelum baris picklist asli")
-
-
-def uji_catatan_gagal_bikin_baris_kuning():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat({"Waktu": "06-10-2026 11:00", "SKU": "MX-5054", "No Picklist": "PICK-000157365",
-                  "Total Pesanan": 2, "Catatan": "TERHENTI: timeout unduh label"})
-        rme.terapkan()
-
-        from openpyxl import load_workbook
-        wb = load_workbook(folder / rme.NAMA_SALINAN)
-        ws = wb[rme.SHEET]
-        assert ws.cell(8, rme.KOLOM_L_PICKLIST).value == 157365
-        for c in range(rme.KOLOM_FILL_AWAL, rme.KOLOM_FILL_AKHIR + 1):
-            assert ws.cell(8, c).fill.fgColor.rgb == rme.WARNA_KUNING
-    print("  Catatan GAGAL/TERHENTI: baris picklist itu sendiri ikut ditandai kuning")
-
-
-def uji_tanpa_no_picklist_dilewati():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat({"SKU": "AKS28", "Catatan": "Dilewati: tidak ada stok"})
-        assert rme._wb is None, "belum pernah buka workbook kalau tidak ada No Picklist"
-        assert rme.jumlah_antrian() == 0
-        rme.terapkan()
-        assert not (folder / rme.NAMA_SALINAN).exists()
-    print("  catat(): baris tanpa No Picklist (gagal sebelum picklist dibuat) dilewati")
-
-
-# -------------------------------------------------- antrean (insiden 2026-10-06)
 def _baris(no: int, waktu: str = "06-10-2026 13:45", **lain) -> dict:
     return {"Waktu": waktu, "SKU": f"SKU{no}", "No Picklist": f"PICK-000{no}",
             "Total Pesanan": 3, "Resi Keluar": 3, **lain}
 
 
-def _isi_kolom_l(folder: Path) -> list:
+def _muat(folder: Path):
     from openpyxl import load_workbook
 
-    ws = load_workbook(folder / rme.NAMA_SALINAN)[rme.SHEET]
-    return [ws.cell(r, rme.KOLOM_L_PICKLIST).value for r in range(6, 13)]    # [2] = baris 8
+    wb = load_workbook(folder / rme.NAMA_FILE)
+    return wb, wb.worksheets[0]
 
 
-class _KunciSepertiExcel:
-    """Buka file dengan share mode baca-saja (Windows CreateFileW) - persis cara Excel
-    mengunci file yang sedang dibuka: proses lain masih bisa MEMBACA, tapi tidak bisa
-    membukanya untuk ditulis maupun menimpanya lewat os.replace."""
-
-    def __init__(self, path: Path):
-        self.path = path
-
-    def __enter__(self):
-        import ctypes
-        from ctypes import wintypes
-
-        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        k32.CreateFileW.restype = wintypes.HANDLE
-        k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD,
-                                    wintypes.LPVOID, wintypes.DWORD, wintypes.DWORD,
-                                    wintypes.HANDLE]
-        generic_read, file_share_read, open_existing = 0x80000000, 0x1, 3
-        self.k32 = k32
-        self.h = k32.CreateFileW(str(self.path), generic_read, file_share_read, None,
-                                 open_existing, 0, None)
-        assert self.h not in (None, wintypes.HANDLE(-1).value), ctypes.get_last_error()
-        return self
-
-    def __exit__(self, *exc):
-        self.k32.CloseHandle(self.h)
+def _kuning(sel) -> bool:
+    return sel.fill.fill_type == "solid" and sel.fill.fgColor.rgb == KUNING
 
 
-def _bisa_kunci_windows() -> bool:
-    if sys.platform != "win32":
-        print("  (dilewati: bukan Windows)")
-        return False
-    return True
+def uji_template_sama_dengan_form_kosong_tim():
+    from openpyxl import load_workbook
+
+    wb = load_workbook(rme.TEMPLATE)
+    assert wb.sheetnames == ["HARI IN - FORM KOSONG"], wb.sheetnames
+    ws = wb.worksheets[0]
+    assert ws["E2"].value == "PICK LIST - HARI INI" and ws["M2"].value == "=SUBTOTAL(9,M6:M40000)"
+    assert [ws.cell(4, c).value for c in (5, 6, 7, 8, 12, 13, 14, 15, 16, 17)] == [
+        "NO", "OPR", "TGL PROSES", "JAM", "NO PICK LIST", "LOLOS", "PRINT", "MINUS", "SCAN", "CTRL"]
+    assert ws["O6"].value == '=IF(L6="","",IF(N6="","",M6-N6))'
+    assert ws["E6"].value == '=IF(L6="","",IF(G6=G5,E5+1,1))'
+    assert ws["Q6"].value == '=IF(P6="","",M6-P6)'
+    assert ws["B6"].value == '=IF(L6="","",I6&"-"&J6)' and ws["W6"].value == '=IF(L6="","",G6)'
+    assert ws.column_dimensions["B"].hidden and ws.freeze_panes == "A6"
+    print("  template: sheet, header, rumus B/E/O/Q/W & subtotal sama dengan form kosong tim")
 
 
-def uji_catat_cuma_antre_tanpa_buka_workbook():
+def uji_catat_buat_file_sesi_dari_template_rumus_dan_format_ikut():
+    _reset()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat(_baris(157401))
-        rme.catat({"SKU": "X", "No Picklist": "PICK-000157402"})          # tanpa Waktu
-        assert rme._wb is None, "catat() tidak boleh membuka PICKLIST.xlsx (~48 detik)"
-        assert not (folder / rme.NAMA_SALINAN).exists()
-        assert rme.jumlah_antrian() == 2
-        entri = rme._baca_entri(folder / "logs" / rme.NAMA_ANTRIAN)
-        assert entri[0]["baris"]["No Picklist"] == "PICK-000157401"
-        assert entri[1]["baris"]["Waktu"], "Waktu kosong diisi saat catat(), bukan saat ditulis"
-    print("  catat(): cuma menambah antrean (logs/), tidak membuka/membuat PICKLIST.xlsx")
-
-
-def uji_terapkan_tulis_semua_antrean_berurutan_lalu_kosongkan():
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat(_baris(157401))
-        rme.catat(_baris(157403), nomor_terlompat=[157402])
-        rme.catat(_baris(157404, Catatan="TERHENTI: HTTP 410"))
-        assert rme.terapkan() == 3
-        assert _isi_kolom_l(folder)[2:6] == [157401, 157402, 157403, 157404]
-        assert rme.jumlah_antrian() == 0
-        assert not list((folder / "logs").glob("antrian_*")), "antrean harus kosong"
+        rme.catat(folder, _baris(157401))
+        rme.catat(folder, _baris(157402, **{"Resi Keluar": 3, "Tanpa Resi": ["SO1", "SO2"]}))
+        rme.catat(folder, _baris(157403, "06-10-2026 18:53"))
         assert not (folder / rme.NAMA_SEMENTARA).exists()
+        wb, ws = _muat(folder)
+        assert wb.sheetnames == ["HARI IN - FORM KOSONG"]
+        assert [ws.cell(r, 12).value for r in (6, 7, 8, 9)] == [157401, 157402, 157403, None]
+        assert ws.cell(6, 6).value == "PUTRI" and ws.cell(6, 7).value == datetime(2026, 10, 6)
+        assert ws.cell(6, 8).value == 13.45 and ws.cell(8, 8).value == 18.53
+        assert (ws.cell(6, 13).value, ws.cell(6, 14).value, ws.cell(6, 20).value) == (3, 3, "SKU157401")
+        assert ws.cell(7, 21).value == "SO1, SO2" and ws.cell(6, 21).value is None
+        # rumus disalin ke baris baru (relatif) & tidak ada nilai di kolom rumus
+        assert ws["O8"].value == '=IF(L8="","",IF(N8="","",M8-N8))'
+        assert ws["E8"].value == '=IF(L8="","",IF(G8=G7,E7+1,1))'
+        assert ws["Q7"].value == '=IF(P7="","",M7-P7)' and ws["W8"].value == '=IF(L8="","",G8)'
+        assert ws["B7"].value == '=IF(L7="","",I7&"-"&J7)'
+        # format: font, number format, tinggi baris sama dengan baris contoh
+        assert ws["M8"].number_format == "#,##0" and ws["G8"].number_format == ws["G6"].number_format
+        assert ws["L8"].font.name == "Cambria" and ws["L8"].font.b and ws["L8"].border.left.style == "thin"
+        assert ws.row_dimensions[8].height == ws.row_dimensions[6].height
+        assert not any(_kuning(ws.cell(r, c)) for r in (6, 7, 8) for c in range(2, 22))
+    print("  catat(): file sesi dari template, nilai F/G/H/L/M/N/T/U terisi, rumus & format disalin")
 
-        def _jangan_dibuka():
-            raise AssertionError("antrean kosong tidak boleh membuka PICKLIST.xlsx")
-        asli, rme._buka = rme._buka, _jangan_dibuka
-        try:
-            assert rme.terapkan() == 0
-        finally:
-            rme._buka = asli
-    print("  terapkan(): semua antrean ditulis berurutan dalam 1x buka/simpan, antrean dikosongkan;"
-          " antrean kosong tidak membuka workbook")
 
-
-def uji_terapkan_berikutnya_lanjut_di_baris_setelahnya():
+def uji_minus_lebih_dari_nol_sel_o_kuning():
+    _reset()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat(_baris(157401))
-        rme.terapkan()
-        rme.catat(_baris(157405))         # TIPE berikutnya
-        rme.terapkan()
-        assert _isi_kolom_l(folder)[2:4] == [157401, 157405]
-    print("  terapkan() berulang (tiap TIPE): baris baru lanjut setelah baris sebelumnya")
+        rme.catat(folder, _baris(157501, **{"Total Pesanan": 10, "Resi Keluar": 8}))     # minus 2
+        rme.catat(folder, _baris(157502))                                              # minus 0
+        _, ws = _muat(folder)
+        assert _kuning(ws["O6"]) and not _kuning(ws["O7"])
+        assert not any(_kuning(ws.cell(6, c)) for c in range(2, 22) if c != 15)       # hanya sel O
+    print("  MINUS > 0: hanya sel O baris itu yang kuning")
 
 
-def uji_salinan_sedang_dibuka_excel_antrean_tetap_disimpan():
-    if not _bisa_kunci_windows():
-        return
+def uji_picklist_cancel_hanya_nomor_terlompat_yang_diberikan():
+    _reset()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat(_baris(157401))
-        rme.terapkan()                                         # PICKLIST.xlsx sudah ada
-        rme.catat(_baris(157402))
-
-        def _jangan_dibuka():
-            raise AssertionError("file terkunci Excel: jangan buang ~48 detik load_workbook()")
-        asli, rme._buka = rme._buka, _jangan_dibuka
-        try:
-            with _KunciSepertiExcel(folder / rme.NAMA_SALINAN):
-                assert rme.terapkan() == 0
-        finally:
-            rme._buka = asli
-        assert rme.jumlah_antrian() == 1, "antrean tidak boleh dibuang"
-        assert rme.terapkan() == 1                            # Excel sudah ditutup
-        assert _isi_kolom_l(folder)[2:4] == [157401, 157402]
-    print("  PICKLIST.xlsx dibuka di Excel: dilewati TANPA load, antrean tetap, ditulis di "
-          "terapkan() berikutnya")
+        rme.catat(folder, _baris(157601))
+        rme.catat(folder, _baris(157604), [157602, 157603])
+        _, ws = _muat(folder)
+        assert [ws.cell(r, 12).value for r in (6, 7, 8, 9)] == [157601, 157602, 157603, 157604]
+        for r in (7, 8):
+            assert ws.cell(r, 20).value == "PICKLIST CANCEL"
+            assert ws.cell(r, 6).value == "PUTRI" and ws.cell(r, 7).value == datetime(2026, 10, 6)
+            assert all(_kuning(ws.cell(r, c)) for c in range(2, 22)), r
+            assert not _kuning(ws.cell(r, 1))
+        assert not any(_kuning(ws.cell(9, c)) for c in range(2, 22))
+        assert ws["E9"].value == '=IF(L9="","",IF(G9=G8,E8+1,1))'
+    print("  nomor_terlompat: baris kuning PICKLIST CANCEL sebelum baris picklist, rumus tetap")
 
 
-def uji_simpan_gagal_file_lama_utuh_dan_antrean_tidak_hilang():
-    """Excel membuka PICKLIST.xlsx SETELAH dicek (di tengah ~2 menit load/save): os.replace
-    gagal -> PICKLIST.xlsx lama tetap utuh (bukan setengah tertulis), file sementara dibuang,
-    antrean lama + antrean baru tetap urut di terapkan() berikutnya."""
-    if not _bisa_kunci_windows():
-        return
+def uji_catatan_gagal_atau_terhenti_baris_kuning():
+    _reset()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        _buat_master(folder)
-        rme.atur_root(folder)
-        _reset()
-        rme.catat(_baris(157401))
-        rme.terapkan()
-        rme.catat(_baris(157402))
-        jeda_asli, cek_asli = rme.JEDA_COBA_GANTI_FILE_S, rme._sedang_dibuka
-        rme.JEDA_COBA_GANTI_FILE_S, rme._sedang_dibuka = 0, lambda f: False
-        try:
-            with _KunciSepertiExcel(folder / rme.NAMA_SALINAN):
-                assert rme.terapkan() == 0
-        finally:
-            rme.JEDA_COBA_GANTI_FILE_S, rme._sedang_dibuka = jeda_asli, cek_asli
-        assert _isi_kolom_l(folder)[2:4] == [157401, None], "file lama harus utuh"
-        assert not (folder / rme.NAMA_SEMENTARA).exists()
-        rme.catat(_baris(157403))                    # antrean baru saat yang lama tertunda
-        assert rme.jumlah_antrian() == 2
-        assert rme.terapkan() == 2
-        assert _isi_kolom_l(folder)[2:5] == [157401, 157402, 157403]
-    print("  simpan gagal: PICKLIST.xlsx lama utuh, file sementara dibuang, antrean tertunda + "
-          "baru ditulis urut berikutnya")
+        rme.catat(folder, {"Waktu": "06-10-2026 14:00", "SKU": "X", "No Picklist": "PICK-000157701",
+                           "Total Pesanan": 5, "Catatan": "TERHENTI: timeout. Lanjutkan: ..."})
+        _, ws = _muat(folder)
+        assert all(_kuning(ws.cell(6, c)) for c in range(2, 22))
+        assert ws.cell(6, 14).value is None
+    print("  Catatan GAGAL/TERHENTI: seluruh baris picklist kuning")
 
 
-def uji_master_tidak_ada_catat_tidak_menambah_antrean():
+def uji_tanpa_no_picklist_dilewati_dan_tanpa_file():
+    _reset()
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
-        rme.atur_root(folder)
+        rme.catat(folder, {"Waktu": "06-10-2026 14:00", "SKU": "X", "Catatan": "Dilewati: tidak ada"})
+        assert not (folder / rme.NAMA_FILE).exists()
+    print("  catat(): baris tanpa No Picklist (gagal sebelum picklist dibuat) dilewati")
+
+
+def uji_sesi_berbeda_file_berbeda_dan_lanjut_di_file_yang_sudah_ada():
+    _reset()
+    with tempfile.TemporaryDirectory() as tmp:
+        a, b = Path(tmp) / "1", Path(tmp) / "2"
+        a.mkdir(), b.mkdir()
+        rme.catat(a, _baris(157801))
+        rme.catat(b, _baris(157802))
+        rme.catat(a, _baris(157803))
+        assert [_muat(a)[1].cell(r, 12).value for r in (6, 7)] == [157801, 157803]
+        assert _muat(b)[1].cell(6, 12).value == 157802
+        # proses python baru (langkah .bat berikutnya) membuka file sesi yang sama dan melanjutkan
         _reset()
-        rme.catat(_baris(157401))
-        assert rme.jumlah_antrian() == 0
-        assert rme.terapkan() == 0
-        assert not (folder / rme.NAMA_SALINAN).exists()
-    print("  file master tidak ada (fitur opsional): catat() tidak menumpuk antrean")
+        rme.catat(a, _baris(157804), [])
+        assert [_muat(a)[1].cell(r, 12).value for r in (6, 7, 8)] == [157801, 157803, 157804]
+        assert _muat(a)[1]["E8"].value == '=IF(L8="","",IF(G8=G7,E7+1,1))'
+    print("  1 file per sesi; proses berikutnya melanjutkan di baris setelah data terakhir")
+
+
+def uji_template_hilang_tidak_menggagalkan_proses():
+    _reset()
+    asli = rme.TEMPLATE
+    try:
+        rme.TEMPLATE = Path("tidak/ada/template.xlsx")
+        with tempfile.TemporaryDirectory() as tmp:
+            rme.catat(Path(tmp), _baris(157901))
+            assert not (Path(tmp) / rme.NAMA_FILE).exists()
+    finally:
+        rme.TEMPLATE = asli
+        rme._sudah_peringatan_template = False
+    print("  template tidak ada: catat() tidak error, tidak ada file")
+
+
+def uji_simpan_gagal_file_lama_utuh_dan_tersimpan_di_catat_berikutnya():
+    """PICKLIST.xlsx dibuka di Excel => os.replace gagal: file lama utuh, sementara dibuang,
+    isi tetap di memori & ikut tersimpan begitu bisa menulis lagi."""
+    _reset()
+    asli = rme._ganti_file
+    peringatan = []
+    asli_catat = peringatan_gagal.catat
+    peringatan_gagal.catat = peringatan.append
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            rme.catat(folder, _baris(158001))
+
+            def terkunci(asal, tujuan, coba_maks):
+                raise PermissionError("dibuka di Excel")
+            rme._ganti_file = terkunci
+            rme.catat(folder, _baris(158002))
+            assert not (folder / rme.NAMA_SEMENTARA).exists()
+            assert [_muat(folder)[1].cell(r, 12).value for r in (6, 7)] == [158001, None]   # lama utuh
+            rme.selesai()                                   # masih terkunci -> peringatan
+            assert len(peringatan) == 1 and "belum tersimpan" in peringatan[0], peringatan
+            rme._ganti_file = asli                          # Excel ditutup
+            rme.catat(folder, _baris(158003))
+            assert [_muat(folder)[1].cell(r, 12).value for r in (6, 7, 8)] == [158001, 158002, 158003]
+            rme.selesai()
+            assert len(peringatan) == 1
+    finally:
+        rme._ganti_file = asli
+        peringatan_gagal.catat = asli_catat
+    print("  simpan gagal: file lama utuh, isi ikut tersimpan lagi di catat() berikutnya, "
+          "peringatan kalau tetap gagal di akhir proses")
+
+
+def uji_file_rusak_dipindah_lalu_dibuat_baru():
+    _reset()
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / rme.NAMA_FILE).write_bytes(b"bukan zip")
+        rme.catat(folder, _baris(158101))
+        assert _muat(folder)[1].cell(6, 12).value == 158101
+        assert list(folder.glob("PICKLIST_rusak_*.xlsx"))
+    print("  PICKLIST.xlsx rusak: dipindah ke PICKLIST_rusak_*, dibuat baru dari template")
+
+
+def uji_cepat_puluhan_picklist():
+    _reset()
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        mulai = time.monotonic()
+        for i in range(60):
+            rme.catat(folder, _baris(160000 + i))
+        detik = time.monotonic() - mulai
+        assert _muat(folder)[1].cell(65, 12).value == 160059
+    assert detik < 30, detik
+    print(f"  60 picklist ditulis langsung (simpan tiap picklist) dalam {detik:.1f} detik")
 
 
 if __name__ == "__main__":

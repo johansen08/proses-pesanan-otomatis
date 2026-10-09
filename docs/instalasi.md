@@ -29,12 +29,10 @@ harus disiapkan/disalin manual sendiri di PC baru:
 - `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat (salin dari PC
   lama via USB/cloud kalau mau melanjutkan riwayat lama; kalau tidak, program akan
   membuat riwayat baru dari nol)
-- `PICK LIST - EXCEL 2022 - 2024 - MASTER - TERBARU NEW.xlsx` — file master kerja tim
-  (dijalankan manual, bukan oleh program) yang jadi sumber salinan `PICKLIST.xlsx` tempat
-  program mencatat tiap picklist (lihat `src/rekap_master_excel.py`). **Opsional**: kalau
-  file ini tidak disalin ke PC baru, program tetap jalan normal — fitur rekap ke
-  `PICKLIST.xlsx` cuma dilewati dengan warning di log, tidak menggagalkan proses picklist
-  utama. Salin manual via USB/cloud dari PC lama kalau tim mau fitur ini aktif.
+- `PICK LIST - EXCEL 2022 - 2024 - MASTER - TERBARU NEW.xlsx` — file master kerja tim, dikelola
+  manual (tidak dibuka program). Program mencatat tiap picklist ke `PICKLIST.xlsx` di folder
+  sesi label dari `template/picklist-form-kosong.xlsx` (ikut repo, tidak perlu disalin); tim
+  copy-paste manual ke master.
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang
 di PC baru (langkah 3). Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`,
@@ -170,7 +168,7 @@ Lalu jalankan semua uji offline (tanpa internet & tanpa menyentuh Jubelio sunggu
 .venv\Scripts\python tests\test_bat.py
 ```
 
-`test_bat.py` memakai `cmd.exe` sungguhan, jadi hanya jalan di Windows. `test_rekap_master_excel.py` memakai file Excel buatan sendiri, bukan file master tim, sehingga tidak perlu file master ada di PC baru.
+`test_bat.py` memakai `cmd.exe` sungguhan, jadi hanya jalan di Windows. `test_rekap_master_excel.py` memakai folder sementara dan template di repo, tidak butuh file master tim.
 
 Lalu pastikan file `.env` ada dan berisi `JUBELIO_EMAIL` + `JUBELIO_PASSWORD`
 yang benar, baru jalankan `bat\proses-harian-uji.bat` (mode uji) sebagai tes akhir koneksi ke

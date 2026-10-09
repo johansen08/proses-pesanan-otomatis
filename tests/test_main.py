@@ -172,6 +172,29 @@ def uji_peringatan_picklist_terlompat():
     print("  peringatan_picklist: nomor terlompat terdeteksi & tersimpan, berurutan tidak dianggap")
 
 
+def uji_nomor_terlompat_sebelum_picklist_pertama_tidak_jadi_picklist_cancel():
+    """Gap sebelum picklist PERTAMA proses ini (mis. terakhir 21, sekarang 100) hanya
+    diperingatkan; baru gap SESUDAH itu yang dipakai utk baris PICKLIST CANCEL di Excel."""
+    import peringatan_picklist as pp
+    with tempfile.TemporaryDirectory() as tmp:
+        pp.atur_folder(Path(tmp))
+        pp._sesi.clear()
+        (Path(tmp) / "picklist_terakhir.txt").write_text("21")
+        pesan = pp.periksa_nomor("PICK-000000100")
+        assert pesan and "PICK-000000022" in pesan, pesan       # tetap diperingatkan
+        assert pp.ambil_nomor_hilang() == []                    # tapi tidak ditulis ke Excel
+        assert pp.periksa_nomor("PICK-000000103")
+        assert pp.ambil_nomor_hilang() == [101, 102]            # selama proses berjalan: ditulis
+        assert pp.periksa_nomor("PICK-000000104") is None
+        assert pp.ambil_nomor_hilang() == []
+        pp.atur_folder(Path(tmp))                               # proses python baru
+        (Path(tmp) / "picklist_terakhir.txt").write_text("104")
+        assert pp.periksa_nomor("PICK-000000110")
+        assert pp.ambil_nomor_hilang() == []
+    pp._file_terakhir = pp._file_peringatan = None
+    print("  picklist cancel: gap sebelum picklist pertama proses hanya peringatan, bukan ke Excel")
+
+
 def uji_peringatan_resi_tanpa_resi():
     import peringatan_resi as pr
     with tempfile.TemporaryDirectory() as tmp:
@@ -186,39 +209,6 @@ def uji_peringatan_resi_tanpa_resi():
         assert len(pr.baca_sejak(0)) == 1 and pr.baca_sejak(9e12) == []
     pr._file_peringatan = None
     print("  peringatan_resi: pesanan tanpa resi (bukan batal) dicatat untuk diinformasikan ke CS")
-
-
-def uji_tulis_picklist_excel_mode_uji_tidak_menulis():
-    import logging
-    from types import SimpleNamespace
-
-    import rekap_master_excel as rme
-    log = logging.getLogger("uji-main")
-    with mock.patch.object(rme, "jumlah_antrian", return_value=3), \
-            mock.patch.object(rme, "terapkan") as terapkan:
-        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=False)) == 0
-        terapkan.assert_not_called()
-    with mock.patch.object(rme, "jumlah_antrian", return_value=0), \
-            mock.patch.object(rme, "terapkan") as terapkan:
-        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 0
-        terapkan.assert_not_called()
-    print("  --tulis-excel: mode uji / antrean kosong tidak membuka PICKLIST.xlsx")
-
-
-def uji_tulis_picklist_excel_exit_1_kalau_masih_tertunda():
-    import logging
-    from types import SimpleNamespace
-
-    import rekap_master_excel as rme
-    log = logging.getLogger("uji-main")
-    with mock.patch.object(rme, "jumlah_antrian", side_effect=[2, 0]), \
-            mock.patch.object(rme, "terapkan", return_value=2) as terapkan:
-        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 0
-        terapkan.assert_called_once()
-    with mock.patch.object(rme, "jumlah_antrian", side_effect=[2, 2]), \
-            mock.patch.object(rme, "terapkan", return_value=0):
-        assert m.tulis_picklist_excel(log, SimpleNamespace(jalankan=True)) == 1
-    print("  --tulis-excel --jalankan: terapkan() sekali; exit 1 kalau antrean masih tertunda")
 
 
 def uji_upload_iresis_mode_uji_gagal_dan_sukses():
@@ -466,7 +456,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                     total += 1
                 except SystemExit as e:
                     raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-    assert total >= 2 * (14 + 17), total
+    assert total >= 2 * (13 + 16), total
     print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
 
 

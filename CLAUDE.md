@@ -128,19 +128,25 @@ project secara umum, root tidak boleh berisi file `.py`):
   `src/rekap_waktu.py` bisa mencetaknya ULANG di rekap akhir tiap TIPE — kalau langkah yang
   bermasalah bukan langkah terakhir TIPE itu, peringatannya tenggelam di tengah log dan luput
   dibaca kalau cuma scroll ke rekap paling bawah (insiden 2026-10-06).
-- `src/rekap_master_excel.py` — catat tiap picklist ke `PICKLIST.xlsx` (sheet `HARI INI`,
-  kolom F/G/H/L/M/N/T/U), SALINAN kerja dari file master "PICK LIST - EXCEL 2022 - 2024 -
-  MASTER - TERBARU NEW.xlsx" yang tetap dijalankan MANUAL oleh tim — program TIDAK PERNAH
-  menulis ke file master langsung, tim verifikasi `PICKLIST.xlsx` dulu baru copy manual kalau
-  sudah sesuai (dibuat otomatis dari master kalau belum ada/sudah dihapus tim). Picklist
-  terlompat (dari `peringatan_picklist.ambil_nomor_hilang()`) jadi baris kuning "PICKLIST
-  CANCEL" tersendiri, meniru pola manual yang sudah ada di file master. Karena file itu besar
-  (~51 ribu baris: buka ~48 detik + simpan ~67 detik), `catat()` cuma menambah antrean
-  `logs/antrian_picklist_excel.jsonl`; workbook baru dibuka & disimpan SEKALI per TIPE oleh
-  `terapkan()` lewat `main.py --tulis-excel --jalankan` (langkah terakhir tiap TIPE
-  `proses-harian.bat`), disimpan atomik (file sementara lalu `os.replace`). Dulu dibuka &
-  disimpan di TIAP proses — ±15-20 menit per TIPE habis untuk Excel, dan file pernah rusak
-  (insiden 2026-10-06). Kalau gagal (file dibuka di Excel/rusak), antrean tidak dibuang.
+- `src/rekap_master_excel.py` — catat tiap picklist ke `PICKLIST.xlsx` PER SESI, langsung di
+  folder sesi (`label-pengiriman/YYYY-MM-DD/N/PICKLIST.xlsx`), dibuat dari
+  `template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim: rumus B/E/O/Q/W
+  & format sama, supaya baris-barisnya mudah di-copy-paste manual ke file master). Program TIDAK
+  PERNAH membuka/menulis file master (dulu salinan ~51 ribu baris: buka ~48 detik + simpan ~67
+  detik per proses, insiden 2026-10-06 -> antrean + `--tulis-excel`; sekarang dibuang). Kolom
+  F/G/H/L/M/N/T/U diisi, rumus disalin ke tiap baris baru; sel O (MINUS) kuning kalau
+  Total Pesanan - Resi Keluar > 0; baris GAGAL/TERHENTI kuning. "PICKLIST CANCEL" (baris kuning)
+  HANYA untuk nomor yang terlompat SELAMA proses python berjalan: gap sebelum picklist PERTAMA
+  proses cuma diperingatkan di layar (`peringatan_picklist.ambil_nomor_hilang()` mengembalikan
+  kosong untuk gap itu — bisa dibuat orang lain di PC lain). `catat(folder_sesi, baris,
+  nomor_terlompat)` langsung menambah baris & menyimpan atomik (file sementara lalu
+  `os.replace`; file kecil ±60 ms); workbook ditahan di memori per proses, jadi kalau simpan
+  gagal (file dibuka di Excel) isinya ikut tersimpan di `catat()` berikutnya / `selesai()`
+  (dipanggil `main.py` di akhir proses; peringatan lewat `peringatan_gagal` kalau tetap gagal).
+  Template dibuat ulang lewat `python src/buat_template_picklist.py` (butuh `PICKLIST.xlsx`
+  salinan master, ±2 menit) — hanya kalau tim mengubah format form; template sengaja disalin ke
+  workbook BARU (menghapus baris saja tidak cukup: stylesheet 22 ribu fill membuat tiap save ~1
+  detik).
 - `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat

@@ -247,7 +247,8 @@ def uji_bat_event_urutan_pagi_dan_pemisahan_kurir():
             if "--label" in a or "--reguler" in a:
                 assert "--event" in a and ("--kurir jnt" in a or "--kurir spx-hemat" in a), a
         assert sesi[0].startswith("--recheck-stok") and sesi[1].startswith("--sampel")
-        assert sesi[-2].startswith("--tulis-excel") and sesi[-1].startswith("--upload-iresis")
+        assert sesi[-1].startswith("--upload-iresis")
+        assert not any(a.startswith("--tulis-excel") for a in sesi)
     assert not any("--pagi" in a or "spx-hemat-pagi" in a for a in sesi1)
     pagi = [i for i, a in enumerate(sesi2) if "--pagi" in a or "spx-hemat-pagi" in a]
     harian = [i for i, a in enumerate(sesi2)

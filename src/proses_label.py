@@ -749,7 +749,7 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
                                             subfolder=subfolder)
         baris["Durasi"] = durasi(time.monotonic() - mulai)
         catat_riwayat(file_riwayat, baris)
-        rekap_master_excel.catat(baris, nomor_terlompat)
+        rekap_master_excel.catat(folder_label, baris, nomor_terlompat)
         hasil.append(baris)
     return hasil
 
@@ -1857,8 +1857,7 @@ def _unduh_label_sekali(k: Klien, ids: list[int], host: str = HOST_REPORT_UTAMA,
 # key = path resolve()) dan disimpan SEKALI di akhir proses lewat tutup_riwayat() (dipanggil
 # main.py lewat finally), menghindari load_workbook()+wb.save() ULANG seluruh file tiap
 # picklist/batch (O(n^2) kalau dibuka-simpan tiap baris). File ini kecil, jadi cukup 1x per
-# proses - beda dengan PICKLIST.xlsx (puluhan MB) yang diantrekan & ditulis 1x per TIPE (lihat
-# rekap_master_excel.py).
+# proses - mirip rekap_master_excel.py (PICKLIST.xlsx kecil per sesi, disimpan tiap picklist).
 # catat_detail_spesial() bisa dipanggil dari beberapa thread worker sekaligus (lihat
 # MAKS_WORKER_PARALEL di proses()), jadi semua akses _wb_cache/worksheet dikunci _lock_wb.
 _wb_cache: dict[Path, "Workbook"] = {}
@@ -2156,7 +2155,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
                 detik = time.monotonic() - mulai
                 baris.update({"Rak": rak, "detik": detik, "Durasi": durasi(detik)})
                 catat_riwayat(file_riwayat, baris)
-                rekap_master_excel.catat(baris, nomor_terlompat)
+                rekap_master_excel.catat(folder_label, baris, nomor_terlompat)
                 log.info("  Selesai SKU %s dalam %s", baris["SKU"], baris["Durasi"])
                 hasil[idx] = baris
 
@@ -2193,10 +2192,10 @@ def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path
                        "Catatan": f"TERHENTI lagi: {e}",
                        "Durasi": durasi(time.monotonic() - mulai)}
         catat_riwayat(file_riwayat, baris_gagal)
-        rekap_master_excel.catat(baris_gagal)
+        rekap_master_excel.catat(folder_label, baris_gagal)
         raise
     baris["Durasi"] = durasi(time.monotonic() - mulai)
     catat_riwayat(file_riwayat, baris)
-    rekap_master_excel.catat(baris)
+    rekap_master_excel.catat(folder_label, baris)
     peringatan_gagal.tandai_selesai(p["picklist_no"])
     return baris

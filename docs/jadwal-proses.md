@@ -76,8 +76,7 @@ bisa manual lewat `jalankan.bat --recheck-stok ...`/`jalankan.bat --sampel
 5. SPX - J&T SPESIAL
 6. SPX - J&T 1 QTY REGULER
 7. SPX - J&T KOMBINASI
-8. TULIS PICKLIST.XLSX *(lihat "Rekap PICKLIST.xlsx" di bawah)*
-9. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+7. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore **16.00-17.00** — begitu TIPE 4 selesai (jam 15.00-an), TIPE 1
@@ -98,8 +97,7 @@ bawah), bukan TIPE 1.
 9. SPX - SPESIAL
 10. SPX - 1 QTY REGULER
 11. SPX - KOMBINASI
-12. TULIS PICKLIST.XLSX
-13. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+12. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 5,
 channel Shopee, jam pesan WIB maksimal 12.00 siang hari itu, cukup
@@ -119,8 +117,7 @@ jadwal.
 8. SPX - SPESIAL
 9. SPX - 1 QTY REGULER
 10. SPX - KOMBINASI
-11. TULIS PICKLIST.XLSX
-12. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+11. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
@@ -137,8 +134,7 @@ di bawah).
 6. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
 7. SPX - J&T 1 QTY REGULER *(digabung)*
 8. SPX - J&T KOMBINASI *(digabung)*
-9. TULIS PICKLIST.XLSX
-10. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+9. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 15.00**, menghabiskan wajib keluar TikTok Shop (langkah
 4, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
@@ -177,22 +173,15 @@ Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IR
   GAGAL" dicetak mencolok & muncul lagi di rekap waktu; upload ulang manual dengan
   `jalankan.bat --upload-iresis --jalankan`.
 
-### Rekap PICKLIST.xlsx (langkah terakhir tiap TIPE)
+### Rekap PICKLIST.xlsx (per sesi)
 
-**Revisi 2026-10-06**: langkah **TULIS PICKLIST.XLSX** (`--tulis-excel --jalankan`) jadi
-langkah PALING TERAKHIR di tiap TIPE 1-4. Selama langkah-langkah sebelumnya, tiap picklist
-cuma masuk antrean (`logs/antrian_picklist_excel.jsonl`); baru di langkah ini `PICKLIST.xlsx`
-dibuka & disimpan **sekali** (±2 menit, file ~51 ribu baris). Dulu dibuka & disimpan di TIAP
-langkah, sehingga TIPE 2/3 kehilangan ±15-20 menit cuma untuk Excel (insiden 2026-10-06).
-
-- Picklist dari `--lanjut` manual juga masuk antrean → ikut tertulis di akhir TIPE
-  berikutnya, atau langsung lewat `jalankan.bat --tulis-excel --jalankan`.
-- Kalau `PICKLIST.xlsx` sedang dibuka di Excel/rusak: antrean TIDAK dibuang, muncul di blok
-  PERHATIAN rekap akhir TIPE, dicoba lagi otomatis di TIPE berikutnya. **Tutup Excel sebelum
-  TIPE selesai** supaya rekap langsung tertulis.
-
-Implementasi kode: `catat()`/`terapkan()` di `src/rekap_master_excel.py`,
-`tulis_picklist_excel()` di `src/main.py`.
+**Revisi 2026-10-09**: tidak ada lagi langkah **TULIS PICKLIST.XLSX** (`--tulis-excel`, antrean
+`logs/antrian_picklist_excel.jsonl`) di tiap TIPE. Tiap picklist langsung ditulis ke
+`PICKLIST.xlsx` di folder sesi label (dari `template/picklist-form-kosong.xlsx`), file kecil
+yang disimpan ±60 ms. File master tidak pernah dibuka lagi — tim copy-paste manual dari file
+sesi. Sel MINUS (O) > 0 kuning; "PICKLIST CANCEL" hanya untuk nomor yang terlompat selama
+proses berjalan (gap sebelum picklist pertama proses hanya diperingatkan). Lihat README bagian
+"Rekap PICKLIST.xlsx". Implementasi: `catat()`/`selesai()` di `src/rekap_master_excel.py`.
 
 ### Jam tunda Urgent Lazada & GTL/SiCepat
 
@@ -361,8 +350,7 @@ menangkap `J&T Express Hemat`).
 10. SPX HEMAT 1 QTY REGULER
 11. SPX HEMAT KOMBINASI
 12. SPX STANDARD (PER LANTAI)
-13. TULIS PICKLIST.XLSX
-14. UPLOAD FAKTUR & PESANAN KE IRESIS
+13. UPLOAD FAKTUR & PESANAN KE IRESIS
 
 **Pilihan 2 — tepat jam 13.00 (Shopee Pagi, cukup 1x sehari):**
 
@@ -374,8 +362,7 @@ menangkap `J&T Express Hemat`).
 9-11. J&T spesial / 1 qty / kombinasi
 12-14. SPX Hemat spesial / 1 qty / kombinasi
 15. SPX STANDARD (PER LANTAI)
-16. TULIS PICKLIST.XLSX
-17. UPLOAD FAKTUR & PESANAN KE IRESIS
+16. UPLOAD FAKTUR & PESANAN KE IRESIS
 
 Shopee Pagi mendahului langkah seharian supaya pesanan Shopee dengan jam pesan WIB maksimal
 12.00 pasti masuk picklist pagi yang **foldernya terpisah** (tabel di bawah). Pesanan setelah

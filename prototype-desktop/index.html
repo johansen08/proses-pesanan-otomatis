@@ -304,7 +304,7 @@ const ic=n=>`<svg><use href="#${n}"/></svg>`;
 
 /* ---------- data ---------- */
 const AWAL=['Recheck stok','Sampel TikTok (nilai 0)','Urgent Lazada','Urgent GTL & SiCepat'];
-const AKHIR=['Tulis PICKLIST.xlsx','Upload faktur & pesanan ke IRESIS'];
+const AKHIR=['Upload faktur & pesanan ke IRESIS'];
 const TIPE=[
  {id:1,nama:'TIPE 1',sub:'Gabung J&T + SPX',jam:'07.00–12.00 · 16.00–17.00',tip:'Dipakai pagi (07.00–12.00) dan sore (16.00–17.00). J&T dan SPX digabung dalam satu picklist.',
   mid:['SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi']},
@@ -368,11 +368,11 @@ const GRUP=[
  ['Gabung J&T + SPX',['SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi']],
  ['Dipisah — J&T',['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi']],
  ['Dipisah — SPX',['SPX Spesial','SPX 1 qty reguler','SPX Kombinasi']],
- ['Penutup',['Tulis PICKLIST.xlsx','Upload faktur & pesanan ke IRESIS']],
+ ['Penutup',['Upload faktur & pesanan ke IRESIS']],
 ];
 const SEMUA=GRUP.flatMap(g=>g[1]);
 const PRESET=[...TIPE.slice(0,4).map(t=>({id:t.id,nama:t.nama,sub:t.jam,steps:tipeSteps(t)})),
- {id:5,nama:'MALAM',sub:'Urgent + SPX-J&T',steps:['Urgent Lazada','Urgent GTL & SiCepat','SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi','Tulis PICKLIST.xlsx']}];
+ {id:5,nama:'MALAM',sub:'Urgent + SPX-J&T',steps:['Urgent Lazada','Urgent GTL & SiCepat','SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi']}];
 let pilih=new Set(),presetAktif=null;
 function setPreset(p){presetAktif=p?p.id:null;pilih=new Set(p?p.steps:[]);drawHarian();}
 function initHarian(rec){window._rec=rec;const p=PRESET.find(x=>x.id===rec);if(!presetAktif&&!pilih.size&&p){presetAktif=p.id;pilih=new Set(p.steps);}drawHarian();}

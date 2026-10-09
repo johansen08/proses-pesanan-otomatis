@@ -113,7 +113,7 @@ mengabaikan yang tidak berubah, jadi upload ulang aman (idempoten: "Data Tidak B
 4. **`.env`** — `IRESIS_URL`, `IRESIS_USERNAME`, `IRESIS_PASSWORD`, opsional `IRESIS_NAMA_PK`
    (jangan dikomit; tambahkan contoh di `docs/instalasi.md`).
 5. **Penempatan di alur** — langkah terakhir tiap TIPE `proses-harian.bat` (setelah
-   `--tulis-excel --jalankan`), karena data faktur baru lengkap setelah resi tercetak. Kegagalan
+   langkah picklist terakhir), karena data faktur baru lengkap setelah resi tercetak. Kegagalan
    upload **tidak boleh** menggagalkan TIPE: cukup `cetak_bermasalah()` + simpan ke
    `peringatan_gagal.py` agar muncul lagi di rekap waktu. Update `test_bat.py` (urutan langkah)
    dan ingat aturan CRLF `.bat`.

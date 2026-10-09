@@ -91,7 +91,7 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
 | `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
 | `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `proses-harian.bat` |
-| `src/rekap_master_excel.py` | Catat tiap picklist ke salinan kerja `PICKLIST.xlsx` (dari file master "PICK LIST - EXCEL ... MASTER - TERBARU NEW.xlsx" yang tetap diverifikasi & disalin manual oleh tim) — lewat antrean, ditulis sekaligus 1x per TIPE (`--tulis-excel`, lihat bagian "Rekap PICKLIST.xlsx") |
+| `src/rekap_master_excel.py` | Catat tiap picklist ke `PICKLIST.xlsx` per sesi (di folder sesi label, dari `template/picklist-form-kosong.xlsx`) — langsung ditulis, siap di-copy-paste manual ke file master (lihat bagian "Rekap PICKLIST.xlsx") |
 | `jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
 | `bat\cetak-label-spesial.bat` | Menjalankan `src/print_spesial.py --jenis spesial` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `bat\cetak-label-gtl-sicepat.bat` | Menjalankan `src/print_spesial.py --jenis gtl-sicepat` (klik 2x) — hanya label GTL-SiCepat — lihat bagian "Cetak bulk label" |
@@ -393,22 +393,26 @@ Tiap TIPE `proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara b
 satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
 [docs/jadwal-proses.md](docs/jadwal-proses.md).
 
-### Rekap PICKLIST.xlsx (`--tulis-excel`)
+### Rekap PICKLIST.xlsx (per sesi)
 
-Selama langkah-langkah TIPE berjalan, tiap picklist cuma masuk **antrean**
-(`logs/antrian_picklist_excel.jsonl`) — `PICKLIST.xlsx` baru dibuka & disimpan **sekali** di
-langkah terakhir tiap TIPE ("TULIS PICKLIST.XLSX"), karena membuka+menyimpan file sebesar itu
-makan ±2 menit (dulu terulang di tiap langkah, insiden 2026-10-06). Picklist dari `--lanjut`
-juga masuk antrean dan ikut tertulis di akhir TIPE berikutnya — atau tulis sekarang juga:
+Tiap picklist yang dibuat langsung ditulis ke **`PICKLIST.xlsx` di folder sesi label**
+(`label-pengiriman/YYYY-MM-DD/N/PICKLIST.xlsx`), dibuat dari template
+`template/picklist-form-kosong.xlsx` (sheet "HARI IN - FORM KOSONG" milik tim, rumus & format
+sama persis). Tim tinggal verifikasi lalu copy-paste baris-barisnya ke file master — program
+tidak pernah membuka file master (dulu salinan ±51 ribu baris yang makan ±2 menit per proses).
+Tidak ada lagi langkah/flag `--tulis-excel`. Penulisan ±60 ms per picklist.
 
-```bash
-jalankan.bat --tulis-excel              # mode uji: hanya tampilkan jumlah antrean
-jalankan.bat --tulis-excel --jalankan   # tulis semua antrean ke PICKLIST.xlsx
-```
-
-Kalau `PICKLIST.xlsx` sedang dibuka di Excel (atau rusak), antrean **tidak dibuang** — muncul
-peringatan di rekap akhir TIPE, dan otomatis dicoba lagi di TIPE berikutnya. File lama tidak
-pernah setengah tertulis: penyimpanan lewat file sementara `PICKLIST.xlsx.menulis` dulu.
+- Sel **MINUS** (kolom O) otomatis **kuning** kalau Total Pesanan - Resi Keluar > 0; baris
+  picklist GAGAL/TERHENTI kuning seluruhnya.
+- Baris kuning **PICKLIST CANCEL** hanya untuk nomor yang terlompat **selama proses berjalan**.
+  Nomor yang sudah terlompat sebelum proses dimulai (mis. terakhir 21, sekarang 100) cuma
+  diperingatkan di layar — bisa dibuat orang lain di PC lain.
+- Kalau `PICKLIST.xlsx` sesi itu sedang dibuka di Excel, isinya ditahan di memori dan ikut
+  tersimpan di picklist berikutnya; kalau sampai akhir proses tetap gagal, muncul peringatan di
+  rekap TIPE. Tutup file itu di Excel supaya langsung tertulis. File rusak dipindah ke
+  `PICKLIST_rusak_*.xlsx` dan dibuat baru.
+- Template dibuat ulang (hanya kalau format form di master berubah) lewat
+  `python src/buat_template_picklist.py` dengan `PICKLIST.xlsx` salinan master di root.
 
 ## 4. Picklist SPX Resi Pagi (`--shopee-pagi`)
 
