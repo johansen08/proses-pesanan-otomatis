@@ -156,12 +156,12 @@ Satu klik + 1 konfirmasi Y/N, tanpa cek jam & tanpa Recheck Stok/Sampel/IRESIS: 
 langkah paling akhir tiap TIPE 1-4. Dulu langkah manual tim: unduh Excel "Daftar Penjualan
 Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IRESIS
 (picklist/resi/status) ter-update. Sekarang program mengunduh laporan 2 hari terakhir
-(`--hari N` untuk mengubah) ke `laporan-faktur/` lalu mengunggahnya lewat `src/iresis.py`.
+(`--hari N` untuk mengubah) ke `data/laporan-faktur/` lalu mengunggahnya lewat `src/iresis.py`.
 
 - **Sejak 2026-10-07 (sniff 14:12)**: langkah yang sama juga mengunggah laporan **PESANAN**
   (`reference=order`, endpoint & form IRESIS sama) sebagai upload ke-2, rentang 4 hari
   (3 hari ke belakang + hari ini; ubah dengan `--hari-pesanan N`), disimpan sebagai
-  `laporan-faktur/daftar_penjualan_pesanan_*.xlsx`. Gagalnya faktur tidak membatalkan upload
+  `data/laporan-faktur/daftar_penjualan_pesanan_*.xlsx`. Gagalnya faktur tidak membatalkan upload
   pesanan (dan sebaliknya); exit code 1 kalau salah satu gagal.
 - Butuh `IRESIS_USERNAME` & `IRESIS_PASSWORD` di `.env` (opsional `IRESIS_URL`,
   `IRESIS_NAMA_PK`, `IRESIS_CA_BUNDLE`); PC harus satu LAN dengan server IRESIS.

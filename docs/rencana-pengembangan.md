@@ -106,7 +106,7 @@ mengabaikan yang tidak berubah, jadi upload ulang aman (idempoten: "Data Tidak B
    (Terinput/Dilewati/Duplikat/Diupdate/Tidak Berubah) dan log.
 2. **`src/jubelio.py`** — tambah `ambil_url_faktur(token, date_from, date_to)` untuk endpoint
    `sales-list/date-range`, lalu pakai ulang `unduh_excel()` (perlu parameter folder/nama file
-   supaya tidak bentrok dengan `laporan-siap-proses/`; simpan di `laporan-faktur/`).
+   supaya tidak bentrok dengan `data/laporan-siap-proses/`; simpan di `data/laporan-faktur/`).
 3. **`src/main.py`** — flag baru `--upload-iresis` (default mode uji: hanya unduh + tampilkan
    jumlah baris & rencana upload; upload sungguhan dengan `--jalankan`, konsisten dengan alur lain).
    Opsi `--hari N` (default 2) untuk rentang tanggal.

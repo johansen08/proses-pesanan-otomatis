@@ -26,7 +26,7 @@ Kedua cara di atas **tidak** membawa file-file berikut, karena sengaja di-ignore
 harus disiapkan/disalin manual sendiri di PC baru:
 
 - `.env` — isi kredensial Jubelio (lihat langkah 5 kalau mau isi baru saja)
-- `riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat (salin dari PC
+- `data/riwayat_picklist.xlsx` — riwayat semua picklist yang pernah dibuat (salin dari PC
   lama via USB/cloud kalau mau melanjutkan riwayat lama; kalau tidak, program akan
   membuat riwayat baru dari nol)
 - `PICK LIST - EXCEL 2022 - 2024 - MASTER - TERBARU NEW.xlsx` — file master kerja tim, dikelola
@@ -35,7 +35,7 @@ harus disiapkan/disalin manual sendiri di PC baru:
   copy-paste manual ke master.
 
 Folder **`.venv`** dan **`__pycache__`** TIDAK perlu disalin — akan dibuat ulang
-di PC baru (langkah 3). Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`,
+di PC baru (langkah 3). Folder `data/` (isi `laporan-siap-proses/`, `laporan-faktur/`, `laporan-sku-spesial/`, `riwayat_picklist.xlsx`), `label-pengiriman/`,
 `logs/` boleh disalin kalau mau menyimpan histori file lama, tapi tidak wajib (dibuat
 otomatis saat program pertama kali jalan).
 
@@ -119,7 +119,7 @@ proses-harian.bat
 
 Program akan menampilkan menu 4 TIPE (TIPE 1-4) + Keluar seperti di
 [README.md](../README.md)/[jadwal-proses.md](jadwal-proses.md).
-Folder `laporan-siap-proses/`, `laporan-sku-spesial/`, `label-pengiriman/`, `logs/` akan dibuat
+Folder `data/` (isi `laporan-siap-proses/`, `laporan-faktur/`, `laporan-sku-spesial/`, `riwayat_picklist.xlsx`), `label-pengiriman/`, `logs/` akan dibuat
 otomatis saat dibutuhkan.
 
 **Disarankan**: coba dulu `bat\proses-harian-uji.bat` (mode uji, struktur menu sama seperti

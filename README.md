@@ -28,7 +28,7 @@ Alur bisnis yang dicakup, sesuai aturan toko ini:
 - **Sampel/kreator** (pesanan TikTok Shop nilai 0) — tetap dipicklist & diberi label sendiri
   alih-alih dibuang diam-diam, supaya tim tahu ke mana pesanan itu harus dikirim.
 
-Setiap langkah mencatat riwayat ke `riwayat_picklist.xlsx` dan mendeteksi anomali (nomor
+Setiap langkah mencatat riwayat ke `data/riwayat_picklist.xlsx` dan mendeteksi anomali (nomor
 picklist yang terlompat karena Jubelio gagal buat picklist, atau pesanan yang sudah "Picking
 > Selesai" tapi tidak kunjung dapat resi) supaya tim admin/CS bisa ditindaklanjuti lebih awal.
 Hampir semua alur defaultnya **mode uji** (read-only, hanya menampilkan rencana) dan baru
@@ -106,10 +106,10 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
 | `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label) |
 
-Hasil: Excel di `laporan-siap-proses/`, PDF ringkasan SKU spesial di `laporan-sku-spesial/`,
+Hasil: Excel di `data/laporan-siap-proses/`, PDF ringkasan SKU spesial di `data/laporan-sku-spesial/`,
 label per picklist di `label-pengiriman/`, log di `logs/`, riwayat semua picklist (SKU spesial, urgent,
-reguler) di `riwayat_picklist.xlsx`, salinan kerja rekap picklist di `PICKLIST.xlsx` (kalau file
-master-nya ada — lihat [docs/instalasi.md](docs/instalasi.md)). Lihat
+reguler) di `data/riwayat_picklist.xlsx`, rekap picklist per sesi di `PICKLIST.xlsx` dalam folder sesi
+label (lihat bagian "Rekap PICKLIST.xlsx"). Lihat
 [docs/standar-struktur-proyek.md](docs/standar-struktur-proyek.md) untuk aturan penamaan folder/file.
 
 ## Instalasi (sekali saja)
@@ -126,7 +126,7 @@ Buat file `.env` berisi `JUBELIO_EMAIL` dan `JUBELIO_PASSWORD` (lihat
 GitHub karena sengaja di-gitignore (berisi kredensial login), jadi wajib dibuat manual
 sendiri; tidak ada file `.env.example` di proyek ini.
 
-Pindah dari PC lama ke PC baru (atau sudah pernah pakai `riwayat_picklist.xlsx` sebelumnya)?
+Pindah dari PC lama ke PC baru (atau sudah pernah pakai `data/riwayat_picklist.xlsx` sebelumnya)?
 Lihat panduan lengkap di [docs/instalasi.md](docs/instalasi.md) (versi Python, semua library
 yang perlu di-install, konfigurasi `.env`, dan file lain yang perlu disalin manual).
 
@@ -186,7 +186,7 @@ pengganti" dipakai sebagai pengganti nama SKU asli (karena lintas SKU, sama pola
   mis. `label-pengiriman/PICK-000155229_SAMPEL-TIKTOK_2026-10-01_070512.pdf`. Tidak memakai
   penanda `SPESIAL` (itu khusus Alur 1 - SKU spesial, lihat bagian "Cetak bulk label"
   di bawah).
-- **Kolom SKU di `riwayat_picklist.xlsx`**: berisi `SAMPEL-TIKTOK` juga.
+- **Kolom SKU di `data/riwayat_picklist.xlsx`**: berisi `SAMPEL-TIKTOK` juga.
 
 `ambil_pesanan_channel()` (dipakai urgent/reguler/Shopee Pagi/J&T Resi Siang) TETAP
 mengeluarkan pesanan sampel ini dari hasilnya supaya tidak dobel diproses.
@@ -250,7 +250,7 @@ mode uji (tanpa `--jalankan`) masing-masing channel.
   Beda dengan subfolder `SPESIAL` (bagian 2 di bawah): nama filenya TIDAK disisipi penanda
   `URGENT`, cuma lokasi penyimpanannya yang pindah ke subfolder itu (lihat parameter
   `subfolder` di `lanjutkan_picklist()`, `src/proses_label.py`). Tercatat juga di
-  `riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` /
+  `data/riwayat_picklist.xlsx` dengan kolom SKU berisi `LAZADA` /
   `GTL-SICEPAT-LANTAI1`/`LANTAI2`/`LANTAI3`/`LAINNYA`.
 
 ## 2. Proses SKU spesial sampai label pengiriman (`--label`, `proses_label.py`)
@@ -278,7 +278,7 @@ jalankan.bat --lanjut PICK-000157269 --nama KOMBINASI-REGULER-LANTAI2 --subfolde
 Urutan pakai: (1) mode uji semua SKU, (2) mode uji satu SKU, (3) jalankan sungguhan untuk
 **satu SKU** dan cek hasilnya di web Jubelio, (4) baru semua SKU. `--lanjut` dipakai untuk
 picklist yang prosesnya terhenti di tengah — **salin perintah lengkapnya dari Catatan
-`TERHENTI`** (blok PERHATIAN di akhir proses / `riwayat_picklist.xlsx`): perintah itu sudah
+`TERHENTI`** (blok PERHATIAN di akhir proses / `data/riwayat_picklist.xlsx`): perintah itu sudah
 membawa `--nama` (label, mis. `KOMBINASI-REGULER-LANTAI2` atau SKU-nya), `--subfolder`
 (`URGENT`/`SATUAN`/`KOMBINASI`/...) atau `--tag` (SKU spesial: `SPESIAL`/`JNT_SPESIAL`/
 `SPX_SPESIAL`), dan `--sesi` (folder sesi asal), sehingga PDF hasil lanjutan bernama & tersimpan
@@ -310,8 +310,8 @@ TIPE 2/TIPE 3, langkah "J&T SPESIAL"/"SPX SPESIAL" = `jalankan.bat --label --kur
 (satu konfirmasi Y/N per TIPE). `bat\proses-harian-uji.bat` = versi mode uji (tanpa `--jalankan`) yang sama.
 
 - Label PDF: disimpan di subfolder `SPESIAL` folder sesi, `label-pengiriman/<tanggal>/<sesi>/SPESIAL/<PICK-no>_SPESIAL_<SKU>_<tanggal>_<jam>.pdf`, mis. `label-pengiriman/2026-10-02/1/SPESIAL/PICK-000155085_SPESIAL_BM-AKS27-1_2026-09-29_090947.pdf` (dipisah dari label alur lain supaya folder sesi tidak penuh puluhan file SPESIAL). Kalau `--kurir jnt`/`--kurir spx` dipakai, tag & subfoldernya jadi `JNT_SPESIAL`/`SPX_SPESIAL` (mis. `.../JNT_SPESIAL/PICK-000155085_JNT_SPESIAL_BM-AKS27-1_..._....pdf`) supaya label J&T dan SPX tidak bercampur/tertukar — `bat\cetak-label-spesial.bat` tetap mencari ketiga kemungkinan subfolder (lihat bagian "Cetak bulk label").
-- Riwayat: `riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
-  File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `riwayat_picklist.csv`.
+- Riwayat: `data/riwayat_picklist.xlsx` (Waktu, SKU, No Picklist, Total Pesanan, Resi Keluar,
+  File Label, Catatan, Durasi). Jika file sedang dibuka di Excel, ditulis ke `data/riwayat_picklist.csv`.
 - Detail resi (1 file per sesi, langsung di folder sesi `label-pengiriman/<tanggal>/<sesi>/`,
   BUKAN di subfolder SPESIAL): 1 baris per pesanan yang resinya benar-benar keluar & labelnya
   berhasil diunduh (kolom No Picklist, SKU, No Pesanan, No Resi). Kalau dari 1 picklist jumlah

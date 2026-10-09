@@ -118,12 +118,13 @@ from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_
                          sku_bundle_per_pesanan)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
-FOLDER_EXCEL = ROOT / "laporan-siap-proses"
-FOLDER_FAKTUR = ROOT / "laporan-faktur"
-FOLDER_PDF = ROOT / "laporan-sku-spesial"
+FOLDER_DATA = ROOT / "data"       # laporan hasil unduh & riwayat picklist (tidak dikomit)
+FOLDER_EXCEL = FOLDER_DATA / "laporan-siap-proses"
+FOLDER_FAKTUR = FOLDER_DATA / "laporan-faktur"
+FOLDER_PDF = FOLDER_DATA / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
 FOLDER_LABEL = ROOT / "label-pengiriman"
-FILE_RIWAYAT = ROOT / "riwayat_picklist.xlsx"
+FILE_RIWAYAT = FOLDER_DATA / "riwayat_picklist.xlsx"
 
 # Folder sesi aktif di dalam FOLDER_LABEL, mis. "label-pengiriman/2026-09-30/4" (folder
 # tanggal berisi subfolder bernomor per sesi). Diisi sekali oleh main() lewat
@@ -472,7 +473,7 @@ def _main() -> int:
             # beda dari kandidat di atas kalau ada yang dilewati/gagal/stok kosong).
             return proses_label_sku(log, token, df, tabel, ringkasan, args, lama_daftar, waktu)
 
-        FOLDER_PDF.mkdir(exist_ok=True)
+        FOLDER_PDF.mkdir(parents=True, exist_ok=True)
         pdf = FOLDER_PDF / nama_pdf_spesial(waktu, args)
         buat_pdf(tabel, ringkasan, pdf, waktu)
         log.info("SELESAI: %d SKU spesial, %d resi spesial -> %s",
@@ -564,7 +565,7 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
         "total_sku_spesial": len(tabel_aktual),
         "total_resi_spesial": int(tabel_aktual["Jumlah Resi"].sum()) if len(tabel_aktual) else 0,
     }
-    FOLDER_PDF.mkdir(exist_ok=True)
+    FOLDER_PDF.mkdir(parents=True, exist_ok=True)
     pdf = FOLDER_PDF / nama_pdf_spesial(waktu, args)
     buat_pdf(tabel_aktual, ringkasan_aktual, pdf, waktu)
     log.info("SELESAI: %d SKU spesial (benar-benar diproses), %d resi -> %s",

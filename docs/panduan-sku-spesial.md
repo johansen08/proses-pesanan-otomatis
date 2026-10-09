@@ -164,7 +164,7 @@ PDF **hanya** berisi (sesuai implementasi saat ini di `sku_spesial.py::buat_pdf`
 Tanpa judul, nama file sumber, keterangan syarat, atau ringkasan penyaringan
 (ringkasan penyaringan dicatat di file log saja).
 
-Nama file: `laporan-sku-spesial/SKU_Spesial_YYYY-MM-DD_HHMM.pdf`.
+Nama file: `data/laporan-sku-spesial/SKU_Spesial_YYYY-MM-DD_HHMM.pdf`.
 
 ### Detail resi per sesi (Excel, dibuat saat `--label --jalankan`)
 

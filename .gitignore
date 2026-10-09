@@ -1,16 +1,13 @@
 .env
 .venv/
 sniff_*.json
-laporan-siap-proses/
-laporan-faktur/
-laporan-sku-spesial/
 logs/
+data/
 __pycache__/
 .pytest_cache/
 *.cookies.json
 sniff/
 label-pengiriman/
-riwayat_picklist.*
 .vscode/
 .idea/
 Thumbs.db

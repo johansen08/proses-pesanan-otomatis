@@ -206,13 +206,13 @@ mengunduh `application/pdf`, cuma header disposisinya beda.
 
 ## Pencatatan
 
-Setiap proses menyimpan 1 baris ke `riwayat_picklist.xlsx` (`catat_riwayat()`, konstanta
+Setiap proses menyimpan 1 baris ke `data/riwayat_picklist.xlsx` (`catat_riwayat()`, konstanta
 `KOLOM_RIWAYAT` di `proses_label.py`) dengan 8 kolom: **Waktu, SKU, No Picklist, Total
 Pesanan** (jumlah `salesorderIds` dikurangi `invalidSO`), **Resi Keluar** (jumlah resi yang
 sudah dapat nomor resi), **File Label** (nama file PDF), **Catatan** (kosong jika sukses;
 `GAGAL: ...` atau `TERHENTI: ...` + perintah `--lanjut` jika berhenti di tengah), dan
 **Durasi** (lama proses SKU/skenario itu). Kalau file sedang dibuka di Excel, ditulis ke
-`riwayat_picklist.csv` sebagai gantinya.
+`data/riwayat_picklist.csv` sebagai gantinya.
 
 | Waktu | SKU | No Picklist | Total Pesanan | Resi Keluar | File Label | Catatan | Durasi |
 |---|---|---|---|---|---|---|---|

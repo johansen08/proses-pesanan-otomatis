@@ -69,7 +69,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   buat PDF ringkasan.
 - `src/proses_label.py` — modul terbesar (~1000 baris): semua alur picklist → picking → resi →
   label PDF, untuk SEMUA skenario (SKU spesial per-SKU, urgent per-channel/kurir, reguler,
-  Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `riwayat_picklist.xlsx`. Label
+  Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `data/riwayat_picklist.xlsx`. Label
   Lazada diminta dengan `isFromLz=true` (template "Label Pengiriman Lazada", A5) lalu
   disimpan apa adanya (A5) — tanpa `isFromLz` PDF-nya beda dari unduhan manual (sniff
   2026-10-07). Label Lazada dicetak MANUAL oleh tim (skala custom 68% di kertas 100x150 mm),
@@ -156,7 +156,7 @@ project secara umum, root tidak boleh berisi file `.py`):
 - `src/main.py` — satu-satunya entry point CLI (`argparse`), merutekan ke alur yang sesuai
   berdasarkan flag (`--label`, `--urgent`, `--reguler`, `--shopee-pagi`, `--jnt-siang`,
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder
-  data (`laporan-siap-proses/`, `label-pengiriman/`, dll) selalu dibuat di root project, bukan
+  data (`data/`, `label-pengiriman/`, dll) selalu dibuat di root project, bukan
   di dalam `src/` — modul lain tidak punya `ROOT` sendiri dan mengandalkan ini.
 
 **Lima alur CLI berbeda dan independen** (dijabarkan lengkap di README.md): `--label`

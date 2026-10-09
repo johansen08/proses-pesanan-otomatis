@@ -17,7 +17,8 @@ Supaya root tidak berantakan, hanya boleh berisi:
   `cd /d "%~dp0.."` (naik ke root), bukan `cd /d "%~dp0"` seperti `.bat` di root
 - `README.md` — halaman utama
 - `requirements.txt` — daftar library Python
-- `riwayat_picklist.xlsx` (+ `.csv` fallback-nya) — riwayat picklist
+- `data/` — semua data hasil program yang bukan label/log: `laporan-siap-proses/`, `laporan-faktur/`,
+  `laporan-sku-spesial/`, dan `riwayat_picklist.xlsx` (+ `.csv` fallback-nya). Tidak dikomit.
 - `template/picklist-form-kosong.xlsx` — template PICKLIST per sesi (dikomit; dibuat ulang lewat
   `src/buat_template_picklist.py`). Hasilnya `PICKLIST.xlsx` (+ `.menulis` sementara) ada di
   folder sesi `label-pengiriman/YYYY-MM-DD/N/`, bukan di root.
@@ -52,7 +53,7 @@ dibiarkan menumpuk.
   atas pakai `-`.
 - **Penting kalau menambah file baru di `src/`**: `main.py` menghitung folder root
   project lewat `ROOT = Path(__file__).resolve().parent.parent` (naik 1 level dari
-  `src/`), supaya folder data (`laporan-siap-proses/`, `label-pengiriman/`, dst) tetap
+  `src/`), supaya folder data (`data/`, `label-pengiriman/`, dst) tetap
   dibuat di root, bukan di dalam `src/`. Modul lain (`jubelio.py`, `sku_spesial.py`,
   `proses_label.py`) tidak punya `ROOT` sendiri — cukup taruh di `src/` yang sama
   supaya `import` antar modul (mis. `from proses_label import durasi` di `main.py`)
@@ -118,7 +119,6 @@ proses-pesanan-otomatis/
 ├─ README.md                      # halaman utama, tetap di root
 ├─ .env / .gitignore              # konfigurasi
 ├─ requirements.txt               # daftar library Python
-├─ riwayat_picklist.xlsx          # riwayat semua picklist
 ├─ proses-harian.bat / jalankan.bat / instalasi.bat / bat\proses-harian-uji.bat                  # skrip, huruf kecil
 ├─ src/                           # semua kode, snake_case
 │  ├─ main.py
@@ -137,8 +137,12 @@ proses-pesanan-otomatis/
 │  └─ pep-8.md
 ├─ tests/                         # kasus uji
 ├─ sniff/                         # perekam alur Jubelio (tools dev)
-├─ laporan-siap-proses/           # Excel hasil download Jubelio (dibuat otomatis)
-├─ laporan-sku-spesial/           # PDF ringkasan SKU spesial (dibuat otomatis)
+├─ data/                          # hasil program, tidak dikomit (dibuat otomatis)
+│  ├─ laporan-siap-proses/        # Excel hasil download Jubelio
+│  ├─ laporan-faktur/             # Excel faktur & pesanan untuk upload IRESIS
+│  ├─ laporan-sku-spesial/        # PDF ringkasan SKU spesial
+│  └─ riwayat_picklist.xlsx       # riwayat semua picklist
+├─ template/                      # template PICKLIST per sesi (dikomit)
 ├─ label-pengiriman/              # PDF label pengiriman per picklist (dibuat otomatis)
 └─ logs/                          # log tiap eksekusi (dibuat otomatis)
 ```
