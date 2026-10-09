@@ -35,10 +35,11 @@ ROOT = Path(__file__).resolve().parents[1]
 MENU_BAT = ("proses-harian.bat", "proses-harian-uji.bat")
 BAT_DI_ROOT = ["proses-pesanan.bat"]      # satu-satunya .bat yang boleh di root
 MENU_EVENT = ("proses-event.bat", "proses-event-uji.bat")
-# Langkah J&T Resi Siang di proses-event.bat dijalankan bersyarat (jawaban Y/N di awal):
-# barisnya diawali `if /i "%JNT_SIANG%"=="Y" ` - awalan itu dibuang saat mengekstrak argumen.
-POLA_PANGGIL_MAIN = re.compile(
-    r'^(?:if /i "%JNT_SIANG%"=="Y" )?"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
+POLA_PANGGIL_MAIN = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
+# proses-event.bat: (pilihan menu, label blok, judul rekap, jumlah langkah)
+PILIHAN_EVENT = (("1", "event1", "EVENT - TIPE 1", 12), ("2", "event2", "EVENT - TIPE 2", 16),
+                 ("3", "event3", "EVENT - TIPE 3", 12), ("4", "event4", "EVENT - TIPE 4", 13),
+                 ("5", "event5", "EVENT - MALAM", 9))
 
 # main.py & rekap_waktu.py palsu untuk simulasi: cuma mencatat argumen, tanpa Jubelio.
 MAIN_PALSU = '''import sys
@@ -194,34 +195,23 @@ def uji_simulasi_menu_0_keluar_tanpa_menjalankan_apa_pun():
 
 
 def uji_simulasi_menu_event_menjalankan_langkah_sesuai_urutan_file():
-    """proses-event.bat: pilihan 1 & 2 menjalankan tepat langkah di bloknya (J&T Resi Siang
-    hanya kalau dijawab Y); versi uji menjalankan semua langkah tanpa pertanyaan apa pun."""
+    """proses-event.bat: pilihan 1-5 (TIPE 1-4 & MALAM) menjalankan tepat langkah di bloknya,
+    berurutan; versi uji tanpa konfirmasi."""
     if not bisa_simulasi_cmd():
         return
     for nama in MENU_EVENT:
         uji = nama.endswith("-uji.bat")
-        for pilihan, label, judul in (("1", "event1", "EVENT - SESI BIASA"),
-                                      ("2", "event2", "EVENT - TEPAT JAM 13.00")):
-            semua = langkah_blok(nama, label)
-            assert semua, (nama, label)
-            siang = [a for a in semua if a.startswith("--jnt-siang")]
-            assert len(siang) == (1 if pilihan == "1" else 0), (nama, label, siang)
-            if uji:
-                jawaban = {"": f"{pilihan}\r\n"}
-            elif pilihan == "1":
-                jawaban = {"N": "1\r\nY\r\nN\r\n", "Y": "1\r\nY\r\nY\r\n",
-                           "kosong": "1\r\nY\r\n\r\n"}
-            else:
-                jawaban = {"": "2\r\nY\r\n"}
-            for kunci, masukan in jawaban.items():
-                panggilan, rekap, _ = simulasikan_menu(nama, masukan)
-                harapan = [a for a in semua if uji or kunci == "Y" or a not in siang]
-                assert panggilan == harapan, (
-                    f"{nama} pilihan {pilihan} (jawaban J&T Siang: {kunci!r}) salah langkah",
-                    "harapan:", harapan, "kenyataan:", panggilan)
-                assert rekap == judul, (nama, pilihan, rekap)
-    print("  proses-event.bat & versi uji: pilihan 1-2 menjalankan tepat langkah di bloknya, "
-          "berurutan; J&T Resi Siang hanya kalau dijawab Y (bawaan tidak), versi uji semua langkah")
+        for pilihan, label, judul, jumlah in PILIHAN_EVENT:
+            harapan = langkah_blok(nama, label)
+            assert len(harapan) == jumlah, (nama, label, len(harapan))
+            masukan = f"{pilihan}\r\n" if uji else f"{pilihan}\r\nY\r\n"
+            panggilan, rekap, _ = simulasikan_menu(nama, masukan)
+            assert panggilan == harapan, (
+                f"{nama} pilihan {pilihan} melompat ke langkah yang salah", "harapan:", harapan,
+                "kenyataan:", panggilan)
+            assert rekap == judul, (nama, pilihan, rekap)
+    print("  proses-event.bat & versi uji: pilihan 1-5 (TIPE 1-4, MALAM) menjalankan tepat langkah "
+          "di bloknya masing-masing, berurutan, sekali saja (simulasi cmd.exe, python palsu)")
 
 
 def uji_simulasi_menu_event_batal_dan_keluar_tidak_menjalankan_apa_pun():
@@ -241,36 +231,43 @@ def uji_simulasi_menu_event_batal_dan_keluar_tidak_menjalankan_apa_pun():
 def uji_bat_event_uji_sama_dengan_sungguhan_tanpa_jalankan():
     """Versi uji harus menjalankan PERSIS langkah yang sama dengan versi sungguhan (hanya tanpa
     --jalankan): mencegah keduanya menyimpang diam-diam saat salah satu diedit."""
-    for label in ("event1", "event2"):
+    for _, label, _, _ in PILIHAN_EVENT:
         asli = langkah_blok("proses-event.bat", label)
         uji = langkah_blok("proses-event-uji.bat", label)
-        assert all(a.endswith(" --jalankan") for a in asli), asli
+        assert all(" --jalankan" in a for a in asli), asli
         assert not any("--jalankan" in a for a in uji), uji
-        assert [a[:-len(" --jalankan")] for a in asli] == uji, (label, asli, uji)
+        assert [a.replace(" --jalankan", "") for a in asli] == uji, (label, asli, uji)
     print("  proses-event.bat vs proses-event-uji.bat: langkah identik, uji tanpa --jalankan")
 
 
-def uji_bat_event_urutan_pagi_dan_pemisahan_kurir():
-    """Aturan bisnis yang tidak boleh bergeser diam-diam: Shopee Pagi SEBELUM langkah seharian,
-    J&T/SPX Hemat selalu dengan --event, tidak ada langkah harian (digabung) di .bat event."""
-    sesi1 = langkah_blok("proses-event.bat", "event1")
-    sesi2 = langkah_blok("proses-event.bat", "event2")
-    for sesi in (sesi1, sesi2):
+def uji_bat_event_aturan_tiap_tipe():
+    """Aturan bisnis menu event yang tidak boleh bergeser diam-diam: J&T/SPX Hemat selalu dengan
+    --event (tidak ada langkah harian yang digabung), Shopee Pagi hanya di TIPE 2 dan SEBELUM langkah
+    seharian, J&T Resi Siang hanya di TIPE 4, MALAM tanpa recheck/sampel/IRESIS, --lewati-malam
+    pada urgent hanya di TIPE 1/3/4 (sama dengan KATALOG UI di jalankan_harian.py)."""
+    blok = {label: langkah_blok("proses-event.bat", label) for _, label, _, _ in PILIHAN_EVENT}
+    for label, sesi in blok.items():
         for a in sesi:
             if "--label" in a or "--reguler" in a:
                 assert "--event" in a and ("--kurir jnt" in a or "--kurir spx-hemat" in a), a
-        assert sesi[0].startswith("--recheck-stok") and sesi[1].startswith("--sampel")
-        assert sesi[-1].startswith("--upload-iresis")
         assert not any(a.startswith("--tulis-excel") for a in sesi)
-    assert not any("--pagi" in a or "spx-hemat-pagi" in a for a in sesi1)
-    pagi = [i for i, a in enumerate(sesi2) if "--pagi" in a or "spx-hemat-pagi" in a]
-    harian = [i for i, a in enumerate(sesi2)
+        urgent = [a for a in sesi if a.startswith("--urgent")]
+        assert len(urgent) == 2, (label, urgent)
+        assert all(("--lewati-malam" in a) == (label in ("event1", "event3", "event4")) for a in urgent), (label, urgent)
+        assert sesi[-1].startswith("--upload-iresis") == (label != "event5"), label
+        assert (sesi[0].startswith("--recheck-stok") and sesi[1].startswith("--sampel")) == (label != "event5"), label
+        assert sum(a.startswith("--jnt-siang") for a in sesi) == (1 if label == "event4" else 0), label
+        pagi = [i for i, a in enumerate(sesi) if "--pagi" in a or "spx-hemat-pagi" in a]
+        assert len(pagi) == (4 if label == "event2" else 0), (label, pagi)
+    sesi = blok["event2"]
+    pagi = [i for i, a in enumerate(sesi) if "--pagi" in a or "spx-hemat-pagi" in a]
+    harian = [i for i, a in enumerate(sesi)
               if ("--kurir jnt" in a or "--kurir spx-hemat " in a + " " or a.startswith("--spx-standard --j"))
               and i not in pagi]
-    assert len(pagi) == 4 and pagi == list(range(pagi[0], pagi[0] + 4)), pagi
+    assert pagi == list(range(pagi[0], pagi[0] + 4)), pagi
     assert harian and min(harian) > max(pagi), "Shopee Pagi harus selesai sebelum langkah seharian"
-    print("  .bat event: Shopee Pagi (4 langkah) mendahului langkah seharian; semua --label/"
-          "--reguler memakai --event")
+    print("  .bat event: Shopee Pagi hanya TIPE 2 & mendahului langkah seharian; J&T Resi Siang hanya "
+          "TIPE 4; MALAM tanpa recheck/sampel/IRESIS; --lewati-malam sesuai KATALOG UI")
 
 
 def uji_pendeteksi_mengenali_pola_salah_dan_benar():

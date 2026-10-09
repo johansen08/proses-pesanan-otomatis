@@ -112,7 +112,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   ubah langkah/flag di `.bat` berarti ubah `KATALOG` juga (dan nama langkah di UI). Jangan pernah
   menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
   Menu Event di UI memakai judul `EVENT - TIPE 1..4`/`EVENT - MALAM`/`EVENT - KUSTOM` dan `KATALOG_EVENT`
-  (padanan `bat\proses-event.bat`, flag `--event`; TIPE 2 = pilihan 2 .bat, TIPE 1/3/4 = pilihan 1/sesi biasa;
+  (padanan `bat\proses-event.bat`, flag `--event`; blok `event1..event5` di .bat = TIPE 1-4/MALAM;
   MALAM menolak IRESIS). `KATALOG_EVENT` juga dikunci `tests/test_jalankan_harian.py` terhadap .bat event.
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
@@ -188,8 +188,8 @@ WIB). Opsi `--kurir jnt`/`--kurir spx` pada `--label`/`--reguler` memisahkan pic
 kurir saat PEMBUATAN saja — penentuan SKU "spesial" itu sendiri selalu menggabung J&T+SPX
 (kecuali mode event di bawah).
 
-**Mode event** (hari 10.10/11.11/12.12 dst; `bat\proses-event.bat`/`bat\proses-event-uji.bat`, 2 pilihan
-menu): J&T, SPX Hemat, SPX Standard dipisah seharian. Flag `--event` (bersama `--label`/
+**Mode event** (hari 10.10/11.11/12.12 dst; `bat\proses-event.bat`/`bat\proses-event-uji.bat`, 5 pilihan
+menu: EVENT - TIPE 1-4 + MALAM): J&T, SPX Hemat, SPX Standard dipisah seharian. Flag `--event` (bersama `--label`/
 `--reguler` + `--kurir jnt|spx-hemat|spx-hemat-pagi`) membuat penentuan SKU spesial dihitung PER
 KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesial — hanya
 `--spx-standard [--pagi]`, dipecah per lantai. `--kurir spx-hemat`/`spx-hemat-pagi` tanpa

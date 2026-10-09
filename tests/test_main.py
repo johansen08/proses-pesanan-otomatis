@@ -448,8 +448,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
     class Berhenti(Exception):
         pass
 
-    pola = re.compile(r'^(?:if /i "%JNT_SIANG%"=="Y" )?"\.venv\\Scripts\\python\.exe" '
-                      r'src\\main\.py (.*)$')
+    pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
     total = 0
     for nama in ("proses-event.bat", "proses-event-uji.bat"):
         for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
@@ -465,7 +464,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                     total += 1
                 except SystemExit as e:
                     raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-    assert total >= 2 * (13 + 16), total
+    assert total == 2 * (12 + 16 + 12 + 13 + 9), total      # TIPE 1-4 + MALAM, sungguhan & uji
     print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
 
 
