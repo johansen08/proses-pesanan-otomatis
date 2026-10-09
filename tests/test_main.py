@@ -3,6 +3,7 @@ lewat test_proses_label.py & test_sku_spesial.py untuk bagian yang dipanggilnya)
 
 Jalankan:  .venv\\Scripts\\python tests\\test_main.py
 """
+import os
 import sys
 import tempfile
 from datetime import datetime
@@ -267,6 +268,14 @@ def uji_iresis_dilewati_jam_2000_sampai_0459():
             assert m.main() == 0 or True
             assert up.called is (not dilewati), (h, paksa)
     print("  IRESIS: dilewati 20.00-04.59 (kecuali --paksa), jalan di luar jendela itu")
+
+
+def uji_scan_iresis_dilewati_jam_malam_dan_jalan_dengan_paksa():
+    for h, paksa, jalan in ((22, False, False), (3, False, False), (22, True, True), (10, False, True)):
+        with mock.patch.object(sys, "argv", ["main.py", "--upload-iresis", "--jalankan"] + (["--paksa"] if paksa else [])),                 mock.patch.object(m, "siapkan_log"), mock.patch.object(m, "muat_env"),                 mock.patch.object(m, "jam_tanpa_iresis", return_value=(h >= 20 or h < 5)),                 mock.patch.dict(os.environ, {"IRESIS_USERNAME": "u", "IRESIS_PASSWORD": "p"}),                 mock.patch.object(m, "login", return_value="TOK"),                 mock.patch("jubelio.ambil_url_faktur", return_value="u"),                 mock.patch("jubelio.ambil_url_pesanan", return_value="u"),                 mock.patch("jubelio.unduh_excel", return_value=Path("x.xlsx")),                 mock.patch("iresis.unggah", return_value="ok") as unggah,                 mock.patch.object(m, "isi_scan_picklist", return_value=False) as scan:
+            m.main()
+            assert unggah.called is jalan and scan.called is jalan, (h, paksa)
+    print("  SCAN IRESIS: dilewati bersama upload 20.00-04.59 (kecuali --paksa)")
 
 
 def uji_urgent_lewati_malam_tidak_membuat_folder_sesi_dan_tidak_memproses():
