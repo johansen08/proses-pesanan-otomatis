@@ -245,7 +245,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
     <div class="bar"><div class="bar" id="hari"></div><div class="sp"></div>
       <input type="search" id="cari" placeholder="Cari file, SKU, atau PICK…">
       <label class="sw on" id="swBelum" title="Sembunyikan yang sudah dicetak" aria-label="Sembunyikan yang sudah dicetak"><i></i></label></div>
-    <div class="bar"><label class="allrow" id="allRow" title="Pilih semua" aria-label="Pilih semua"><span class="cb" id="allCb"><svg><use href="#check"/></svg></span></label><span class="pill m" id="cTot"></span></div>
+    <div class="bar"><label class="allrow" id="allRow" title="Pilih semua" aria-label="Pilih semua"><span class="cb" id="allCb"><svg><use href="#check"/></svg></span></label></div>
     <div class="slist" id="slist"></div>
     <div class="dock">
       <b id="cInfo">Belum ada yang dipilih</b><div class="jobs" id="jobs"></div><div class="sp"></div>
@@ -320,7 +320,6 @@ const CFG={
    {id:5,nama:'EVENT - MALAM',jam:'Urgent + J&T/SPX dipisah',dari:17,sampai:31,steps:all.filter(x=>['Urgent Lazada','Urgent GTL & SiCepat','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Hemat Spesial','SPX Hemat 1 qty reguler','SPX Hemat Kombinasi','SPX Standard (per lantai)'].includes(x))}],
   konflik:s=>PAGI.some(x=>s.has(x))?'Shopee Pagi cukup 1× sehari (EVENT - TIPE 2).':'',kGab:[],kDis:[]};
 }
-const MENIT_LANGKAH=2.5;     // perkiraan kasar durasi per langkah
 const jamDesimal=()=>{const d=new Date();return d.getHours()+d.getMinutes()/60};
 function recNow(k){const h=jamDesimal(),p=CFG[k].preset.find(p=>h>=p.dari&&h<p.sampai);return p?p.id:5}
 let HINFO=null;
@@ -334,7 +333,6 @@ function luarJam(p){   // server tahu jam sungguhan; tanpa server: tebakan lokal
    ========================================================= */
 const S={harian:{pilih:new Set(),aktif:null,tampil:true},event:{pilih:new Set(),aktif:null,tampil:true}};
 const urut=k=>CFG[k].grup.flatMap(g=>g[1]).filter(x=>S[k].pilih.has(x));
-const grupDari=(k,x)=>CFG[k].grup.find(g=>g[1].includes(x))[0];
 function bangun(k){
   const c=CFG[k],m=S[k],el=$('#v-'+k),sel=urut(k),p=c.preset.find(x=>x.id===m.aktif),rec=recNow(k);
   const konf=c.konflik(m.pilih);
@@ -347,9 +345,9 @@ function bangun(k){
 
      <div class="lbl tgl ${m.tampil?'open':''}" id="tglUrut" role="button" tabindex="0">${ic('chev').replace('<svg','<svg class="chev"')}Urutan langkah <span class="n">${sel.length}</span><div class="sp"></div>${m.tampil&&sel.length?'<button id="clr">Kosongkan</button>':''}<span class="hid">${m.tampil?'Sembunyikan':'Tampilkan'}</span></div>
      <div class="urut" ${m.tampil?'':'hidden'}><div class="pipe">${sel.length?sel.map((x,i)=>{const kf=(adaGab&&adaDis)&&(c.kGab.includes(x)||c.kDis.includes(x));
-        return `<div class="ps ${kf?'konf':''}"><span class="no">${i+1}</span><span class="nm">${esc(x)}</span>${kf?`<span class="tg">${c.kGab.includes(x)?'gabung':'dipisah'}</span>`:`<span class="gp">${esc(grupDari(k,x))}</span>`}
+        return `<div class="ps ${kf?'konf':''}"><span class="no">${i+1}</span><span class="nm">${esc(x)}</span>${kf?`<span class="tg">${c.kGab.includes(x)?'gabung':'dipisah'}</span>`:''}
         <button class="rm" data-rm="${esc(x)}" title="Hapus langkah" aria-label="Hapus ${esc(x)}">${ic('x')}</button></div>`}).join(''):'<div class="kosong">Belum ada langkah — pilih paket di atas atau tambahkan langkah secara manual.</div>'}</div>
-     <details class="add" ${sel.length?'':'open'}><summary>${ic('plus')}Tambah langkah <span style="color:var(--faint);font-weight:400">· ${noSel.reduce((a,g)=>a+g[1].length,0)} tersedia</span></summary>
+     <details class="add" ${sel.length?'':'open'}><summary>${ic('plus')}Tambah langkah </summary>
        ${noSel.map(([g,ls])=>`<div class="ag"><small>${esc(g)}</small><div class="chips">${ls.map(x=>`<button class="chip" data-add="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`).join('')||'<div class="nol">Semua langkah sudah dipilih.</div>'}
      </details></div>
    </div>
@@ -358,7 +356,7 @@ function bangun(k){
      <div class="card">
        <div style="display:flex;align-items:baseline;gap:8px"><span class="bignum">${sel.length}</span><span style="color:var(--mut)">langkah</span></div>
        <div style="color:var(--mut)">${p?esc(p.nama)+' · '+p.jam:sel.length?'Susunan kustom':'Belum ada paket dipilih'}</div>
-       <ul class="facts"><li>Operator<b>${esc(OP.aktif)}</b></li><li>Perkiraan durasi<b>${sel.length?'±'+Math.round(sel.length*MENIT_LANGKAH)+' menit':'—'}</b></li></ul>
+       <ul class="facts"><li>Operator<b>${esc(OP.aktif)}</b></li></ul>
        ${p&&luarJam(p)?`<div class="note" style="margin:0 0 12px">Sekarang di luar jam ${esc(p.nama)} (${p.jam.split(' · +')[0]}). Pastikan tidak salah pilih.</div>`:''}
        ${konf?`<div class="note" style="margin:0 0 12px">${konf}</div>`:''}
        <button class="btn" id="go" ${sel.length?'':'disabled'}>${ic('play')}Jalankan${sel.length?' '+sel.length+' langkah':''}</button>
@@ -602,12 +600,11 @@ function gambarCetak(){
     return `<div class="ses ${sS?'sel':''} ${open?'open':''}" data-s="${esc(s.id)}">
      <div class="sh"><span class="cb ${sS}" data-act="cs">${chk}</span><span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">· ${s.jam}</span>
        <small>${ks.length?jv.length+' jenis · '+ks.length+' file'+lb(tot)+(p?' · '+p+' dipilih':''):'tidak ada file'+(kata?' yang cocok':' — semua sudah tercetak')}</small></span>
-       ${ks.length?'':`<span class="pill ok">${kata?'—':'Selesai'}</span>`}<span class="chev">${ic('chev')}</span></div>
+       <span class="chev">${ic('chev')}</span></div>
      <div class="sb">${jv.map(j=>{const kj=kJ(s,j),sj=stt(kj),bj=bukaJ.has(s.id+'|'+j.nama)||(kata&&kj.length);
        return `<div class="jg ${bj?'open':''}" data-j="${esc(s.id)}|${esc(j.nama)}"><div class="jr"><span class="cb ${sj}" data-act="cj">${chk}</span><span class="nm">${esc(j.nama)}</span><span class="n">${kj.length} file${lb(sumN(fVis(j)))}</span><span class="chev">${ic('chev')}</span></div>
         <div class="fl">${fVis(j).map(f=>`<div class="fr ${f.done?'done':''}" data-k="${esc(kf(s.id,j.nama,f.f))}"><span class="cb ${pil.has(kf(s.id,j.nama,f.f))?'on':''}">${chk}</span><span class="fn">${esc(f.f)}</span>${f.done?'<span class="pill ok">tercetak</span>':''}<span class="n">${API?f.kb+' KB':f.n+' label'}</span></div>`).join('')}</div></div>`}).join('')}</div></div>`}).join('')||'<div class="empty">Belum ada sesi</div>';
   $('#allCb').className='cb '+(all&&pil.size===all?'on':pil.size?'mix':'');
-  $('#cTot').textContent=pil.size+' dari '+all+' file dipilih';$('#cTot').className='pill '+(pil.size?'acc':'m');
   $('#cInfo').textContent=pil.size?`${sset} sesi · ${jset.size} jenis · ${nFile} file${lb(total)}`:'Belum ada yang dipilih';
   updBtn();
 }
