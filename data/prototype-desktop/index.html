@@ -153,7 +153,7 @@ th{color:var(--mut);font-weight:600;font-size:12px}
 .ck.on{background:var(--acc2);border-color:var(--acc)}
 .ck.on .b{background:var(--acc);border-color:var(--acc)}.ck.on .b svg{opacity:1}
 .ck .no{margin-left:auto;font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums}
-#v-harian .dock{margin-top:16px}
+#v-harian .dock,#v-event .dock{margin-top:16px}
 .ctoolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .dstrip{display:flex;gap:6px;flex-wrap:wrap}
 .dchip{padding:9px 18px;border-radius:12px;background:var(--card);border:2px solid var(--line);text-align:center;min-width:120px;line-height:1.25}
@@ -217,6 +217,7 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
 <aside>
   <div class="logo"><i><svg><use href="#box"/></svg></i><span>Pesanan Otomatis</span></div>
   <button class="nav on" data-v="harian"><svg><use href="#play"/></svg><span>Harian</span><b class="dot" id="dotP">4</b></button>
+  <button class="nav" data-v="event"><svg><use href="#bolt"/></svg><span>Event</span></button>
   <button class="nav" data-v="cetak"><svg><use href="#print"/></svg><span>Cetak</span></button>
 </aside>
 
@@ -252,6 +253,22 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
       <div class="sec" style="font-size:13px">Proses gagal <i class="i l" data-tip="Langkah yang terhenti, mis. timeout unduh label PDF.">i</i></div>
       <div id="pMasalah"></div>
     </details>
+  </section>
+
+  <!-- EVENT -->
+  <section class="view" id="v-event">
+    <div class="card" style="background:var(--warnbg);border-color:var(--warn);margin-bottom:18px;display:flex;gap:12px;align-items:center">
+      <svg style="color:var(--warn)"><use href="#bolt"/></svg>
+      <div><b>Mode event (10.10 / 11.11 / 12.12 dst)</b><br><small style="color:var(--mut)">J&amp;T, SPX Hemat, dan SPX Standard dipisah seharian. SPX Standard tidak punya jalur spesial — hanya per lantai.</small></div>
+      <div class="grow"></div><span class="pill warn" id="eMode"></span>
+    </div>
+    <div class="sec">Preset <span class="pill acc" id="eSarJam"></span> <i class="i l" data-tip="Mengikuti 4 TIPE harian, tetapi J&T, SPX Hemat, dan SPX Standard dipisah seharian. TIPE 4 menambah J&T Resi Siang (opsional di proses-event.bat). Klik preset untuk mencentang langkah, lalu centang/hapus centang manual bila perlu. Langkah selalu berjalan sesuai urutan daftar.">i</i></div>
+    <div class="presets" id="ePresets"></div>
+    <div class="sec">Langkah <span class="pill" id="eJum">0 dipilih</span> <span class="pill warn" id="eWarn" style="display:none">Shopee Pagi ikut tercentang <i class="i" style="margin-left:4px" data-tip="Shopee Pagi (pesanan ≤ 12.00) cukup 1× sehari, hanya untuk EVENT - TIPE 2.">i</i></span></div>
+    <div id="eChecklist"></div>
+    <div class="dock"><span id="eInfo" style="font-weight:600"></span><div class="grow"></div>
+      <button class="btn sec2" id="eKosong">Kosongkan</button>
+      <button class="btn warn" id="eJalan"><svg style="width:16px"><use href="#play"/></svg>Jalankan Event</button></div>
   </section>
 
   <!-- PROSES: jalan -->
@@ -329,7 +346,7 @@ function tipeSekarang(){const h=new Date().getHours()+new Date().getMinutes()/60
   if(h>=7&&h<12)return 1; if(h>=12.9&&h<13.5)return 2; if(h>=13.5&&h<15)return 3; if(h>=15&&h<16)return 4; if(h>=16&&h<17)return 1; return h>=17||h<7?5:0;}
 
 /* ---------- navigasi ---------- */
-const JUDUL={harian:'Harian',runner:'Proses berjalan',cetak:'Cetak Label'};
+const JUDUL={harian:'Harian',event:'Event',runner:'Proses berjalan',cetak:'Cetak Label'};
 let asal='harian';
 function go(v){
   $$('section.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
@@ -401,6 +418,51 @@ $('#dJalan').onclick=()=>{if(running){toast('Masih ada proses berjalan');return 
  <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" id="yaJalan">Ya, jalankan</button></div>`);
  $('#yaJalan').onclick=()=>{tutup();if(HAPI)return jalankanAPI(list,nm);bukaRunner({id:'h',nama:nm,steps:null,custom:list},'harian');jalan();};};
 
+/* ---------- event: checklist (setara proses-event.bat; contoh, belum tersambung ke server) ---------- */
+const EGRUP=[
+ ['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],
+ ['Urgent',['Urgent Lazada','Urgent GTL & SiCepat']],
+ ['Opsional · Batas waktu',['J&T ≤ 15.00 (Resi Siang)']],
+ ['Shopee Pagi ≤ 12.00 (folder terpisah)',['SPX Standard Pagi ≤ 12.00 (per lantai)','SPX Hemat Pagi Spesial','SPX Hemat Pagi 1 qty reguler','SPX Hemat Pagi Kombinasi']],
+ ['J&T',['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi']],
+ ['SPX Hemat',['SPX Hemat Spesial','SPX Hemat 1 qty reguler','SPX Hemat Kombinasi']],
+ ['SPX Standard',['SPX Standard (per lantai)']],
+ ['Penutup',['Upload faktur & pesanan ke IRESIS']],
+];
+const ESEMUA=EGRUP.flatMap(g=>g[1]);
+const EPAGI=EGRUP[3][1];
+const ESIANG='J&T ≤ 15.00 (Resi Siang)';
+const EBIASA=ESEMUA.filter(x=>x!==ESIANG&&!EPAGI.includes(x));
+const EPRESET=[
+ {id:1,nama:'EVENT - TIPE 1',sub:'07.00–12.00 · 16.00–17.00',steps:EBIASA},
+ {id:2,nama:'EVENT - TIPE 2',sub:'Tepat 13.00 · + Shopee Pagi',steps:ESEMUA.filter(x=>x!==ESIANG)},
+ {id:3,nama:'EVENT - TIPE 3',sub:'13.00–15.00',steps:EBIASA},
+ {id:4,nama:'EVENT - TIPE 4',sub:'Tepat 15.00 · + J&T Resi Siang',steps:ESEMUA.filter(x=>!EPAGI.includes(x))},
+ {id:5,nama:'EVENT - MALAM',sub:'Urgent + J&T/SPX dipisah',steps:ESEMUA.filter(x=>EGRUP.slice(1,2).concat(EGRUP.slice(4,7)).some(g=>g[1].includes(x)))},
+];
+let pilihE=new Set(),presetE=null;
+function setPresetE(p){presetE=p?p.id:null;pilihE=new Set(p?p.steps:[]);drawEvent();}
+function drawEvent(){
+ $('#ePresets').innerHTML=EPRESET.map(p=>`<button class="preset ${p.id===presetE?'on':''}" data-id="${p.id}">${p.id===tipeSekarang()?'<span class="badge-rec">Sekarang</span>':''}${p.nama}<small>${p.sub}</small></button>`).join('');
+ $$('#ePresets .preset').forEach(b=>b.onclick=()=>setPresetE(EPRESET.find(p=>p.id==b.dataset.id)));
+ let n=0;
+ $('#eChecklist').innerHTML=EGRUP.map(([g,ls])=>`<div class="grp"><h4>${g}<button data-g="${g}">${ls.every(x=>pilihE.has(x))?'Hapus semua':'Pilih semua'}</button></h4>`+ls.map(x=>{const on=pilihE.has(x);return `<div class="ck ${on?'on':''}" data-s="${x}"><span class="b">${ic('check')}</span>${x}${on?`<span class="no">#${++n}</span>`:''}</div>`}).join('')+'</div>').join('');
+ $$('#eChecklist .ck').forEach(c=>c.onclick=()=>{const x=c.dataset.s;pilihE.has(x)?pilihE.delete(x):pilihE.add(x);presetE=null;drawEvent();});
+ $$('#eChecklist h4 button').forEach(b=>b.onclick=()=>{const ls=EGRUP.find(g=>g[0]===b.dataset.g)[1];const all=ls.every(x=>pilihE.has(x));ls.forEach(x=>all?pilihE.delete(x):pilihE.add(x));presetE=null;drawEvent();});
+ const c=pilihE.size;$('#eJum').textContent=c+' dipilih';$('#eJum').className='pill '+(c?'acc':'');
+ $('#eWarn').style.display=EPAGI.some(x=>pilihE.has(x))?'':'none';
+ $('#eInfo').textContent=c?(presetE?EPRESET.find(p=>p.id===presetE).nama+' · ':'Kustom · ')+c+' langkah':'Belum ada langkah dipilih';
+ $('#eJalan').disabled=!c;$('#eKosong').disabled=!c;
+ $('#eMode').textContent='Contoh — belum tersambung ke server';
+}
+$('#eKosong').onclick=()=>setPresetE(null);
+$('#eJalan').onclick=()=>{if(running){toast('Masih ada proses berjalan');return go('runner');}
+ const list=ESEMUA.filter(x=>pilihE.has(x));const pe=EPRESET.find(p=>p.id===presetE),nm=pe?pe.nama:'EVENT - KUSTOM';
+ const luar=pe&&tipeSekarang()!==pe.id;
+ konfirmasi(`<h2>Jalankan ${nm}?</h2><p>${list.length} langkah berurutan. Picklist, resi, dan label akan dibuat di Jubelio.${EPAGI.some(x=>pilihE.has(x))?' Shopee Pagi cuma 1× sehari.':''}</p>${luar?'<p style="color:var(--warn);font-weight:600">⚠ Sekarang di luar jam '+nm+' ('+pe.sub.split(' · +')[0]+'). Pastikan tidak salah memilih.</p>':''}<div class="chips">${list.map((x,i)=>`<span class="chip">${i+1}. ${esc(x)}</span>`).join('')}</div>
+ <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn warn" id="yaEvent">Ya, jalankan</button></div>`);
+ $('#yaEvent').onclick=()=>{tutup();bukaRunner({id:'e',nama:nm,steps:null,custom:list},'event');jalan();};};
+
 /* ---------- runner ---------- */
 let cur,running=false,timer,idx=0,stat=[];
 function bukaRunner(t,dari){
@@ -410,7 +472,7 @@ function bukaRunner(t,dari){
  $('#rLog').innerHTML='<div class="m">Siap. Tekan Mulai untuk menjalankan '+cur.list.length+' langkah berurutan.</div>';
  $('#rBar').style.width='0';$('#rPct').textContent='0%';
  drawSteps();$('#rMulai').style.display='';$('#rStop').style.display='none';
- asal='harian';
+ asal=dari||'harian';
  go('runner');
 }
 function drawSteps(){
@@ -712,18 +774,43 @@ async function initHarianAPI(){
  }catch(e){toast('Server UI error: '+e.message);}
 }
 const postJ=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-function gambarOperator(d){const sel=$('#opSel');sel.innerHTML=d.daftar.map(n=>`<option${n===d.aktif?' selected':''}>${n}</option>`).join('');
- sel.disabled=d.terkunci;sel.title=d.terkunci?'Tidak bisa diganti saat proses berjalan':'';}
+/* ---------- operator (kolom F PICKLIST.xlsx; aturan sama dengan operator_aktif.py) ---------- */
+const OP={aktif:'PUTRI',daftar:['PUTRI','ALFIANA','SAHRUL','DENADA','SELVI']};   // bawaan; mode contoh memakai ini
+let OPAPI=false;
+const normOp=n=>{n=String(n||'').split(/\s+/).filter(Boolean).join(' ').toUpperCase();
+ if(!n)throw new Error('Nama operator tidak boleh kosong');if(n.length>30)throw new Error('Nama operator terlalu panjang (maks 30 karakter)');return n;};
+const opTerkunci=()=>OPAPI?!!OP.terkunci:running;
+function gambarOperator(d){if(d)Object.assign(OP,{aktif:d.aktif,daftar:d.daftar,terkunci:d.terkunci});
+ const sel=$('#opSel');sel.innerHTML=OP.daftar.map(n=>`<option${n===OP.aktif?' selected':''}>${esc(n)}</option>`).join('');
+ const k=opTerkunci();sel.disabled=k;$('#opTambah').disabled=false;
+ sel.title=k?'Tidak bisa diganti saat proses berjalan (satu sesi tidak boleh memuat dua operator)':'Operator yang tercatat di kolom F PICKLIST.xlsx';}
+async function opUbah(aksi,nama){   // server kalau tersambung, kalau tidak aturan yang sama secara lokal
+ if(OPAPI)return gambarOperator(await postJ('/api/operator',{aksi,nama}));
+ nama=normOp(nama);
+ if(aksi==='tambah'){if(OP.daftar.includes(nama))throw new Error(`Operator ${nama} sudah ada di daftar`);OP.daftar.push(nama);}
+ else{if(opTerkunci())throw new Error('Operator tidak bisa diganti saat proses berjalan');
+  if(!OP.daftar.includes(nama))throw new Error(`Operator ${nama} belum ada di daftar (tambahkan dulu)`);OP.aktif=nama;}
+ gambarOperator();}
+function dialogTambahOperator(){
+ konfirmasi(`<h2>Tambah operator</h2><p>Nama ditulis huruf besar dan masuk ke daftar. Operator aktif tidak berubah — pilih di daftar untuk mengaktifkan.</p>
+  <input id="opNama" maxlength="30" placeholder="Nama operator" style="padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit">
+  <div id="opErr" style="color:var(--bad);font-weight:600;min-height:18px"></div>
+  <div class="acts"><button class="btn sec2" onclick="tutup()">Batal</button><button class="btn" id="opSimpan">Tambah</button></div>`);
+ const simpan=async()=>{try{await opUbah('tambah',$('#opNama').value);const n=normOp($('#opNama').value);tutup();toast('Operator '+n+' ditambahkan (pilih di daftar untuk mengaktifkan)');}
+  catch(x){$('#opErr').textContent=x.message;}};
+ $('#opSimpan').onclick=simpan;$('#opNama').onkeydown=e=>{if(e.key==='Enter')simpan();};$('#opNama').focus();}
 async function initOperator(){
+ gambarOperator();   // mode contoh: daftar bawaan; server tersambung menimpanya di bawah
+ $('#opSel').onchange=async e=>{try{await opUbah('aktif',e.target.value);toast('Operator aktif: '+OP.aktif);}catch(x){toast(x.message);gambarOperator();}};
+ $('#opTambah').onclick=dialogTambahOperator;
+ setInterval(()=>gambarOperator(),1500);   // mode contoh: ikut terkunci/terbuka sesuai proses berjalan
  if(!location.protocol.startsWith('http'))return;
- const muat=async()=>{try{gambarOperator(await api('/api/operator'));}catch(e){}};
+ const muat=async()=>{try{OPAPI=true;gambarOperator(await api('/api/operator'));}catch(e){OPAPI=false;}};
  await muat();setInterval(muat,5000);   // ikut terkunci/terbuka sesuai proses berjalan
- $('#opSel').onchange=async e=>{try{gambarOperator(await postJ('/api/operator',{aksi:'aktif',nama:e.target.value}));toast('Operator aktif: '+e.target.value);}catch(x){toast(x.message);muat();}};
- $('#opTambah').onclick=async()=>{const n=prompt('Nama operator baru:');if(!n)return;
-  try{gambarOperator(await postJ('/api/operator',{aksi:'tambah',nama:n}));toast('Operator ditambahkan (pilih di daftar untuk mengaktifkan)');}catch(x){toast(x.message);}};
 }
-render();drawPeringatan();initCetak();initHarianAPI();initOperator();
-if(location.hash==='#cetak')go('cetak');   // dari server_ui.py --menu cetak
+render();drawPeringatan();initCetak();initHarianAPI();initOperator();drawEvent();
+if(location.hash==='#cetak')go('cetak');
+if(location.hash==='#event')go('event');   // dari server_ui.py --menu cetak
 </script>
 </body>
 </html>
