@@ -479,7 +479,7 @@ function drawStrip(){
 function drawCetak(){
  drawStrip();
  const ss=ssAktif=dataHari(tglAktif);let total=0,nFile=0,jenisSet=new Set(),sesiSet=0,all=0;
- $('#sesiList').innerHTML=ss.map(s=>{
+ $('#sesiList').innerHTML=[...ss].reverse().map(s=>{  // tampilan: sesi terbaru di atas; urutan cetak tetap terlama->terbaru (ssAktif)
   const jv=jenisVis(s),ks=keysS(s),pil=ks.filter(k=>pilihC.has(k)).length,tot=jv.reduce((a,j)=>a+fileVis(j).reduce((b,f)=>b+f.n,0),0);
   all+=ks.length;if(pil)sesiSet++;
   jv.forEach(j=>fileVis(j).forEach(f=>{if(pilihC.has(kf(s.id,j.nama,f.f))){total+=f.n||0;nFile++;jenisSet.add(j.nama)}}));
