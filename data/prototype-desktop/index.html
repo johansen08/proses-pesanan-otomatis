@@ -257,11 +257,6 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
 
   <!-- EVENT -->
   <section class="view" id="v-event">
-    <div class="card" style="background:var(--warnbg);border-color:var(--warn);margin-bottom:18px;display:flex;gap:12px;align-items:center">
-      <svg style="color:var(--warn)"><use href="#bolt"/></svg>
-      <div><b>Mode event (10.10 / 11.11 / 12.12 dst)</b><br><small style="color:var(--mut)">J&amp;T, SPX Hemat, dan SPX Standard dipisah seharian. SPX Standard tidak punya jalur spesial — hanya per lantai.</small></div>
-      <div class="grow"></div><span class="pill warn" id="eMode"></span>
-    </div>
     <div class="sec">Preset <span class="pill acc" id="eSarJam"></span> <i class="i l" data-tip="Mengikuti 4 TIPE harian, tetapi J&T, SPX Hemat, dan SPX Standard dipisah seharian. TIPE 4 menambah J&T Resi Siang (opsional di proses-event.bat). Klik preset untuk mencentang langkah, lalu centang/hapus centang manual bila perlu. Langkah selalu berjalan sesuai urutan daftar.">i</i></div>
     <div class="presets" id="ePresets"></div>
     <div class="sec">Langkah <span class="pill" id="eJum">0 dipilih</span> <span class="pill warn" id="eWarn" style="display:none">Shopee Pagi ikut tercentang <i class="i" style="margin-left:4px" data-tip="Shopee Pagi (pesanan ≤ 12.00) cukup 1× sehari, hanya untuk EVENT - TIPE 2.">i</i></span></div>
@@ -453,8 +448,6 @@ function drawEvent(){
  $('#eWarn').style.display=EPAGI.some(x=>pilihE.has(x))?'':'none';
  $('#eInfo').textContent=c?(presetE?EPRESET.find(p=>p.id===presetE).nama+' · ':'Kustom · ')+c+' langkah':'Belum ada langkah dipilih';
  $('#eJalan').disabled=!c;$('#eKosong').disabled=!c;
- $('#eMode').textContent=HAPI?'Tersambung ke server (SUNGGUHAN)':'Contoh — belum tersambung ke server';
- $('#eMode').className='pill '+(HAPI?'ok':'warn');
 }
 $('#eKosong').onclick=()=>setPresetE(null);
 $('#eJalan').onclick=()=>{if(running){toast('Masih ada proses berjalan');return go('runner');}
