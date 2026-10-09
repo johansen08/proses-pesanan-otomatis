@@ -262,7 +262,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
       <div class="steps" id="rSteps"></div>
     </div>
     <div class="rcol">
-      <div style="display:flex;align-items:center;margin-bottom:10px"><h2 style="font-size:15px">Aktivitas</h2><div class="sp"></div>
+      <div style="display:flex;align-items:center;margin-bottom:10px"><div class="sp"></div>
         <button class="btn danger auto sm" id="rStop">Hentikan</button></div>
       <div class="log" id="rLog"></div>
     </div>
@@ -340,13 +340,12 @@ function bangun(k){
   const adaGab=c.kGab.some(x=>m.pilih.has(x)),adaDis=c.kDis.some(x=>m.pilih.has(x));
   el.innerHTML=`
    <div class="col">
-     <div class="lbl">Jadwal hari ini</div>
-     <div class="sched">${c.preset.map(x=>`<button class="pk ${m.aktif===x.id?'on':''}" data-id="${x.id}"><b>${x.nama.replace('EVENT - ','')}</b><span class="j" title="${x.jam}">${x.jam.split(' · +')[0]}</span>${x.id===rec?'<i class="nowdot" title="Sesuai jam sekarang"></i>':''}</button>`).join('')}</div>
+          <div class="sched">${c.preset.map(x=>`<button class="pk ${m.aktif===x.id?'on':''}" data-id="${x.id}"><b>${x.nama.replace('EVENT - ','')}</b><span class="j" title="${x.jam}">${x.jam.split(' · +')[0]}</span>${x.id===rec?'<i class="nowdot" title="Sesuai jam sekarang"></i>':''}</button>`).join('')}</div>
 
      <div class="lbl tgl ${m.tampil?'open':''}" id="tglUrut" role="button" tabindex="0">${ic('chev').replace('<svg','<svg class="chev"')}Urutan langkah <span class="n">${sel.length}</span><div class="sp"></div>${m.tampil&&sel.length?'<button id="clr">Kosongkan</button>':''}<span class="hid">${m.tampil?'Sembunyikan':'Tampilkan'}</span></div>
      <div class="urut" ${m.tampil?'':'hidden'}><div class="pipe">${sel.length?sel.map((x,i)=>{const kf=(adaGab&&adaDis)&&(c.kGab.includes(x)||c.kDis.includes(x));
         return `<div class="ps ${kf?'konf':''}"><span class="no">${i+1}</span><span class="nm">${esc(x)}</span>${kf?`<span class="tg">${c.kGab.includes(x)?'gabung':'dipisah'}</span>`:''}
-        <button class="rm" data-rm="${esc(x)}" title="Hapus langkah" aria-label="Hapus ${esc(x)}">${ic('x')}</button></div>`}).join(''):'<div class="kosong">Belum ada langkah — pilih paket di atas atau tambahkan langkah secara manual.</div>'}</div>
+        <button class="rm" data-rm="${esc(x)}" title="Hapus langkah" aria-label="Hapus ${esc(x)}">${ic('x')}</button></div>`}).join(''):'<div class="kosong">Belum ada langkah.</div>'}</div>
      <details class="add" ${sel.length?'':'open'}><summary>${ic('plus')}Tambah langkah </summary>
        ${noSel.map(([g,ls])=>`<div class="ag"><small>${esc(g)}</small><div class="chips">${ls.map(x=>`<button class="chip" data-add="${esc(x)}">${esc(x)}</button>`).join('')}</div></div>`).join('')||'<div class="nol">Semua langkah sudah dipilih.</div>'}
      </details></div>
@@ -390,7 +389,7 @@ function attHtml(){
   const sec=(id,judul,aksi,foot='',head='')=>{const L=ATT[id];return `<div class="as ${attBuka.has(id)?'open':''}" data-as="${id}"><button>${ic('chev').replace('<svg','<svg class="chev"')}${judul}<span class="cnt ${L.length?'':'z'}">${L.length}</span></button>
     <div class="al">${L.length?head+L.map((r,i)=>aksi(r,i)).join('')+foot:'<div class="nol">Tidak ada</div>'}</div></div>`};
   const teks=(r)=>`<div class="t"><small style="color:var(--ink)" title="${esc(r)}">${esc(r)}</small></div>`;
-  return `<div class="card att ${attTampil?'open':''}"><h2 id="attHead" role="button" tabindex="0" style="cursor:pointer;user-select:none;margin:0">Perlu perhatian ${attTotal()?`<span class="pill">${attTotal()}</span>`:'<span class="pill ok">Bersih</span>'}<span class="sp"></span><span style="font-size:12.5px;font-weight:600;color:var(--acc)">${attTampil?'Sembunyikan':'Tampilkan'}</span></h2><div ${attTampil?'':'hidden'} style="margin-top:6px">
+  return `<div class="card att ${attTampil?'open':''}"><h2 id="attHead" role="button" tabindex="0" style="cursor:pointer;user-select:none;margin:0">Perlu perhatian ${attTotal()?`<span class="pill">${attTotal()}</span>`:''}<span class="sp"></span><span style="font-size:12.5px;font-weight:600;color:var(--acc)">${attTampil?'Sembunyikan':'Tampilkan'}</span></h2><div ${attTampil?'':'hidden'} style="margin-top:6px">
    ${sec('terlompat','Picklist terlompat',r=>`<div class="ai">${teks(r)}<button class="btn line sm" data-ok="terlompat" data-t="${esc(r)}">Sudah dicek</button></div>`)}
    ${sec('resi','Pesanan tanpa resi',r=>{const no=nomorResi(r),pk=picklistResi(r);return `<div class="ai">${no?`<div class="t"><b class="mono">${esc(pk||'Picklist')}</b><small title="${esc(r)}">${esc(no)}</small></div>`:teks(r)}<button class="btn line sm" data-salin="${esc(no||r)}" title="Salin nomor pesanan">Salin</button><button class="btn line sm" data-ok="resi" data-t="${esc(r)}">Sudah dicek</button></div>`})}
    ${sec('gagal','Proses gagal',r=>`<div class="ai">${teks(r)}<button class="btn line sm" data-ok="gagal" data-t="${esc(r)}">Sudah dicek</button></div>`)}
@@ -472,9 +471,9 @@ async function opUbah(aksi,nama){
   bangun('harian');bangun('event');
 }
 $('#op').onchange=async e=>{try{await opUbah('aktif',e.target.value);toast('Operator aktif: '+OP.aktif)}catch(x){toast(x.message);gambarOp()}};
-$('#opAdd').onclick=()=>{modal(`<h2>Tambah operator</h2><p>Nama ditulis huruf besar dan masuk ke daftar. Operator aktif tidak berubah — pilih di daftar untuk mengaktifkan.</p><input id="opN" maxlength="30" placeholder="Nama operator"><div id="opE" style="color:var(--bad);font-weight:600;min-height:20px;margin-top:6px"></div>
+$('#opAdd').onclick=()=>{modal(`<h2>Tambah operator</h2><input id="opN" maxlength="30" placeholder="Nama operator"><div id="opE" style="color:var(--bad);font-weight:600;min-height:20px;margin-top:6px"></div>
   <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="opS">Tambah</button></div>`);
-  const s=async()=>{try{const n=normOp($('#opN').value);await opUbah('tambah',n);tutup();toast('Operator '+n+' ditambahkan (pilih di daftar untuk mengaktifkan)')}catch(x){$('#opE').textContent=x.message}};
+  const s=async()=>{try{const n=normOp($('#opN').value);await opUbah('tambah',n);tutup();toast('Operator '+n+' ditambahkan')}catch(x){$('#opE').textContent=x.message}};
   $('#opS').onclick=s;$('#opN').onkeydown=e=>{if(e.key==='Enter')s()};$('#opN').focus()};
 async function initOperator(){
   gambarOp();setInterval(()=>gambarOp(),1500);
@@ -502,7 +501,7 @@ const tickJam=()=>$('#jam').textContent=new Date().toLocaleTimeString('id-ID',{h
 let running=false,runDari='harian',timer=null,apiJob=false,poll=null,off=0,gagalPoll=0,runList=[],runStat=[];
 function konfirmasi(k,list,nama){
   if(running){toast('Masih ada proses berjalan');asal=runDari;return go('runner')}
-  modal(`<h2>Jalankan ${esc(nama)}?</h2><p>${list.length} langkah berurutan. Picklist, resi, dan label akan <b>dibuat di Jubelio</b>.${!TERSAMBUNG?' <span style="color:var(--warn)">(Mode contoh — tidak menyentuh Jubelio.)</span>':''}</p>
+  modal(`<h2>Jalankan ${esc(nama)}?</h2><p>${list.length} langkah berurutan. Picklist, resi, dan label akan <b>dibuat di Jubelio</b>.</p>
    <div class="chips">${list.map((x,i)=>`<span class="chip" style="pointer-events:none"><b style="color:var(--acc)">${i+1}</b> ${esc(x)}</span>`).join('')}</div>
    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yes">Ya, jalankan</button></div>`);
   $('#yes').onclick=()=>{tutup();TERSAMBUNG?jalankanAPI(k,list,nama):mulaiContoh(k,list,nama)};
@@ -590,7 +589,7 @@ const sumN=(arr)=>arr.reduce((a,f)=>a+(f.n||0),0);
 function gambarCetak(){
   $('#hari').innerHTML=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d);
     const blm=dataHari(t).reduce((a,s)=>a+s.jenis.reduce((b,j)=>b+j.files.filter(f=>!f.done).reduce((c,f)=>c+(API?1:f.n),0),0),0);
-    return `<button class="dchip ${t===tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}<small style="color:${blm?'var(--warn)':'var(--ok)'}">${blm?blm+(API?' file':' label')+' belum dicetak':'semua tercetak'}</small></button>`}).join('');
+    return `<button class="dchip ${t===tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}${blm?`<small style="color:var(--warn)">${blm}${API?' file':' label'} belum dicetak</small>`:''}</button>`}).join('');
   ss=dataHari(tgl);let total=0,nFile=0,jset=new Set(),sset=0,all=0;
   $('#slist').innerHTML=[...ss].reverse().map(s=>{
     const jv=jVis(s),ks=kS(s),p=ks.filter(k=>pil.has(k)).length,tot=jv.reduce((a,j)=>a+sumN(fVis(j)),0);
@@ -599,7 +598,7 @@ function gambarCetak(){
     const sS=stt(ks),open=bukaS.has(s.id)||(kata&&ks.length);
     return `<div class="ses ${sS?'sel':''} ${open?'open':''}" data-s="${esc(s.id)}">
      <div class="sh"><span class="cb ${sS}" data-act="cs">${chk}</span><span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">· ${s.jam}</span>
-       <small>${ks.length?jv.length+' jenis · '+ks.length+' file'+lb(tot)+(p?' · '+p+' dipilih':''):'tidak ada file'+(kata?' yang cocok':' — semua sudah tercetak')}</small></span>
+       <small>${ks.length?jv.length+' jenis · '+ks.length+' file'+lb(tot)+(p?' · '+p+' dipilih':''):'tidak ada file'}</small></span>
        <span class="chev">${ic('chev')}</span></div>
      <div class="sb">${jv.map(j=>{const kj=kJ(s,j),sj=stt(kj),bj=bukaJ.has(s.id+'|'+j.nama)||(kata&&kj.length);
        return `<div class="jg ${bj?'open':''}" data-j="${esc(s.id)}|${esc(j.nama)}"><div class="jr"><span class="cb ${sj}" data-act="cj">${chk}</span><span class="nm">${esc(j.nama)}</span><span class="n">${kj.length} file${lb(sumN(fVis(j)))}</span><span class="chev">${ic('chev')}</span></div>
@@ -664,7 +663,7 @@ async function tickCetak(p){
 $('#cetakBtn').onclick=()=>{
   const g={};let tot=0,nf=0;
   ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){const n='Sesi '+s.no+' · '+j.nama;g[n]=(g[n]||0)+1;tot+=f.n||0;nf++}})));
-  modal(`<h2>Cetak ${nf} file${API?'':' ('+tot+' label)'}?</h2><p>Printer: <b>${esc($('#printer').value)}</b><br>Tanggal ${tgl}, urut dari sesi terlama ke terbaru.</p><div class="chips">${Object.keys(g).map(n=>`<span class="chip" style="pointer-events:none">${esc(n)} · ${g[n]} file</span>`).join('')}</div>
+  modal(`<h2>Cetak ${nf} file${API?'':' ('+tot+' label)'}?</h2><p>Printer: <b>${esc($('#printer').value)}</b></p><div class="chips">${Object.keys(g).map(n=>`<span class="chip" style="pointer-events:none">${esc(n)} · ${g[n]} file</span>`).join('')}</div>
    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yaC">Cetak</button></div>`);
   $('#yaC').onclick=async()=>{tutup();const printer=$('#printer').value;
     if(API){const files=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
