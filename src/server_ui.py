@@ -24,6 +24,9 @@ API (JSON):
   GET  /api/terhenti             picklist terhenti (mis. gagal unduh PDF) + status job download ulang
   POST /api/terhenti/jalankan    {"picklist": ["PICK-...", ...]} -> `main.py --lanjut` berurutan
                                  (SUNGGUHAN; 409 kalau download ulang/proses harian masih berjalan)
+  GET  /api/operator             {"aktif", "daftar", "terkunci"} (terkunci = proses harian/download ulang jalan)
+  POST /api/operator             {"aksi": "tambah"|"aktif", "nama": "..."} (ganti operator aktif -> 409
+                                 kalau proses harian/download ulang berjalan; lihat operator_aktif.py)
 Jenis yang ditampilkan: spesial, satuan, kombinasi, gtl-sicepat (JENIS_UI). Jenis lain
 (spx-pagi, jnt-siang, event, dst) tetap lewat cetak-label.bat.
 """
@@ -43,6 +46,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import jalankan_harian as jh
+import operator_aktif as oa
 import print_spesial as ps
 
 ROOT = ps.ROOT
@@ -191,6 +195,26 @@ def _kerjakan_lanjut(job: dict, pilih: list[dict]) -> None:
     job["status"] = "gagal" if job["gagal"] else "selesai"
 
 
+def info_operator() -> dict:
+    """Daftar operator + apakah penggantian operator sedang dikunci (ada proses yang menulis
+    PICKLIST.xlsx: satu sesi tidak boleh memuat dua operator)."""
+    terkunci = jh.keadaan()["status"] == "jalan" or bool(_lanjut and _lanjut["status"] == "jalan")
+    return {**oa.info(), "terkunci": terkunci}
+
+
+def ubah_operator(aksi, nama) -> dict:
+    """Tambah operator / ganti operator aktif. Melempar oa.OperatorError (400) atau RuntimeError (409)."""
+    if aksi == "tambah":
+        oa.tambah(nama)
+    elif aksi == "aktif":
+        if info_operator()["terkunci"]:
+            raise RuntimeError("Operator tidak bisa diganti saat proses berjalan")
+        oa.set_aktif(nama)
+    else:
+        raise oa.OperatorError("aksi harus 'tambah' atau 'aktif'")
+    return info_operator()
+
+
 def _publik(job: dict | None) -> dict:
     """Job tanpa daftar path internal (untuk JSON)."""
     if not job:
@@ -249,6 +273,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/jobs":     # ringkasan semua printer (UI memulihkan status setelah refresh)
                 return self._kirim(200, {"jobs": {n: {"status": j["status"], "total": j["total"],
                                                       "id": j["id"]} for n, j in _jobs.items()}})
+            if url.path == "/api/operator":
+                return self._kirim(200, info_operator())
             if url.path == "/api/terhenti":
                 return self._kirim(200, info_terhenti())
             if url.path == "/api/harian/info":
@@ -266,11 +292,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._kirim(403, {"error": "host ditolak"})
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
         if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan",
-                             "/api/terhenti/jalankan") \
+                             "/api/terhenti/jalankan", "/api/operator") \
                 or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
             data = json.loads(corpus or b"{}")
+            if self.path == "/api/operator":
+                try:
+                    return self._kirim(200, ubah_operator(data.get("aksi"), data.get("nama")))
+                except oa.OperatorError as e:
+                    return self._kirim(400, {"error": str(e)})
             if self.path == "/api/terhenti/jalankan":
                 try:
                     mulai_lanjut(data.get("picklist"))

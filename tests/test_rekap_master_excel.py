@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import operator_aktif  # noqa: E402
 import rekap_master_excel as rme  # noqa: E402
 import peringatan_gagal  # noqa: E402
 
@@ -22,6 +23,7 @@ def _reset():
     rme._buku.clear()
     rme._simpan_pernah_gagal = False
     peringatan_gagal._file = None
+    operator_aktif.FILE = Path(tempfile.gettempdir()) / "tidak-ada-operator.json"   # -> bawaan PUTRI
 
 
 def _baris(no: int, waktu: str = "06-10-2026 13:45", **lain) -> dict:

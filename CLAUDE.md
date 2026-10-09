@@ -36,6 +36,7 @@ bat\jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_main.py
 .venv\Scripts\python tests\test_rekap_master_excel.py
 .venv\Scripts\python tests\test_server_ui.py
+.venv\Scripts\python tests\test_operator_aktif.py
 .venv\Scripts\python tests\test_jalankan_harian.py
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
@@ -147,6 +148,12 @@ project secara umum, root tidak boleh berisi file `.py`):
   salinan master, ±2 menit) — hanya kalau tim mengubah format form; template sengaja disalin ke
   workbook BARU (menghapus baris saja tidak cukup: stylesheet 22 ribu fill membuat tiap save ~1
   detik).
+- `src/operator_aktif.py` — daftar operator & operator aktif di `data/operator.json` (tidak dikomit,
+  per PC; bawaan PUTRI/ALFIANA/SAHRUL/DENADA/SELVI kalau file belum ada). Dibaca ULANG tiap
+  `rekap_master_excel` menulis baris (kolom F), jadi ganti operator langsung berlaku di proses
+  berikutnya. Diatur lewat dropdown "Operator" di header UI (`/api/operator`; ganti operator DITOLAK 409
+  selama proses harian/download ulang berjalan) atau CLI `main.py --operator [NAMA]` /
+  `--tambah-operator NAMA`. Tes: `tests/test_operator_aktif.py`.
 - `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat

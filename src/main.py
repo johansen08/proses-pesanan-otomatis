@@ -281,6 +281,24 @@ def download(log: logging.Logger, token: str) -> Path:
     return jubelio.unduh_excel(token, url, FOLDER_EXCEL)
 
 
+def atur_operator(args) -> int:
+    """--operator [NAMA] / --tambah-operator NAMA: kelola daftar operator, tanpa menyentuh Jubelio."""
+    import operator_aktif
+    try:
+        if args.tambah_operator:
+            operator_aktif.tambah(args.tambah_operator)
+            print(f"Operator {operator_aktif.normalkan(args.tambah_operator)} ditambahkan.")
+        if args.operator:
+            operator_aktif.set_aktif(args.operator)
+    except operator_aktif.OperatorError as e:
+        print(f"GAGAL: {e}")
+        return 1
+    d = operator_aktif.info()
+    print("Operator aktif:", d["aktif"])
+    print("Daftar        :", ", ".join(d["daftar"]))
+    return 0
+
+
 def main() -> int:
     """Jalankan _main(), lalu cetak peringatan picklist terlompat/batal & pesanan tanpa resi
     PALING AKHIR supaya tidak tenggelam di log yang panjang."""
@@ -377,6 +395,12 @@ def _main() -> int:
                     help="dipakai bersama --upload-iresis: rentang laporan PESANAN N hari "
                         "terakhir termasuk hari ini (bawaan 4 = 3 hari ke belakang + hari ini, "
                         "sesuai sniff 07-10-2026)")
+    ap.add_argument("--operator", metavar="NAMA", nargs="?", const="",
+                    help="ganti operator aktif (nama harus sudah ada di daftar) lalu selesai; "
+                        "tanpa NAMA = tampilkan daftar & operator aktif. Operator ini yang ditulis "
+                        "di kolom F PICKLIST.xlsx (lihat operator_aktif.py)")
+    ap.add_argument("--tambah-operator", metavar="NAMA",
+                    help="tambah NAMA ke daftar operator (tidak mengganti operator aktif) lalu selesai")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -398,6 +422,9 @@ def _main() -> int:
     args = ap.parse_args()
     if (pesan := pesan_salah_mode_event(args)):
         ap.error(pesan)
+
+    if args.operator is not None or args.tambah_operator:
+        return atur_operator(args)
 
     muat_env(ROOT / ".env")
     log = siapkan_log()

@@ -41,6 +41,9 @@ header h1{font-size:17px}
 .seg button.on.live{background:var(--warn);color:#fff}
 .banner{background:var(--warnbg);color:var(--warn);padding:7px 24px;font-weight:600;display:none;align-items:center;gap:8px;flex:none}
 body.live .banner{display:flex}
+.oper{display:flex;align-items:center;gap:6px;color:var(--mut);font-size:13px}
+.oper select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-weight:600}
+.oper .iconbtn{width:30px;height:30px;font-size:18px;border:1px solid var(--line)}
 .iconbtn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--mut)}
 .iconbtn:hover{background:var(--bg)}
 section.view{flex:1;overflow:auto;padding:24px;display:none}
@@ -221,6 +224,8 @@ input[type=search]{padding:9px 12px;border-radius:9px;border:1px solid var(--lin
   <header>
     <h1 id="judul">Harian</h1>
     <div class="grow"></div>
+    <div class="oper" title="Operator yang tercatat di kolom F PICKLIST.xlsx"><span>Operator</span>
+      <select id="opSel"></select><button class="iconbtn" id="opTambah" title="Tambah operator">+</button></div>
     <div class="clock"><svg><use href="#clock"/></svg><span id="jam">--:--</span></div>
     <button class="iconbtn" id="tema" title="Ganti tema"><svg><use href="#moon"/></svg></button>
   </header>
@@ -706,7 +711,18 @@ async function initHarianAPI(){
    bukaRunner({id:'h',nama:j.judul,steps:null,custom:j.langkah.map(x=>x.nama)},'harian');mulaiPoll();go('runner');}
  }catch(e){toast('Server UI error: '+e.message);}
 }
-render();drawPeringatan();initCetak();initHarianAPI();
+const postJ=(u,b)=>api(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function gambarOperator(d){const sel=$('#opSel');sel.innerHTML=d.daftar.map(n=>`<option${n===d.aktif?' selected':''}>${n}</option>`).join('');
+ sel.disabled=d.terkunci;sel.title=d.terkunci?'Tidak bisa diganti saat proses berjalan':'';}
+async function initOperator(){
+ if(!location.protocol.startsWith('http'))return;
+ const muat=async()=>{try{gambarOperator(await api('/api/operator'));}catch(e){}};
+ await muat();setInterval(muat,5000);   // ikut terkunci/terbuka sesuai proses berjalan
+ $('#opSel').onchange=async e=>{try{gambarOperator(await postJ('/api/operator',{aksi:'aktif',nama:e.target.value}));toast('Operator aktif: '+e.target.value);}catch(x){toast(x.message);muat();}};
+ $('#opTambah').onclick=async()=>{const n=prompt('Nama operator baru:');if(!n)return;
+  try{gambarOperator(await postJ('/api/operator',{aksi:'tambah',nama:n}));toast('Operator ditambahkan (pilih di daftar untuk mengaktifkan)');}catch(x){toast(x.message);}};
+}
+render();drawPeringatan();initCetak();initHarianAPI();initOperator();
 if(location.hash==='#cetak')go('cetak');   // dari server_ui.py --menu cetak
 </script>
 </body>

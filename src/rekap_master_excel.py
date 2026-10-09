@@ -8,8 +8,8 @@ insiden 2026-10-06). Template dibuat ulang lewat src/buat_template_picklist.py.
 
 Kolom P (SCAN) diisi terpisah oleh isi_scan() setelah upload IRESIS (total resi per picklist).
 
-Kolom yang diisi (nilainya saja, rumus bawaan template dibiarkan): F=operator (konstan
-"PUTRI"), G=tanggal, H=jam (desimal gaya "HH.MM", mis. 18.53 = jam 18:53, BUKAN pecahan jam
+Kolom yang diisi (nilainya saja, rumus bawaan template dibiarkan): F=operator (operator aktif,
+lihat operator_aktif.py / data/operator.json), G=tanggal, H=jam (desimal gaya "HH.MM", mis. 18.53 = jam 18:53, BUKAN pecahan jam
 sungguhan), L=nomor picklist (angka saja), M=Total Pesanan, N=Resi Keluar, T=label alur
 (sama seperti kolom "SKU" di riwayat_picklist.xlsx), U=daftar no pesanan yang belum dapat
 resi. Kolom rumus B/E/O/Q/W di tiap baris baru disalin dari baris rumus template (rumus
@@ -39,6 +39,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 
+import operator_aktif
 import peringatan_gagal
 
 log = logging.getLogger("sku-spesial")
@@ -46,7 +47,6 @@ log = logging.getLogger("sku-spesial")
 TEMPLATE = Path(__file__).resolve().parent.parent / "data" / "template" / "picklist-form-kosong.xlsx"
 NAMA_FILE = "PICKLIST.xlsx"
 NAMA_SEMENTARA = "PICKLIST.xlsx.menulis"         # lihat _simpan()
-OPERATOR = "PUTRI"
 BARIS_DATA_AWAL = 6            # baris rumus contoh di template; data mulai di sini
 KOLOM_F_OPR, KOLOM_G_TGL, KOLOM_H_JAM = 6, 7, 8
 KOLOM_L_PICKLIST, KOLOM_M_LOLOS, KOLOM_N_PRINT, KOLOM_O_MINUS = 12, 13, 14, 15
@@ -247,7 +247,7 @@ def _baris_kosong(buku: _Buku, tanggal: date) -> int:
                                        ).translate_formula(sel.coordinate)
         if buku.tinggi:
             ws.row_dimensions[r].height = buku.tinggi
-    ws.cell(r, KOLOM_F_OPR, OPERATOR)
+    ws.cell(r, KOLOM_F_OPR, operator_aktif.ambil_aktif())
     ws.cell(r, KOLOM_G_TGL, datetime.combine(tanggal, datetime.min.time()))
     return r
 
