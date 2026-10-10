@@ -472,6 +472,14 @@ class JubelioPalsuUrgent:
         for i in range(420, 450):
             self.rak_gtl_sicepat[i] = f"4C-R{i}-1"
         self.kombinasi_rak_gtl_sicepat = list(self.rak_gtl_sicepat.values())
+        # JNE-LEX (kurir di luar J&T/SPX/GTL/SiCepat, lintas channel): 1 JNE Tokopedia asli
+        # (source 128, seperti TP-... insiden 09/10/2026) + 1 LEX ID Shopee (source 64)
+        self.pesanan_jne_lex = [
+            {"salesorder_id": 500, "salesorder_no": "TP-JNE-500", "source": 128,
+             "shipper": "JNE-MP JNE", "grand_total": "35900.0000"},
+            {"salesorder_id": 501, "salesorder_no": "SP-LEX-501", "source": 64,
+             "shipper": "LEX ID", "grand_total": "35900.0000"},
+        ]
         self.picklist_no = 0
         self.stok_kosong_ids: set[int] = set()
 
@@ -497,6 +505,10 @@ class JubelioPalsuUrgent:
                 "Lazada/GTL-SiCepat urgent tidak pakai SPX atau Shopee -> jangan pakai filter tipe"
             if params.get("channel_ids[0]") == 4:
                 data = self.pesanan_lazada
+            elif params.get("couriers[0]") == "jne":
+                assert "channel_ids[0]" not in params, "JNE-LEX lintas channel -> tanpa channel_ids"
+                assert params.get("couriers[1]") == "lex" and "couriers[2]" not in params
+                data = self.pesanan_jne_lex
             else:
                 assert "channel_ids[0]" not in params, \
                     "GTL/SiCepat urgent lintas channel -> jangan difilter channel_ids"
@@ -680,16 +692,17 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
 
     label_gtl_sicepat = {"GTL-SICEPAT-LANTAI1", "GTL-SICEPAT-LANTAI2", "GTL-SICEPAT-LANTAI3",
                         "GTL-SICEPAT-LAINNYA"}
-    assert all(sku in ({"LAZADA"} | label_gtl_sicepat) for _, _, _, sku, _, _ in panggilan), panggilan
+    semua_label = {"LAZADA", "JNE-LEX"} | label_gtl_sicepat
+    assert all(sku in semua_label for _, _, _, sku, _, _ in panggilan), panggilan
     assert all(subfolder == pl.SUBFOLDER_URGENT for *_, subfolder in panggilan), panggilan
-    print("  Lazada DAN GTL/SiCepat (semua lantai) sama-sama disimpan di subfolder URGENT")
+    print("  Lazada, GTL/SiCepat (semua lantai) DAN JNE-LEX sama-sama disimpan di subfolder URGENT")
     per_channel = {}
     for h in hasil:
         per_channel.setdefault(h["SKU"], []).append(h)
     assert len(per_channel["LAZADA"]) == 1
     assert per_channel["LAZADA"][0]["Total Pesanan"] == 3
     assert per_channel["LAZADA"][0]["File Label"] == f"{per_channel['LAZADA'][0]['No Picklist']}_LAZADA_x.pdf"
-    assert set(per_channel) == {"LAZADA"} | label_gtl_sicepat, \
+    assert set(per_channel) == semua_label, \
         "GTL/SiCepat dipecah per lantai (1/2/3/LAINNYA), masing-masing picklist sendiri"
     assert per_channel["GTL-SICEPAT-LANTAI1"][0]["Total Pesanan"] == 100, \
         "id 200-299 (rak 1A) -> LANTAI1"
@@ -699,7 +712,9 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
         "id 370-419 (rak 3A, nyebrang Tokopedia/TikTok) -> LANTAI3"
     assert per_channel["GTL-SICEPAT-LAINNYA"][0]["Total Pesanan"] == 30, \
         "id 420-449 (rak 4C, di luar LANTAI_RAK) -> LAINNYA"
-    assert len(baris) == 1 + 5, "1 Lazada + 4 picklist GTL/SiCepat (per lantai) tercatat di riwayat"
+    assert len(per_channel["JNE-LEX"]) == 1 and per_channel["JNE-LEX"][0]["Total Pesanan"] == 2,         "JNE (Tokopedia asli) + LEX (Shopee) lintas channel -> 1 picklist gabungan JNE-LEX"
+    assert [s[0] for s in pl.SKENARIO_URGENT] == ["Lazada", "GTL-SiCepat", "JNE-LEX"],         "JNE-LEX harus SETELAH Lazada & GTL-SiCepat"
+    assert len(baris) == 1 + 5 + 1,         "1 Lazada + 4 picklist GTL/SiCepat (per lantai) + 1 JNE-LEX tercatat di riwayat"
     print("  proses_urgent: 3 pesanan Lazada -> 1 picklist, 250 GTL/SiCepat -> 4 picklist "
           "per LANTAI (100+70+50+30), nama file pakai label skenario+lantai (mis. "
           "PICK-..._GTL-SICEPAT-LANTAI1_...)")
@@ -714,6 +729,25 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
         pl.lanjutkan_picklist = asli
     assert {h["SKU"] for h in hasil} == {"LAZADA"}, hasil
     print("  skenario bisa dibatasi 1 channel saja (dipakai --channel)")
+
+    skenario_jne_lex = [s for s in pl.SKENARIO_URGENT if s[0] == "JNE-LEX"]
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            hasil = pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label", skenario_jne_lex)
+    finally:
+        pl.lanjutkan_picklist = asli
+    assert [(h["SKU"], h["Total Pesanan"]) for h in hasil] == [("JNE-LEX", 2)], hasil
+    print("  --channel jne-lex: hanya picklist JNE-LEX (JNE Tokopedia asli + LEX Shopee, 2 pesanan)")
+
+    # tanpa jam tunda: jam pesan di atas cutoff Lazada/GTL pun tidak ditahan, sebelum jam 16
+    import datetime as dt
+    for o in j.pesanan_jne_lex:
+        o["transaction_date"] = "2026-10-02T09:30:00Z"      # 16:30 WIB
+    pakai, ditahan = pl._saring_jam_urgent(j.pesanan_jne_lex, None,
+                                           dt.datetime(2026, 10, 2, 10, 0, tzinfo=pl.WIB))
+    assert ditahan == 0 and len(pakai) == 2, (pakai, ditahan)
+    print("  JNE-LEX tanpa jam tunda (jam_cutoff None): tidak pernah ditahan")
 
 
 def uji_urgent_jam_tunda_ditahan_lalu_lanjut_setelah_jam_16():
@@ -835,7 +869,8 @@ class JubelioPalsuReguler:
             assert params.get("sort_by") == "transaction_date" and params.get("sort_direction") == "ASC", \
                 "resi terlama harus diambil duluan, supaya masuk picklist pertama kalau dipecah"
             assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
-            assert params.get("channel_ids[1]") == pl.CHANNEL_ID_SHOPEE
+            assert params.get("channel_ids[1]") == pl.CHANNEL_ID_TOKOPEDIA,                 "TP-... (Tokopedia asli, source 128) ikut reguler - insiden 09/10/2026"
+            assert params.get("channel_ids[2]") == pl.CHANNEL_ID_SHOPEE
             assert params.get("couriers[0]") == "j&t" and params.get("couriers[1]") == "spx"
             assert [params[f"order_type[{i}]"] for i in range(len(pl.TIPE_PESANAN_FILTER))] \
                 == pl.TIPE_PESANAN_FILTER, \
@@ -1444,7 +1479,8 @@ class JubelioPalsuJntSiang:
                 return Resp(data={"data": [{"salesorder_id": so} for so in cocok],
                                   "totalCount": len(cocok)})
             assert params.get("channel_ids[0]") == pl.CHANNEL_ID_TIKTOK_SHOP
-            assert "channel_ids[1]" not in params, "J&T Resi Siang cuma channel TikTok Shop"
+            assert params.get("channel_ids[1]") == pl.CHANNEL_ID_TOKOPEDIA
+            assert "channel_ids[2]" not in params, "J&T Resi Siang cuma TikTok Shop + Tokopedia"
             assert params.get("couriers[0]") == "j&t" and "couriers[1]" not in params, \
                 "J&T Resi Siang cuma kurir J&T"
             return Resp(data={"data": self.pesanan, "totalCount": len(self.pesanan)})

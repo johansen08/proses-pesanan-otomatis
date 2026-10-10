@@ -37,6 +37,7 @@ bat\jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_rekap_master_excel.py
 .venv\Scripts\python tests\test_server_ui.py
 .venv\Scripts\python tests\test_operator_aktif.py
+.venv\Scripts\python tests\test_peringatan_sisa.py
 .venv\Scripts\python tests\test_jalankan_harian.py
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
@@ -134,6 +135,16 @@ project secara umum, root tidak boleh berisi file `.py`):
   resi perlu tahu nomor pesanannya untuk diinformasikan ke tim admin/CS. Peringatan di
   `logs/pesanan_tanpa_resi.jsonl`; dicetak di tempat yang sama (akhir `main.py` & rekap
   waktu tiap TIPE).
+- `src/peringatan_sisa.py` — penjaga "pesanan tak tersentuh" (insiden 2026-10-09: 2 resi wajib keluar,
+  channel Tokopedia asli `TP-...` id 128 & kurir JNE, tidak pernah masuk picklist apa pun TANPA peringatan).
+  Dipanggil `main.py --upload-iresis` (langkah terakhir tiap TIPE; tetap jalan walau upload IRESIS dilewati
+  di jendela malam): mengambil SEMUA pesanan Siap Proses tanpa filter channel/kurir, memperingatkan yang
+  jam pesannya sebelum hari ini 00:00 WIB beserta tebakan alasan (kurir/channel di luar alur, atau sebab
+  lain). Peringatan di `logs/pesanan_tak_tersentuh.jsonl`, dicetak ulang di rekap waktu; kegagalan API/login
+  hanya jadi warning. Channel `TP-` (128) sekarang ikut alur reguler/J&T Siang lewat
+  `CHANNEL_IDS_TIKTOK_TOKOPEDIA`; kurir JNE/LEX punya skenario urgent `JNE-LEX` sendiri (langkah "Urgent JNE
+  & LEX" di semua .bat/KATALOG/UI, setelah Lazada & GTL-SiCepat, tanpa jam tunda, label `JNE-LEX` di subfolder
+  URGENT, dicetak manual). Tes: `tests/test_peringatan_sisa.py`.
 - `src/peringatan_gagal.py` — persistensi lintas-proses (pola sama, `logs/picklist_bermasalah.
   jsonl`) untuk picklist/proses yang TERHENTI/GAGAL (lihat `main.cetak_bermasalah()`, dipicu
   mis. timeout unduh label PDF di `proses_label.py`). `main.cetak_bermasalah()` sendiri sudah

@@ -465,7 +465,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                     total += 1
                 except SystemExit as e:
                     raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-    assert total == 2 * (12 + 16 + 12 + 13 + 9), total      # TIPE 1-4 + MALAM, sungguhan & uji
+    assert total == 2 * (13 + 17 + 13 + 14 + 10), total      # TIPE 1-4 + MALAM, sungguhan & uji (+1 langkah Urgent JNE & LEX tiap blok)
     print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
 
 

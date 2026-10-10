@@ -49,47 +49,52 @@ if /i not "%yakin%"=="Y" goto menu
 echo.
 call :catat_waktu TR_AWAL
 set "WAKTU_MENU_MULAI=%TR_AWAL%"
-echo === 1/8 RECHECK STOK ===
+echo === 1/9 RECHECK STOK ===
 ".venv\Scripts\python.exe" src\main.py --recheck-stok --jalankan
 call :catat_waktu TR_AKHIR
 echo.
 call :catat_waktu T0_AWAL
-echo === 2/8 SAMPEL TIKTOK (NILAI 0) ===
+echo === 2/9 SAMPEL TIKTOK (NILAI 0) ===
 ".venv\Scripts\python.exe" src\main.py --sampel --jalankan
 call :catat_waktu T0_AKHIR
 echo.
 call :catat_waktu T1_AWAL
-echo === 3/8 URGENT LAZADA ===
+echo === 3/9 URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan --lewati-malam
 call :catat_waktu T1_AKHIR
 echo.
 call :catat_waktu T2_AWAL
-echo === 4/8 URGENT GTL ^& SICEPAT ===
+echo === 4/9 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan --lewati-malam
 call :catat_waktu T2_AKHIR
 echo.
+call :catat_waktu TJ_AWAL
+echo === 5/9 URGENT JNE ^& LEX ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel jne-lex --jalankan --lewati-malam
+call :catat_waktu TJ_AKHIR
+echo.
 call :catat_waktu T3_AWAL
-echo === 5/8 SPX - J^&T SPESIAL ===
+echo === 6/9 SPX - J^&T SPESIAL ===
 ".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan --non-wajib-sore
 call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
-echo === 6/8 SPX - J^&T 1 QTY REGULER ===
+echo === 7/9 SPX - J^&T 1 QTY REGULER ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan --non-wajib-sore
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
-echo === 7/8 SPX - J^&T KOMBINASI ===
+echo === 8/9 SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan --non-wajib-sore
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 8/8 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
+echo === 9/9 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
 echo TIPE 1 selesai.
-".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 1" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "SPX - J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
+".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 1" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "URGENT JNE & LEX:%TJ_AWAL%:%TJ_AKHIR%" "SPX - J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
 pause
 goto menu
 
@@ -105,6 +110,90 @@ echo.
 echo PERHATIAN: proses SUNGGUHAN di Jubelio. SPX RESI PAGI cuma 1x sehari.
 set "yakin="
 set /p "yakin=Lanjutkan TIPE 2? (Y/N): "
+if /i not "%yakin%"=="Y" goto menu
+echo.
+call :catat_waktu TR_AWAL
+echo === 1/13 RECHECK STOK ===
+".venv\Scripts\python.exe" src\main.py --recheck-stok --jalankan
+call :catat_waktu TR_AKHIR
+echo.
+call :catat_waktu T0_AWAL
+echo === 2/13 SAMPEL TIKTOK (NILAI 0) ===
+".venv\Scripts\python.exe" src\main.py --sampel --jalankan
+call :catat_waktu T0_AKHIR
+echo.
+call :catat_waktu T1_AWAL
+echo === 3/13 URGENT LAZADA ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
+call :catat_waktu T1_AKHIR
+echo.
+call :catat_waktu T2_AWAL
+echo === 4/13 URGENT GTL ^& SICEPAT ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
+call :catat_waktu T2_AKHIR
+echo.
+call :catat_waktu TJ_AWAL
+echo === 5/13 URGENT JNE ^& LEX ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel jne-lex --jalankan
+call :catat_waktu TJ_AKHIR
+echo.
+call :catat_waktu T3_AWAL
+echo === 6/13 SPX ^<= 12.00 (SPX RESI PAGI) ===
+".venv\Scripts\python.exe" src\main.py --shopee-pagi --jalankan
+call :catat_waktu T3_AKHIR
+echo.
+call :catat_waktu T4_AWAL
+echo === 7/13 J^&T SPESIAL ===
+".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
+call :catat_waktu T4_AKHIR
+echo.
+call :catat_waktu T5_AWAL
+echo === 8/13 J^&T 1 QTY REGULER ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
+call :catat_waktu T5_AKHIR
+echo.
+call :catat_waktu T6_AWAL
+echo === 9/13 J^&T KOMBINASI ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
+call :catat_waktu T6_AKHIR
+echo.
+call :catat_waktu T7_AWAL
+echo === 10/13 SPX SPESIAL ===
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
+call :catat_waktu T7_AKHIR
+echo.
+call :catat_waktu T8_AWAL
+echo === 11/13 SPX 1 QTY REGULER ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
+call :catat_waktu T8_AKHIR
+echo.
+call :catat_waktu T9_AWAL
+echo === 12/13 SPX KOMBINASI ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan --non-wajib
+call :catat_waktu T9_AKHIR
+echo.
+call :catat_waktu TF_AWAL
+echo === 13/13 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
+".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
+call :catat_waktu TF_AKHIR
+echo.
+echo TIPE 2 selesai.
+".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 2" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "URGENT JNE & LEX:%TJ_AWAL%:%TJ_AKHIR%" "SPX RESI PAGI:%T3_AWAL%:%T3_AKHIR%" "J&T SPESIAL:%T4_AWAL%:%T4_AKHIR%" "J&T 1 QTY REGULER:%T5_AWAL%:%T5_AKHIR%" "J&T KOMBINASI:%T6_AWAL%:%T6_AKHIR%" "SPX SPESIAL:%T7_AWAL%:%T7_AKHIR%" "SPX 1 QTY REGULER:%T8_AWAL%:%T8_AKHIR%" "SPX KOMBINASI:%T9_AWAL%:%T9_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
+pause
+goto menu
+
+rem ============================================================
+rem TIPE 3: sama seperti TIPE 2 tapi TANPA SPX Resi Pagi (sudah
+rem dijalankan di TIPE 2, cukup 1x sehari). Dipakai SETELAH TIPE 2
+rem selesai DAN SEBELUM TIPE 4 dimulai (13.00-15.00)
+rem ============================================================
+:tipe3
+call :cek_jam 3 "TIPE 3 (13.00-15.00)"
+if errorlevel 1 goto menu
+echo.
+echo PERHATIAN: proses SUNGGUHAN di Jubelio.
+set "yakin="
+set /p "yakin=Lanjutkan TIPE 3? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 call :catat_waktu TR_AWAL
@@ -127,122 +216,48 @@ echo === 4/12 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 call :catat_waktu T2_AKHIR
 echo.
+call :catat_waktu TJ_AWAL
+echo === 5/12 URGENT JNE ^& LEX ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel jne-lex --jalankan
+call :catat_waktu TJ_AKHIR
+echo.
 call :catat_waktu T3_AWAL
-echo === 5/12 SPX ^<= 12.00 (SPX RESI PAGI) ===
-".venv\Scripts\python.exe" src\main.py --shopee-pagi --jalankan
+echo === 6/12 J^&T SPESIAL ===
+".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
 call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
-echo === 6/12 J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
+echo === 7/12 J^&T 1 QTY REGULER ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
-echo === 7/12 J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
+echo === 8/12 J^&T KOMBINASI ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
-echo === 8/12 J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
+echo === 9/12 SPX SPESIAL ===
+".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu T7_AWAL
-echo === 9/12 SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
+echo === 10/12 SPX 1 QTY REGULER ===
+".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
 call :catat_waktu T7_AKHIR
 echo.
 call :catat_waktu T8_AWAL
-echo === 10/12 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
-call :catat_waktu T8_AKHIR
-echo.
-call :catat_waktu T9_AWAL
 echo === 11/12 SPX KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan --non-wajib
-call :catat_waktu T9_AKHIR
+call :catat_waktu T8_AKHIR
 echo.
 call :catat_waktu TF_AWAL
 echo === 12/12 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
-echo TIPE 2 selesai.
-".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 2" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "SPX RESI PAGI:%T3_AWAL%:%T3_AKHIR%" "J&T SPESIAL:%T4_AWAL%:%T4_AKHIR%" "J&T 1 QTY REGULER:%T5_AWAL%:%T5_AKHIR%" "J&T KOMBINASI:%T6_AWAL%:%T6_AKHIR%" "SPX SPESIAL:%T7_AWAL%:%T7_AKHIR%" "SPX 1 QTY REGULER:%T8_AWAL%:%T8_AKHIR%" "SPX KOMBINASI:%T9_AWAL%:%T9_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
-pause
-goto menu
-
-rem ============================================================
-rem TIPE 3: sama seperti TIPE 2 tapi TANPA SPX Resi Pagi (sudah
-rem dijalankan di TIPE 2, cukup 1x sehari). Dipakai SETELAH TIPE 2
-rem selesai DAN SEBELUM TIPE 4 dimulai (13.00-15.00)
-rem ============================================================
-:tipe3
-call :cek_jam 3 "TIPE 3 (13.00-15.00)"
-if errorlevel 1 goto menu
-echo.
-echo PERHATIAN: proses SUNGGUHAN di Jubelio.
-set "yakin="
-set /p "yakin=Lanjutkan TIPE 3? (Y/N): "
-if /i not "%yakin%"=="Y" goto menu
-echo.
-call :catat_waktu TR_AWAL
-echo === 1/11 RECHECK STOK ===
-".venv\Scripts\python.exe" src\main.py --recheck-stok --jalankan
-call :catat_waktu TR_AKHIR
-echo.
-call :catat_waktu T0_AWAL
-echo === 2/11 SAMPEL TIKTOK (NILAI 0) ===
-".venv\Scripts\python.exe" src\main.py --sampel --jalankan
-call :catat_waktu T0_AKHIR
-echo.
-call :catat_waktu T1_AWAL
-echo === 3/11 URGENT LAZADA ===
-".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
-call :catat_waktu T1_AKHIR
-echo.
-call :catat_waktu T2_AWAL
-echo === 4/11 URGENT GTL ^& SICEPAT ===
-".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
-call :catat_waktu T2_AKHIR
-echo.
-call :catat_waktu T3_AWAL
-echo === 5/11 J^&T SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir jnt --tanpa-reguler --jalankan
-call :catat_waktu T3_AKHIR
-echo.
-call :catat_waktu T4_AWAL
-echo === 6/11 J^&T 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir jnt --jalankan
-call :catat_waktu T4_AKHIR
-echo.
-call :catat_waktu T5_AWAL
-echo === 7/11 J^&T KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir jnt --jalankan
-call :catat_waktu T5_AKHIR
-echo.
-call :catat_waktu T6_AWAL
-echo === 8/11 SPX SPESIAL ===
-".venv\Scripts\python.exe" src\main.py --label --kurir spx --tanpa-reguler --jalankan --non-wajib
-call :catat_waktu T6_AKHIR
-echo.
-call :catat_waktu T7_AWAL
-echo === 9/11 SPX 1 QTY REGULER ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --kurir spx --jalankan --non-wajib
-call :catat_waktu T7_AKHIR
-echo.
-call :catat_waktu T8_AWAL
-echo === 10/11 SPX KOMBINASI ===
-".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --kurir spx --jalankan --non-wajib
-call :catat_waktu T8_AKHIR
-echo.
-call :catat_waktu TF_AWAL
-echo === 11/11 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
-".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
-call :catat_waktu TF_AKHIR
-echo.
 echo TIPE 3 selesai.
-".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 3" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%" "SPX SPESIAL:%T6_AWAL%:%T6_AKHIR%" "SPX 1 QTY REGULER:%T7_AWAL%:%T7_AKHIR%" "SPX KOMBINASI:%T8_AWAL%:%T8_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
+".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 3" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "URGENT JNE & LEX:%TJ_AWAL%:%TJ_AKHIR%" "J&T SPESIAL:%T3_AWAL%:%T3_AKHIR%" "J&T 1 QTY REGULER:%T4_AWAL%:%T4_AKHIR%" "J&T KOMBINASI:%T5_AWAL%:%T5_AKHIR%" "SPX SPESIAL:%T6_AWAL%:%T6_AKHIR%" "SPX 1 QTY REGULER:%T7_AWAL%:%T7_AKHIR%" "SPX KOMBINASI:%T8_AWAL%:%T8_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
 pause
 goto menu
 
@@ -262,52 +277,57 @@ set /p "yakin=Lanjutkan TIPE 4? (Y/N): "
 if /i not "%yakin%"=="Y" goto menu
 echo.
 call :catat_waktu TR_AWAL
-echo === 1/9 RECHECK STOK ===
+echo === 1/10 RECHECK STOK ===
 ".venv\Scripts\python.exe" src\main.py --recheck-stok --jalankan
 call :catat_waktu TR_AKHIR
 echo.
 call :catat_waktu T0_AWAL
-echo === 2/9 SAMPEL TIKTOK (NILAI 0) ===
+echo === 2/10 SAMPEL TIKTOK (NILAI 0) ===
 ".venv\Scripts\python.exe" src\main.py --sampel --jalankan
 call :catat_waktu T0_AKHIR
 echo.
 call :catat_waktu T1_AWAL
-echo === 3/9 URGENT LAZADA ===
+echo === 3/10 URGENT LAZADA ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel lazada --jalankan
 call :catat_waktu T1_AKHIR
 echo.
 call :catat_waktu T2_AWAL
-echo === 4/9 URGENT GTL ^& SICEPAT ===
+echo === 4/10 URGENT GTL ^& SICEPAT ===
 ".venv\Scripts\python.exe" src\main.py --urgent --channel gtl-sicepat --jalankan
 call :catat_waktu T2_AKHIR
 echo.
+call :catat_waktu TJ_AWAL
+echo === 5/10 URGENT JNE ^& LEX ===
+".venv\Scripts\python.exe" src\main.py --urgent --channel jne-lex --jalankan
+call :catat_waktu TJ_AKHIR
+echo.
 call :catat_waktu T3_AWAL
-echo === 5/9 J^&T ^<= 15.00 (J^&T RESI SIANG) ===
+echo === 6/10 J^&T ^<= 15.00 (J^&T RESI SIANG) ===
 ".venv\Scripts\python.exe" src\main.py --jnt-siang --jalankan
 call :catat_waktu T3_AKHIR
 echo.
 call :catat_waktu T4_AWAL
-echo === 6/9 SPX - J^&T SPESIAL ===
+echo === 7/10 SPX - J^&T SPESIAL ===
 ".venv\Scripts\python.exe" src\main.py --label --tanpa-reguler --jalankan --non-wajib
 call :catat_waktu T4_AKHIR
 echo.
 call :catat_waktu T5_AWAL
-echo === 7/9 SPX - J^&T 1 QTY REGULER ===
+echo === 8/10 SPX - J^&T 1 QTY REGULER ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian 1qty --jalankan --non-wajib
 call :catat_waktu T5_AKHIR
 echo.
 call :catat_waktu T6_AWAL
-echo === 8/9 SPX - J^&T KOMBINASI ===
+echo === 9/10 SPX - J^&T KOMBINASI ===
 ".venv\Scripts\python.exe" src\main.py --reguler --bagian kombinasi --jalankan --non-wajib
 call :catat_waktu T6_AKHIR
 echo.
 call :catat_waktu TF_AWAL
-echo === 9/9 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
+echo === 10/10 UPLOAD FAKTUR ^& PESANAN KE IRESIS ===
 ".venv\Scripts\python.exe" src\main.py --upload-iresis --jalankan
 call :catat_waktu TF_AKHIR
 echo.
 echo TIPE 4 selesai.
-".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 4" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "J&T RESI SIANG:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T SPESIAL:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T 1 QTY REGULER:%T5_AWAL%:%T5_AKHIR%" "SPX - J&T KOMBINASI:%T6_AWAL%:%T6_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
+".venv\Scripts\python.exe" src\rekap_waktu.py "TIPE 4" "RECHECK STOK:%TR_AWAL%:%TR_AKHIR%" "SAMPEL TIKTOK:%T0_AWAL%:%T0_AKHIR%" "URGENT LAZADA:%T1_AWAL%:%T1_AKHIR%" "URGENT GTL & SICEPAT:%T2_AWAL%:%T2_AKHIR%" "URGENT JNE & LEX:%TJ_AWAL%:%TJ_AKHIR%" "J&T RESI SIANG:%T3_AWAL%:%T3_AKHIR%" "SPX - J&T SPESIAL:%T4_AWAL%:%T4_AKHIR%" "SPX - J&T 1 QTY REGULER:%T5_AWAL%:%T5_AKHIR%" "SPX - J&T KOMBINASI:%T6_AWAL%:%T6_AKHIR%" "UPLOAD IRESIS:%TF_AWAL%:%TF_AKHIR%"
 pause
 goto menu
 

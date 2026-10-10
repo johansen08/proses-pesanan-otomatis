@@ -14,6 +14,7 @@ from pathlib import Path
 import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
+import peringatan_sisa
 
 
 def format_durasi(detik):
@@ -60,6 +61,8 @@ def main():
         peringatan_resi.cetak(peringatan_resi.baca_sejak(awal))
         peringatan_gagal.atur_folder(folder_log)
         peringatan_gagal.cetak(peringatan_gagal.baca_sejak(awal))
+        peringatan_sisa.atur_folder(folder_log)
+        peringatan_sisa.cetak(peringatan_sisa.baca_sejak(awal))
 
 
 if __name__ == "__main__":

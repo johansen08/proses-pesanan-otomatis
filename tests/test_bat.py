@@ -37,9 +37,9 @@ BAT_DI_ROOT = ["proses-pesanan.bat"]      # satu-satunya .bat yang boleh di root
 MENU_EVENT = ("proses-event.bat", "proses-event-uji.bat")
 POLA_PANGGIL_MAIN = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
 # proses-event.bat: (pilihan menu, label blok, judul rekap, jumlah langkah)
-PILIHAN_EVENT = (("1", "event1", "EVENT - TIPE 1", 12), ("2", "event2", "EVENT - TIPE 2", 16),
-                 ("3", "event3", "EVENT - TIPE 3", 12), ("4", "event4", "EVENT - TIPE 4", 13),
-                 ("5", "event5", "EVENT - MALAM", 9))
+PILIHAN_EVENT = (("1", "event1", "EVENT - TIPE 1", 13), ("2", "event2", "EVENT - TIPE 2", 17),
+                 ("3", "event3", "EVENT - TIPE 3", 13), ("4", "event4", "EVENT - TIPE 4", 14),
+                 ("5", "event5", "EVENT - MALAM", 10))
 
 # main.py & rekap_waktu.py palsu untuk simulasi: cuma mencatat argumen, tanpa Jubelio.
 MAIN_PALSU = '''import sys
@@ -252,7 +252,7 @@ def uji_bat_event_aturan_tiap_tipe():
                 assert "--event" in a and ("--kurir jnt" in a or "--kurir spx-hemat" in a), a
         assert not any(a.startswith("--tulis-excel") for a in sesi)
         urgent = [a for a in sesi if a.startswith("--urgent")]
-        assert len(urgent) == 2, (label, urgent)
+        assert len(urgent) == 3, (label, urgent)      # Lazada, GTL-SiCepat, JNE-LEX
         assert all(("--lewati-malam" in a) == (label in ("event1", "event3", "event4")) for a in urgent), (label, urgent)
         assert sesi[-1].startswith("--upload-iresis") == (label != "event5"), label
         assert (sesi[0].startswith("--recheck-stok") and sesi[1].startswith("--sampel")) == (label != "event5"), label

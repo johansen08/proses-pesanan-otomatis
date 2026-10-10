@@ -40,6 +40,7 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 | Sampel TikTok (nilai 0/kosong) | `--sampel --jalankan` |
 | Urgent Lazada | `--urgent --channel lazada --jalankan` |
 | Urgent GTL & SiCepat | `--urgent --channel gtl-sicepat --jalankan` |
+| Urgent JNE & LEX | `--urgent --channel jne-lex --jalankan` (kurir di luar J&T/SPX/GTL/SiCepat: 1 picklist gabungan lintas channel, tanpa jam tunda) |
 | SPX & J&T spesial (digabung) | `--label --tanpa-reguler --jalankan` |
 | SPX & J&T 1 SKU 1 qty reguler (digabung) | `--reguler --bagian 1qty --jalankan` |
 | SPX & J&T kombinasi reguler (digabung) | `--reguler --bagian kombinasi --jalankan` |
@@ -66,7 +67,7 @@ Tiap pilihan menjalankan urutan langkah di bawah **berurut, 1 kali klik +
 1 konfirmasi Y/N**. Recheck stok **selalu** dijalankan PALING PERTAMA di
 tiap tipe (lihat pembahasan lebih lanjut di bawah), lalu picklist sampel
 (TikTok Shop nilai 0/kosong) **selalu** dicek setelahnya (dilewati kalau
-tidak ada pesanannya), lalu picklist urgent (Lazada, GTL/SiCepat) **selalu**
+tidak ada pesanannya), lalu picklist urgent (Lazada, GTL/SiCepat, JNE/LEX) **selalu**
 ikut setelahnya — tidak ada lagi cara memicunya sendirian lewat menu (masih
 bisa manual lewat `bat\jalankan.bat --recheck-stok ...`/`bat\jalankan.bat --sampel
 ...`/`bat\jalankan.bat --urgent ...` kalau perlu).
@@ -77,10 +78,11 @@ bisa manual lewat `bat\jalankan.bat --recheck-stok ...`/`bat\jalankan.bat --samp
 2. SAMPEL TIKTOK (NILAI 0)
 3. URGENT LAZADA
 4. URGENT GTL & SICEPAT
-5. SPX - J&T SPESIAL
-6. SPX - J&T 1 QTY REGULER
-7. SPX - J&T KOMBINASI
-7. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+5. URGENT JNE & LEX
+6. SPX - J&T SPESIAL
+7. SPX - J&T 1 QTY REGULER
+8. SPX - J&T KOMBINASI
+8. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai untuk siklus pagi **07.00-11.xx**, DAN dipakai lagi untuk siklus
 sore **16.00-17.00** — begitu TIPE 4 selesai (jam 15.00-an), TIPE 1
@@ -94,14 +96,15 @@ bawah), bukan TIPE 1.
 2. SAMPEL TIKTOK (NILAI 0)
 3. URGENT LAZADA
 4. URGENT GTL & SICEPAT
-5. SPX ≤ 12.00 (SPX RESI PAGI)
-6. J&T SPESIAL
-7. J&T 1 QTY REGULER
-8. J&T KOMBINASI
-9. SPX - SPESIAL
-10. SPX - 1 QTY REGULER
-11. SPX - KOMBINASI
-12. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+5. URGENT JNE & LEX
+6. SPX ≤ 12.00 (SPX RESI PAGI)
+7. J&T SPESIAL
+8. J&T 1 QTY REGULER
+9. J&T KOMBINASI
+10. SPX - SPESIAL
+11. SPX - 1 QTY REGULER
+12. SPX - KOMBINASI
+13. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 13.00**, menghabiskan wajib keluar Shopee (langkah 5,
 channel Shopee, jam pesan WIB maksimal 12.00 siang hari itu, cukup
@@ -115,13 +118,14 @@ jadwal.
 2. SAMPEL TIKTOK (NILAI 0)
 3. URGENT LAZADA
 4. URGENT GTL & SICEPAT
-5. J&T SPESIAL
-6. J&T 1 QTY REGULER
-7. J&T KOMBINASI
-8. SPX - SPESIAL
-9. SPX - 1 QTY REGULER
-10. SPX - KOMBINASI
-11. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+5. URGENT JNE & LEX
+6. J&T SPESIAL
+7. J&T 1 QTY REGULER
+8. J&T KOMBINASI
+9. SPX - SPESIAL
+10. SPX - 1 QTY REGULER
+11. SPX - KOMBINASI
+12. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipakai **setelah TIPE 2 selesai** (kapan pun itu, tidak harus tepat jam
 13.00) **dan sebelum TIPE 4 dimulai** — jam 13.00 sampai 15.00. **Tidak
@@ -134,11 +138,12 @@ di bawah).
 2. SAMPEL TIKTOK (NILAI 0)
 3. URGENT LAZADA
 4. URGENT GTL & SICEPAT
-5. J&T ≤ 15.00 (J&T RESI SIANG)
-6. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
-7. SPX - J&T 1 QTY REGULER *(digabung)*
-8. SPX - J&T KOMBINASI *(digabung)*
-9. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
+5. URGENT JNE & LEX
+6. J&T ≤ 15.00 (J&T RESI SIANG)
+7. SPX - J&T SPESIAL *(digabung, seperti TIPE 1 - bukan dipisah)*
+8. SPX - J&T 1 QTY REGULER *(digabung)*
+9. SPX - J&T KOMBINASI *(digabung)*
+10. UPLOAD FAKTUR & PESANAN KE IRESIS *(lihat "Upload faktur ke IRESIS" di bawah)*
 
 Dipicu **tepat jam 15.00**, menghabiskan wajib keluar TikTok Shop (langkah
 4, channel TikTok Shop, kurir J&T, jam pesan WIB maksimal 15.00 hari itu,
@@ -151,8 +156,8 @@ atas) sampai jam 17.00.
 ### bat\proses-malam.bat (tanpa menu)
 
 Satu klik + 1 konfirmasi Y/N, tanpa cek jam & tanpa Recheck Stok/Sampel/IRESIS: 1. Urgent Lazada,
-2. Urgent GTL & SiCepat (tanpa `--lewati-malam`, jadi tidak ditahan), 3. SPX - J&T SPESIAL,
-4. 1 QTY REGULER, 5. KOMBINASI (J&T+SPX digabung), 6. Tulis PICKLIST.xlsx, lalu rekap waktu.
+2. Urgent GTL & SiCepat (tanpa `--lewati-malam`, jadi tidak ditahan), 3. Urgent JNE & LEX, 4. SPX - J&T SPESIAL,
+5. 1 QTY REGULER, 6. KOMBINASI (J&T+SPX digabung), 7. Tulis PICKLIST.xlsx, lalu rekap waktu.
 
 ### Upload faktur ke IRESIS (langkah paling terakhir tiap TIPE)
 

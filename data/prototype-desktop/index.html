@@ -291,17 +291,17 @@ const bacaLokal=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(
    DATA — Harian & Event memakai komponen yang sama
    ========================================================= */
 const GAB=['SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi'];
-const A=['Recheck stok','Sampel TikTok (nilai 0)','Urgent Lazada','Urgent GTL & SiCepat'],Z=['Upload faktur & pesanan ke IRESIS'];
+const A=['Recheck stok','Sampel TikTok (nilai 0)','Urgent Lazada','Urgent GTL & SiCepat','Urgent JNE & LEX'],Z=['Upload faktur & pesanan ke IRESIS'];
 const CFG={
  harian:{
-  grup:[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Urgent GTL & SiCepat']],['Batas waktu',['SPX ≤ 12.00 (Resi Pagi)','J&T ≤ 15.00 (Resi Siang)']],
+  grup:[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Urgent GTL & SiCepat','Urgent JNE & LEX']],['Batas waktu',['SPX ≤ 12.00 (Resi Pagi)','J&T ≤ 15.00 (Resi Siang)']],
    ['Gabung J&T + SPX',GAB],['Dipisah — J&T',['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi']],['Dipisah — SPX',['SPX Spesial','SPX 1 qty reguler','SPX Kombinasi']],['Penutup',Z]],
   preset:[
    {id:1,nama:'TIPE 1',jam:'07.00–12.00 · 16.00–17.00',dari:7,sampai:12,steps:[...A,...GAB,...Z]},
    {id:2,nama:'TIPE 2',jam:'Tepat 13.00',dari:12.9,sampai:13.5,steps:[...A,'SPX ≤ 12.00 (Resi Pagi)','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi',...Z]},
    {id:3,nama:'TIPE 3',jam:'13.00–15.00',dari:13.5,sampai:15,steps:[...A,'J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi',...Z]},
    {id:4,nama:'TIPE 4',jam:'Tepat 15.00',dari:15,sampai:16,steps:[...A,'J&T ≤ 15.00 (Resi Siang)',...GAB,...Z]},
-   {id:5,nama:'MALAM',jam:'Malam hari',dari:17,sampai:31,steps:['Urgent Lazada','Urgent GTL & SiCepat',...GAB]},
+   {id:5,nama:'MALAM',jam:'Malam hari',dari:17,sampai:31,steps:['Urgent Lazada','Urgent GTL & SiCepat','Urgent JNE & LEX',...GAB]},
   ],
   konflik:s=>GAB.some(x=>s.has(x))&&['J&T Spesial','SPX Spesial'].some(x=>s.has(x))?'“Gabung” dan “dipisah” sama-sama aktif — biasanya hanya salah satu.':'',
   kGab:GAB, kDis:['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi'],
@@ -309,7 +309,7 @@ const CFG={
 };
 { // Event
  const PAGI=['SPX Standard Pagi ≤ 12.00 (per lantai)','SPX Hemat Pagi Spesial','SPX Hemat Pagi 1 qty reguler','SPX Hemat Pagi Kombinasi'],SIANG='J&T ≤ 15.00 (Resi Siang)';
- const grup=[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Urgent GTL & SiCepat']],['Opsional · Batas waktu',[SIANG]],['Shopee Pagi ≤ 12.00 (folder terpisah)',PAGI],
+ const grup=[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Urgent GTL & SiCepat','Urgent JNE & LEX']],['Opsional · Batas waktu',[SIANG]],['Shopee Pagi ≤ 12.00 (folder terpisah)',PAGI],
   ['J&T',['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi']],['SPX Hemat',['SPX Hemat Spesial','SPX Hemat 1 qty reguler','SPX Hemat Kombinasi']],['SPX Standard',['SPX Standard (per lantai)']],['Penutup',Z]];
  const all=grup.flatMap(g=>g[1]),biasa=all.filter(x=>x!==SIANG&&!PAGI.includes(x));
  CFG.event={grup,
@@ -317,7 +317,7 @@ const CFG={
    {id:2,nama:'EVENT - TIPE 2',jam:'Tepat 13.00 · + Shopee Pagi',dari:12.9,sampai:13.5,steps:all.filter(x=>x!==SIANG)},
    {id:3,nama:'EVENT - TIPE 3',jam:'13.00–15.00',dari:13.5,sampai:15,steps:biasa},
    {id:4,nama:'EVENT - TIPE 4',jam:'Tepat 15.00 · + J&T Resi Siang',dari:15,sampai:16,steps:all.filter(x=>!PAGI.includes(x))},
-   {id:5,nama:'EVENT - MALAM',jam:'Urgent + J&T/SPX dipisah',dari:17,sampai:31,steps:all.filter(x=>['Urgent Lazada','Urgent GTL & SiCepat','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Hemat Spesial','SPX Hemat 1 qty reguler','SPX Hemat Kombinasi','SPX Standard (per lantai)'].includes(x))}],
+   {id:5,nama:'EVENT - MALAM',jam:'Urgent + J&T/SPX dipisah',dari:17,sampai:31,steps:all.filter(x=>['Urgent Lazada','Urgent GTL & SiCepat','Urgent JNE & LEX','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Hemat Spesial','SPX Hemat 1 qty reguler','SPX Hemat Kombinasi','SPX Standard (per lantai)'].includes(x))}],
   konflik:s=>PAGI.some(x=>s.has(x))?'Shopee Pagi cukup 1× sehari (EVENT - TIPE 2).':'',kGab:[],kDis:[]};
 }
 const jamDesimal=()=>{const d=new Date();return d.getHours()+d.getMinutes()/60};

@@ -19,7 +19,7 @@ Alur bisnis yang dicakup, sesuai aturan toko ini:
 - **SKU spesial** — SKU tertentu (lihat [docs/panduan-sku-spesial.md](docs/panduan-sku-spesial.md))
   dipicklist terpisah per SKU supaya proses packing lebih cepat, alih-alih tercampur dengan
   pesanan reguler.
-- **Urgent** (Lazada, serta kurir GTL/SiCepat lintas channel) — diproses lebih dulu/terpisah
+- **Urgent** (Lazada, kurir GTL/SiCepat lintas channel, serta kurir JNE/LEX) — diproses lebih dulu/terpisah
   karena punya tenggat pengiriman lebih ketat.
 - **Reguler** (sisa TikTok Shop & Shopee yang bukan SKU spesial) — dipecah 1 Qty vs Kombinasi
   supaya packing lebih efisien.
@@ -45,7 +45,7 @@ berurutan (otomatis, satu kali jalan):
    spesial selesai (perlu tahu SKU mana yang sudah spesial dulu), dipecah 1 Qty Reguler &
    Kombinasi Reguler.
 
-**Picklist urgent** (channel Lazada, kurir GTL/SiCepat lintas channel) **BUKAN** bagian dari
+**Picklist urgent** (channel Lazada, kurir GTL/SiCepat lintas channel, kurir JNE/LEX) **BUKAN** bagian dari
 `--label --jalankan` — harus dijalankan **terpisah**, lewat `--urgent`, sebelum atau sesudah
 menu SKU spesial/reguler sesuai kebutuhan. Ketiganya (`--urgent`, `--label`, `--reguler`) juga
 bisa dijalankan berdiri sendiri — lihat bagian masing-masing di bawah.
@@ -219,6 +219,12 @@ reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
   live-nya dibatasi kurir GTL/SiCepat (bukan J&T/SPX reguler). Label/nama file jadi
   `GTL-SICEPAT-LANTAI1`/`GTL-SICEPAT-LANTAI2`/`GTL-SICEPAT-LANTAI3`/`GTL-SICEPAT-LAINNYA`,
   masing-masing dipecah lagi kalau > 200 pesanan.
+- **JNE-LEX**: semua pesanan kurir **JNE** (mis. `JNE-MP JNE`) atau **LEX** (`LEX ID`),
+  lintas channel, digabung jadi 1 picklist (volumenya kecil, tidak dipecah per lantai), TANPA
+  jam tunda. Dijalankan SETELAH Lazada & GTL-SiCepat, jadi LEX milik Lazada sudah terambil di
+  skenario Lazada; yang tersisa hanya kurir ini di channel lain. Label/nama file `JNE-LEX`,
+  di subfolder `URGENT`. Sebelumnya kurir ini tidak punya alur sama sekali (insiden
+  09/10/2026: resi `TG...` JNE tidak pernah masuk picklist). Dicetak manual (tidak ada cetak bulk).
 
 **Jam tunda**: pesanan yang jam pesannya (WIB) masih di atas jam tunda hari itu belum
 dipicklist dulu — Lazada ditahan di atas jam 14.00, GTL/SiCepat di atas jam 15.00 — baru
@@ -235,11 +241,13 @@ tim/jadwal, bukan otomatis di kode). Jalankan salah satu atau kedua skenario:
 bat\jalankan.bat --urgent                                      # mode uji (keduanya)
 bat\jalankan.bat --urgent --channel lazada --jalankan           # Lazada saja, sungguhan
 bat\jalankan.bat --urgent --channel gtl-sicepat --jalankan      # GTL/SiCepat saja, sungguhan
+bat\jalankan.bat --urgent --channel jne-lex --jalankan          # JNE/LEX saja, sungguhan
 ```
 
-Dijalankan sebagai langkah kedua & ketiga di setiap TIPE `bat\proses-harian.bat` (TIPE 1-4,
-setelah picklist sampel di bagian 0 di atas) = `bat\jalankan.bat --urgent --channel lazada --jalankan`
-lalu `bat\jalankan.bat --urgent --channel gtl-sicepat --jalankan`. `bat\proses-harian-uji.bat` = versi
+Dijalankan sebagai langkah ketiga, keempat & kelima di setiap TIPE `bat\proses-harian.bat` (TIPE 1-4,
+setelah picklist sampel di bagian 0 di atas) = `bat\jalankan.bat --urgent --channel lazada --jalankan`,
+lalu `bat\jalankan.bat --urgent --channel gtl-sicepat --jalankan`, lalu
+`bat\jalankan.bat --urgent --channel jne-lex --jalankan`. `bat\proses-harian-uji.bat` = versi
 mode uji (tanpa `--jalankan`) masing-masing channel.
 
 - Label PDF urgent: nama file & kolom SKU di riwayat pakai nama skenario (huruf besar),

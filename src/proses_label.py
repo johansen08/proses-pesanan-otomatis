@@ -37,9 +37,10 @@ disimpan di subfolder masing-masing (`URGENT`, `SATUAN`, `KOMBINASI` - lihat par
 2/3 di bawah); Alur 0, 4 & 5 (sampel, Shopee Pagi, J&T Resi Siang) TIDAK memakai penanda
 maupun subfolder apa pun, tetap langsung di folder sesi.
 
-Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 2 skenario -
-channel Lazada, dan kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia -
-lihat SKENARIO_URGENT), sebanyak mungkin per picklist (maks MAKS_PESANAN_PICKLIST, dipecah
+Alur 2 - picklist urgent (fungsi rencana_urgent()/proses_urgent()): lintas SKU, 3 skenario -
+channel Lazada, kurir GTL/SiCepat (lintas channel, TIDAK dibatasi channel Tokopedia - lihat
+SKENARIO_URGENT), dan kurir JNE/LEX (JNE-LEX: 1 picklist gabungan tanpa jam tunda, urutan
+paling akhir setelah Lazada & GTL-SiCepat), sebanyak mungkin per picklist (maks MAKS_PESANAN_PICKLIST, dipecah
 kalau lebih). Tidak ada validasi SKU sejenis (multi-SKU per pesanan boleh). Pesanan yang jam
 pesannya (WIB) di atas jam cutoff skenario (Lazada > jam 14.00, GTL/SiCepat > jam 15.00)
 ditahan dulu, baru diproses otomatis setelah jam 16.00 (lihat JAM_CUTOFF_URGENT_LAZADA/
@@ -52,7 +53,7 @@ skenario (Lazada maupun GTL/SiCepat) disimpan di subfolder `URGENT` di dalam fol
 `subfolder` di lanjutkan_picklist().
 
 Alur 3 - picklist sisa reguler (fungsi rencana_reguler()/proses_reguler()), dijalankan
-SETELAH alur 1: lintas SKU, channel TikTok Shop ("Shop | Tokopedia") & Shopee, kurir J&T/SPX
+SETELAH alur 1: lintas SKU, channel TikTok Shop ("Shop | Tokopedia" TT-... & "TOKOPEDIA" TP-...) & Shopee, kurir J&T/SPX
 (default, digabung) atau 1 kurir saja lewat parameter `kurir` (sama seperti alur 1), yang
 BUKAN bagian SKU spesial (dikecualikan lewat resi_spesial_semua) - dipecah 2 picklist: 1 SKU
 1 qty, dan kombinasi (qty > 1). Sama seperti alur 2: lintas SKU, maks MAKS_PESANAN_PICKLIST
@@ -141,7 +142,7 @@ TAG_SPESIAL = "SPESIAL"
 # lanjutkan_picklist(), beda dari `tag`). Tujuannya supaya tim gudang bisa menyortir fisik
 # print-out Lazada/GTL-SiCepat (urgent), 1 qty reguler (satuan), dan kombinasi/multi-qty
 # reguler (kombinasi) tanpa harus baca nama file satu-satu.
-SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada & GTL-SiCepat (kedua skenario)
+SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada, GTL-SiCepat & JNE-LEX (semua skenario)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
 SUBFOLDER_SPX_PAGI = "SPX_PAGI"        # Shopee Pagi (SPX <= 12.00), nama file tetap SHOPEE-PAGI-*
@@ -170,6 +171,7 @@ CHANNEL_ID_LAZADA = 4
 # channel itu sama-sama urgent kalau kurirnya GTL/SiCepat, jadi filter channel sengaja
 # DILEPAS di sini, cukup filter kurir.
 KURIR_FILTER_URGENT_GTL_SICEPAT = ["gtl", "sicepat"]
+KURIR_FILTER_URGENT_JNE_LEX = ["jne", "lex"]
 MAKS_PESANAN_PICKLIST = 200             # gabung sebanyak mungkin, pecah kalau lebih dari ini
 # Jam tunda per skenario urgent (WIB, HARI INI): pesanan yang jam pesannya di atas jam ini
 # belum "mendesak" - sengaja DITAHAN dulu (tidak masuk picklist) sampai JAM_LANJUT_URGENT,
@@ -191,15 +193,23 @@ JAM_LANJUT_URGENT = 16
 SKENARIO_URGENT = [
     ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA, False),
     ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT, True),
+    # Kurir di luar J&T/SPX/GTL/SiCepat (JNE-MP, LEX ID) tidak punya alur lain -> 1 picklist
+    # gabungan lintas channel, TANPA jam tunda (jam_cutoff None). Lazada jalan duluan, jadi LEX ID
+    # milik Lazada sudah diambil skenario Lazada; ini hanya sisanya.
+    ("JNE-LEX", None, KURIR_FILTER_URGENT_JNE_LEX, None, False),
 ]
 
 # Picklist "sisa reguler" (lintas SKU, dibuat SETELAH picklist SKU spesial selesai): pesanan
 # channel TikTok Shop & Shopee, kurir J&T/SPX, yang BUKAN bagian dari SKU spesial hari itu.
-# channel_id 131076 = "Shop | Tokopedia" di Jubelio, itu nama lain TikTok Shop (Tokopedia asli
-# = channel_id 128, TIDAK dipakai di sini) -> BUKAN Tokopedia asli.
+# channel_id 131076 = "Shop | Tokopedia" di Jubelio, itu nama lain TikTok Shop (nomor pesanan
+# TT-...). Channel_id 128 = "TOKOPEDIA" (nomor pesanan TP-..., toko "(TTS)") JUGA marketplace
+# TikTok-Tokopedia dengan label & aturan pengiriman yang sama, jadi ikut alur reguler/J&T Siang
+# (dulu terlewat: insiden 09/10/2026 - 2 resi wajib keluar TP-... tidak pernah masuk picklist).
 CHANNEL_ID_TIKTOK_SHOP = 131076
+CHANNEL_ID_TOKOPEDIA = 128
 CHANNEL_ID_SHOPEE = 64
-CHANNEL_IDS_REGULER = [CHANNEL_ID_TIKTOK_SHOP, CHANNEL_ID_SHOPEE]
+CHANNEL_IDS_TIKTOK_TOKOPEDIA = [CHANNEL_ID_TIKTOK_SHOP, CHANNEL_ID_TOKOPEDIA]
+CHANNEL_IDS_REGULER = CHANNEL_IDS_TIKTOK_TOKOPEDIA + [CHANNEL_ID_SHOPEE]
 KURIR_FILTER_REGULER = ["j&t", "spx"]
 LABEL_REGULER_1QTY = "1QTY-REGULER"     # 1 SKU, qty 1, tidak spesial
 LABEL_REGULER_KOMBINASI = "KOMBINASI-REGULER"   # sisanya (multi-baris/qty>1), tidak spesial
@@ -660,7 +670,7 @@ def buat_picklist_channel(k: Klien, ids: list[int]) -> tuple[int, str, list[int]
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
-def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int,
+def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int | None,
                        sekarang: datetime | None = None) -> tuple[list[dict], int]:
     """Terapkan jam tunda urgent (lihat JAM_CUTOFF_URGENT_LAZADA/JAM_CUTOFF_URGENT_GTL_SICEPAT
     & JAM_LANJUT_URGENT di atas): sebelum jam JAM_LANJUT_URGENT, pesanan yang jam pesannya
@@ -668,6 +678,8 @@ def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int,
     biasa. Setelah jam JAM_LANJUT_URGENT, semua pesanan diproses tanpa batas jam ini.
     `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat dipanggil. Return (pesanan
     yang boleh diproses sekarang, jumlah yang ditahan)."""
+    if jam_cutoff is None:      # skenario tanpa jam tunda (JNE-LEX)
+        return pesanan, 0
     now = sekarang or datetime.now(WIB)
     if now.hour >= JAM_LANJUT_URGENT:
         return pesanan, 0
@@ -1425,7 +1437,7 @@ def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
     jam 15:00 (resi TikTok Shop wajib keluar lewat J&T yang masuk sebelum jam 15:00 harus
     sudah masuk picklist ini). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil."""
-    pesanan = ambil_pesanan_channel(k, [CHANNEL_ID_TIKTOK_SHOP], couriers=["j&t"])
+    pesanan = ambil_pesanan_channel(k, CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"])
     batas = (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
     hasil = []
     for o in pesanan:
@@ -1446,7 +1458,7 @@ def rencana_jnt_siang(k: Klien) -> None:
     pesanan = ambil_pesanan_jnt_siang(k)
     log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
              "per lantai", JAM_CUTOFF_JNT_SIANG, len(pesanan))
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_TIKTOK_SHOP],
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA,
                                             couriers=["j&t"])
     for lt, sub in per_lt.items():
         batch = bagi_batch([o["salesorder_id"] for o in sub])
@@ -1462,7 +1474,7 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[d
     bukan "JNT-SIANG" polos. Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_TIKTOK_SHOP],
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA,
                                             couriers=["j&t"])
     subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
     return _proses_subkelompok(k, "J&T Resi Siang", LABEL_JNT_SIANG, subkelompok,

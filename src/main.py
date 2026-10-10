@@ -27,17 +27,19 @@ PERTAMA di tiap TIPE proses-harian.bat (sebelum urgent). Berdiri sendiri lewat -
     python src/main.py --sampel --jalankan
 
 Picklist urgent (proses_label.py): TIDAK bagian dari alur "--label --jalankan" (menu 3 di
-menu.bat cuma untuk kurir J&T/SPX). 2 skenario: channel Lazada (1 picklist gabungan), dan
+menu.bat cuma untuk kurir J&T/SPX). 3 skenario: channel Lazada (1 picklist gabungan), dan
 kurir GTL/SiCepat (lintas channel - baik dari Tokopedia asli maupun "Shop | Tokopedia"/TikTok,
 urgent-nya ditentukan kurir bukan channel), dipecah per LANTAI rak gudang (1/2/3/LAINNYA) sama
-pola dengan bagian kombinasi picklist sisa reguler. Berdiri sendiri lewat --urgent (sampai
+pola dengan bagian kombinasi picklist sisa reguler; terakhir kurir JNE/LEX (1 picklist gabungan
+lintas channel, tanpa jam tunda). Berdiri sendiri lewat --urgent (sampai
 label PDF juga), boleh dibatasi 1 skenario saja lewat --channel:
     python src/main.py --urgent                          # MODE UJI: hanya tampilkan rencana
     python src/main.py --urgent --channel lazada --jalankan
     python src/main.py --urgent --channel gtl-sicepat --jalankan
+    python src/main.py --urgent --channel jne-lex --jalankan
 
-Picklist sisa reguler (proses_label.py): pesanan channel TikTok Shop ("Shop | Tokopedia") &
-Shopee, kurir J&T/SPX, yang BUKAN bagian SKU spesial hari itu - dipecah 2: (1) 1 SKU 1 qty
+Picklist sisa reguler (proses_label.py): pesanan channel TikTok Shop ("Shop | Tokopedia" &
+"TOKOPEDIA" TP-...) & Shopee, kurir J&T/SPX, yang BUKAN bagian SKU spesial hari itu - dipecah 2: (1) 1 SKU 1 qty
 yang tidak spesial, (2) kombinasi/multi-baris. Lewat "--label --jalankan" dijalankan otomatis
 SETELAH proses SKU spesial (perlu tahu SKU mana yang sudah spesial) - DILEWATI kalau dipakai
 bersama --sku (proses cuma sebagian SKU, daftar SKU spesial belum lengkap utk pengecualian).
@@ -111,6 +113,7 @@ import pandas as pd
 import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
+import peringatan_sisa
 import rekap_master_excel
 import serah_terima
 from proses_label import durasi
@@ -300,6 +303,17 @@ def login(log: logging.Logger) -> str:
     return jubelio.login(email, password)
 
 
+def cek_pesanan_tak_tersentuh(log: logging.Logger) -> None:
+    """Peringatkan pesanan Siap Proses dari hari sebelumnya yang belum masuk picklist mana pun
+    (lihat peringatan_sisa.py). Read-only; kegagalan apa pun hanya dicatat sebagai warning."""
+    import proses_label
+
+    try:
+        peringatan_sisa.periksa(proses_label.Klien(login(log)))
+    except (Exception, SystemExit) as e:   # noqa: BLE001 - penjaga tidak boleh menggagalkan TIPE
+        log.warning("Cek pesanan tak tersentuh dilewati (gagal): %s", e)
+
+
 def download(log: logging.Logger, token: str) -> Path:
     import jubelio
 
@@ -358,6 +372,7 @@ def main() -> int:
     peringatan_picklist.atur_folder(FOLDER_LOG)
     peringatan_resi.atur_folder(FOLDER_LOG)
     peringatan_gagal.atur_folder(FOLDER_LOG)
+    peringatan_sisa.atur_folder(FOLDER_LOG)
     serah_terima.atur_folder(FOLDER_LOG)
     try:
         return _main()
@@ -369,6 +384,7 @@ def main() -> int:
         rekap_master_excel.selesai()
         peringatan_picklist.cetak_sesi()
         peringatan_resi.cetak_sesi()
+        peringatan_sisa.cetak(peringatan_sisa._sesi)
 
 
 def _main() -> int:
@@ -388,9 +404,10 @@ def _main() -> int:
                         "urgent; tanpa --jalankan = mode uji)")
     ap.add_argument("--urgent", action="store_true",
                     help="hanya buat picklist urgent (channel Lazada, kurir GTL/SiCepat lintas "
-                        "channel - GTL/SiCepat dipecah per lantai rak gudang) sampai label "
+                        "channel - GTL/SiCepat dipecah per lantai rak gudang; kurir JNE/LEX 1 "
+                        "picklist gabungan) sampai label "
                         "PDF, tanpa proses SKU spesial (tanpa --jalankan = mode uji)")
-    ap.add_argument("--channel", choices=["lazada", "gtl-sicepat"],
+    ap.add_argument("--channel", choices=["lazada", "gtl-sicepat", "jne-lex"],
                     help="dipakai bersama --urgent: batasi ke 1 skenario saja")
     ap.add_argument("--lewati-malam", action="store_true",
                     help="dipakai bersama --urgent: lewati (tidak memproses apa pun) kalau "
@@ -504,6 +521,10 @@ def _main() -> int:
     if (galat := ambil_kunci(log, args)):
         log.error(galat)
         return 1
+    if args.upload_iresis:
+        # penjaga pesanan tak tersentuh: langkah terakhir tiap TIPE, TETAP jalan walau upload
+        # IRESIS dilewati di jendela malam (jam_tanpa_iresis()) - tidak pernah menggagalkan TIPE
+        cek_pesanan_tak_tersentuh(log)
     if args.upload_iresis and not args.paksa and jam_tanpa_iresis():
         log.info("IRESIS DILEWATI: jam %s masuk jendela 20.00-05.00 (unduh & upload faktur/pesanan "
                  "tidak dijalankan). Paksa manual: --upload-iresis --jalankan --paksa.",
