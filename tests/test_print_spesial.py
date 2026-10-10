@@ -869,6 +869,41 @@ def uji_catat_sudah_dicetak_aman_dicetak_bersamaan():
     print("  catat_sudah_dicetak: 4 penulis bersamaan tidak kehilangan baris, kunci dilepas, kunci basi dibuang")
 
 
+def uji_cetak_terputus_dicatat_dan_dilanjutkan_dari_halaman_sisa():
+    from unittest import mock
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        pdf = folder / "a.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        catatan = folder / "sebagian.json"
+        urutan = iter([("Printing", 2, 10), ("PaperOut", 4, 10)])
+        with mock.patch.object(ps, "FILE_SEBAGIAN", catatan), \
+                mock.patch.object(ps, "_job_info", lambda p, j: next(urutan)), \
+                mock.patch.object(ps.time, "sleep", lambda s: None), \
+                mock.patch("builtins.input", lambda prompt="": "lewati"):
+            assert ps._tunggu_job_bersih("P", "7", "a.pdf", pdf) is False
+        d = ps.baca_sebagian(catatan)[str(pdf.resolve())]
+        assert (d["halaman_tercetak"], d["total"], d["job_id"]) == (4, 10, "7"), d
+
+        panggilan = []
+
+        def cetak_palsu(sumatra, printer, f, pantau, halaman=None):
+            panggilan.append(halaman)
+            return True
+
+        dicatat = []
+        with mock.patch.object(ps, "FILE_SEBAGIAN", catatan), \
+                mock.patch.object(ps, "cetak", cetak_palsu), \
+                mock.patch.object(ps, "_buang_job_sisa", lambda p, j: None), \
+                mock.patch.object(ps, "catat_sudah_dicetak", dicatat.append), \
+                mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0):
+            sisa = ps.lanjutkan_sebagian(Path("s.exe"), "P", True, interaktif=False)
+            assert sisa == 0 and panggilan == ["5-10"], (sisa, panggilan)
+            assert dicatat == [pdf] and ps.baca_sebagian(catatan) == {}
+        assert ps.rentang_lanjut(10, 10) == "10"
+        print("  cetak terputus: halaman tercetak dicatat, dilanjutkan dari halaman sisa (5-10), catatan dibersihkan")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

@@ -74,6 +74,13 @@ harian, masing-masing cuma memanggil ini dengan --jenis tetap):
         # dicetak). Yang sudah tercatat tercetak dilewati (--cetak-ulang-semua untuk memaksa).
         # Tidak bisa digabung --jenis/--paket/--folder/--semua-sesi/--ulang. Dipakai UI desktop.
 
+File yang TIDAK selesai di tengah jalan (printer bermasalah lalu "lewati", job hilang, atau
+batas tunggu tanpa konsol habis) dicatat beserta jumlah halaman yang sudah tercetak
+(PagesPrinted dari Get-PrintJob) di logs/cetak_sebagian.json. Lanjutkan lewat menu
+"LANJUTKAN cetak yang terputus" atau `--lanjut-sebagian`: hanya halaman sisa yang dicetak
+(SumatraPDF -print-settings "N-total"), halaman mulai bisa diganti user, sisa job lama di
+antrian dibuang dulu supaya tidak dobel. Butuh pemantauan job (Get-PrintJob) aktif.
+
 Perlu SumatraPDF terinstall (gratis, https://www.sumatrapdfreader.org/) - lokasi
 SumatraPDF.exe dicari otomatis di PATH & lokasi install umum (lihat cari_sumatra()),
 atau diset manual lewat environment variable SUMATRA_PDF_PATH.
@@ -257,6 +264,8 @@ TIMEOUT_POWERSHELL_S = 20
 TUNGGU_PRINTER_PULIH_S = 180   # tanpa konsol: tunggu printer pulih sebelum melewati 1 file
 PERCOBAAN_ULANG_CETAK = 2      # percobaan tambahan per file yang gagal (timeout/SumatraPDF error)
 JEDA_ULANG_CETAK_S = 5
+FILE_SEBAGIAN = FOLDER_LOG / "cetak_sebagian.json"   # file yang terputus di tengah jalan
+LANJUT_SEBAGIAN = ["lanjut-sebagian"]                # sentinel hasil menu_pilih_jenis()
 
 # Status job (Get-PrintJob -> JobStatus, dari PrintManagement module) yang dianggap
 # "printer butuh perhatian user" - job tidak akan maju sendiri sampai masalahnya
@@ -541,23 +550,44 @@ def _job_ids(printer: str) -> set[str]:
     return {baris.strip() for baris in out.splitlines() if baris.strip()}
 
 
-def _job_status(printer: str, job_id: str) -> str | None:
-    out = _ps(f"(Get-PrintJob -PrinterName '{_esc_ps(printer)}' -ID {job_id} "
-             "-ErrorAction SilentlyContinue).JobStatus")
-    out = out.strip()
-    return out or None
+def _job_info(printer: str, job_id: str) -> tuple[str, int, int] | None:
+    """(status, halaman_tercetak, total_halaman) satu print job; None = job sudah tidak ada."""
+    out = _ps(f"$j = Get-PrintJob -PrinterName '{_esc_ps(printer)}' -ID {job_id} "
+              "-ErrorAction SilentlyContinue; if ($j) { \"$($j.JobStatus)|$($j.PagesPrinted)|"
+              "$($j.TotalPages)\" }").strip()
+    if not out:
+        return None
+    status, _, sisa = out.partition("|")
+    dicetak, _, total = sisa.partition("|")
+    return (status.strip(), int(dicetak) if dicetak.isdigit() else 0,
+            int(total) if total.isdigit() else 0)
 
 
-def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
+def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str,
+                       file: Path | None = None) -> bool:
     """Pantau 1 print job sampai selesai/hilang dari antrian. True = lanjut normal
-    (selesai atau tidak ada masalah), False = user pilih "lewati" file ini karena
-    printer tetap bermasalah (dicatat sebagai gagal oleh pemanggil)."""
+    (selesai atau tidak ada masalah), False = file TIDAK selesai (user pilih "lewati" karena
+    printer tetap bermasalah, atau job hilang dari antrian di tengah jalan sesudah printer
+    bermasalah). Pada False, halaman yang sudah tercetak dicatat ke FILE_SEBAGIAN supaya
+    bisa dilanjutkan dari halaman sisanya (menu "Lanjutkan cetak yang terputus")."""
     pernah_bermasalah = False
     batas_tunggu = None   # hanya dipakai tanpa konsol interaktif (lihat EOFError di bawah)
+    dicetak = total = 0
+
+    def belum_selesai() -> bool:
+        if file is not None and total and dicetak < total:
+            catat_sebagian(file, printer, job_id, dicetak, total)
+        return False
+
     while True:
-        status = _job_status(printer, job_id)
-        if status is None:
+        info = _job_info(printer, job_id)
+        if info is None:
+            if pernah_bermasalah and total and dicetak < total:
+                log.warning("Job %s hilang dari antrian di tengah jalan (%d/%d halaman tercetak)",
+                            nama_file, dicetak, total)
+                return belum_selesai()
             return True   # job sudah tidak ada di antrian -> selesai dicetak
+        status, dicetak, total = info[0], max(dicetak, info[1]), info[2] or total
         if any(k in status for k in STATUS_JOB_SELESAI):
             return True
         if not any(k in status for k in STATUS_JOB_BERMASALAH):
@@ -573,7 +603,8 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             print()
             print(f'!!! PRINTER BERMASALAH ({status}) saat mencetak: {nama_file}')
             print("    Perbaiki printer (isi kertas / buka yang macet, dst), lalu tekan ENTER untuk melanjutkan")
-            print('    (ketik "lewati" lalu ENTER untuk melewati file ini saja dan lanjut ke berikutnya)')
+            print('    (ketik "lewati" lalu ENTER untuk melewati file ini saja dan lanjut ke berikutnya;')
+            print('     halaman yang sudah tercetak dicatat, sisanya bisa dilanjutkan dari menu)')
             try:
                 aksi = input("> ").strip().lower()
             except EOFError:
@@ -590,8 +621,9 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
                 continue
             aksi = "lewati"
         if aksi == "lewati":
-            log.warning('File %s DILEWATI manual oleh user (status job terakhir: %s)', nama_file, status)
-            return False
+            log.warning('File %s DILEWATI manual oleh user (status job terakhir: %s, %d/%d halaman)',
+                        nama_file, status, dicetak, total)
+            return belum_selesai()
 
 
 def _matikan_sumatra(sumatra: Path, file: Path) -> None:
@@ -608,7 +640,8 @@ def _matikan_sumatra(sumatra: Path, file: Path) -> None:
         log.warning("Gagal mematikan sisa proses %s untuk %s: %s", nama, Path(file).name, e)
 
 
-def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
+def cetak(sumatra: Path, printer: str, file: Path, pantau: bool,
+          halaman: str | None = None) -> bool:
     """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
     manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
     Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
@@ -616,14 +649,15 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
     sebelum = _job_ids(printer) if pantau else set()
     try:
         r = subprocess.run(
-            [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done", str(file)],
+            [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done",
+             *(["-print-settings", halaman] if halaman else []), str(file)],
             capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
     except subprocess.TimeoutExpired:
         _matikan_sumatra(sumatra, file)
         if pantau and (_job_ids(printer) - sebelum):
             # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
             # cukup pantau job-nya seperti biasa.
-            return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)), file.name)
+            return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)), file.name, file)
         raise CetakError(
             f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
             "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
@@ -636,7 +670,7 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
     baru = _job_ids(printer) - sebelum
     if not baru:
         return True   # keburu selesai sebelum sempat dicek -> anggap sukses
-    return _tunggu_job_bersih(printer, next(iter(baru)), file.name)
+    return _tunggu_job_bersih(printer, next(iter(baru)), file.name, file)
 
 
 def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
@@ -667,12 +701,122 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
         if ok:
             log.info("OK cetak %s (%.1f detik)", f.name, durasi)
             catat_sudah_dicetak(f)
+            hapus_sebagian(f)
             berhasil.append(f)
         else:
             log.warning("DILEWATI %s (printer bermasalah, dipilih lewati oleh user)", f.name)
             gagal.append(f)
         time.sleep(JEDA_ANTAR_CETAK_S)
     return berhasil, gagal
+
+
+# ============================================================== 4b. cetak terputus (sebagian)
+def baca_sebagian(file_catatan: Path | None = None) -> dict:
+    """{path_pdf: {halaman_tercetak, total, printer, job_id, waktu}} file yang terputus."""
+    import json
+    try:
+        return json.loads((file_catatan or FILE_SEBAGIAN).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _simpan_sebagian(data: dict, file_catatan: Path | None = None) -> None:
+    import json
+    tujuan = file_catatan or FILE_SEBAGIAN
+    tujuan.parent.mkdir(exist_ok=True)
+    sementara = tujuan.with_name(f"{tujuan.name}.{os.getpid()}.tmp")
+    sementara.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(sementara, tujuan)
+
+
+def catat_sebagian(file: Path, printer: str, job_id: str, dicetak: int, total: int,
+                   file_catatan: Path | None = None) -> None:
+    data = baca_sebagian(file_catatan)
+    data[str(file.resolve())] = {"halaman_tercetak": dicetak, "total": total, "printer": printer,
+                                 "job_id": str(job_id), "waktu": f"{datetime.now():%Y-%m-%d %H:%M:%S}"}
+    _simpan_sebagian(data, file_catatan)
+    log.warning("TERPUTUS %s: %d dari %d halaman tercetak - bisa dilanjutkan dari menu "
+                '"Lanjutkan cetak yang terputus"', file.name, dicetak, total)
+
+
+def hapus_sebagian(file: Path, file_catatan: Path | None = None) -> None:
+    data = baca_sebagian(file_catatan)
+    if data.pop(str(file.resolve()), None) is not None:
+        _simpan_sebagian(data, file_catatan)
+
+
+def _buang_job_sisa(printer: str, job_id: str) -> None:
+    """Hapus sisa job terputus dari antrian supaya tidak mencetak dobel saat dilanjutkan."""
+    if not str(job_id).isdigit():
+        return
+    try:
+        _ps(f"Remove-PrintJob -PrinterName '{_esc_ps(printer)}' -ID {job_id} -ErrorAction SilentlyContinue")
+    except (OSError, subprocess.SubprocessError) as e:
+        log.warning("Gagal membuang sisa job %s di antrian: %s", job_id, e)
+
+
+def rentang_lanjut(mulai: int, total: int) -> str:
+    return f"{mulai}-{total}" if mulai < total else str(total)
+
+
+def lanjutkan_sebagian(sumatra: Path, printer: str, pantau: bool, interaktif: bool = True,
+                       baca=input, tulis=print) -> int:
+    """Lanjutkan file yang terputus, hanya halaman yang belum tercetak (print-settings
+    "N-total" di SumatraPDF). Default mulai = halaman tercetak + 1; user boleh menggantinya
+    (mis. kalau halaman terakhir macet di printer). Return jumlah file yang masih belum selesai."""
+    data = baca_sebagian()
+    antrean = []
+    for p, d in data.items():
+        if Path(p).exists():
+            antrean.append((Path(p), d))
+        else:
+            hapus_sebagian(Path(p))
+    if not antrean:
+        tulis("Tidak ada file terputus yang perlu dilanjutkan.")
+        return 0
+    tulis(f"\n{len(antrean)} file terputus:")
+    for i, (f, d) in enumerate(antrean, 1):
+        tulis(f"  {i}. {f.name} - {d['halaman_tercetak']} dari {d['total']} halaman tercetak "
+              f"({d['waktu']}, printer {d['printer']})")
+    if interaktif and baca("Lanjutkan semua dari halaman yang belum tercetak? (Y/N): ").strip().lower() != "y":
+        return len(antrean)
+    sisa = 0
+    for f, d in antrean:
+        total = int(d["total"])
+        mulai = int(d["halaman_tercetak"]) + 1
+        if interaktif:
+            teks = baca(f"{f.name}: mulai dari halaman [{mulai}] (Enter = {mulai}): ").strip()
+            if teks.isdigit() and 1 <= int(teks) <= total:
+                mulai = int(teks)
+        if mulai > total:
+            hapus_sebagian(f)
+            catat_sudah_dicetak(f)
+            continue
+        _buang_job_sisa(d["printer"], d["job_id"])
+        halaman = rentang_lanjut(mulai, total)
+        tulis(f"Melanjutkan {f.name} halaman {halaman} ...")
+        try:
+            ok = cetak(sumatra, printer, f, pantau, halaman)
+        except CetakError as e:
+            log.error("GAGAL melanjutkan %s: %s", f.name, e)
+            sisa += 1
+            continue
+        if ok:
+            log.info("OK lanjut cetak %s (halaman %s)", f.name, halaman)
+            hapus_sebagian(f)
+            catat_sudah_dicetak(f)
+        else:
+            sisa += 1
+            # catat_sebagian() menyimpan jumlah halaman relatif terhadap rentang job lanjutan
+            # (job hanya berisi halaman mulai..total) -> geser ke nomor halaman asli dokumen.
+            data2 = baca_sebagian()
+            baru = data2.get(str(f.resolve()))
+            if baru:
+                baru["halaman_tercetak"] = min(total, mulai - 1 + int(baru["halaman_tercetak"]))
+                baru["total"] = total
+                _simpan_sebagian(data2)
+        time.sleep(JEDA_ANTAR_CETAK_S)
+    return sisa
 
 
 # ============================================================== 4. daftar gagal (resume)
@@ -725,11 +869,14 @@ def menu_pilih_jenis(baca=input, tulis=print) -> list[str] | None:
         tulis(garis)
         for i, (judul, _) in enumerate(MENU, 1):
             tulis(f"  {i}. {judul}")
+        tulis(f"  {len(MENU) + 1}. LANJUTKAN cetak yang terputus (dari halaman yang belum tercetak)")
         tulis("  0. Keluar")
         tulis(garis)
-        pilih = _pilih_angka(baca, tulis, len(MENU))
+        pilih = _pilih_angka(baca, tulis, len(MENU) + 1)
         if pilih == 0:
             return None
+        if pilih == len(MENU) + 1:
+            return list(LANJUT_SEBAGIAN)
         judul, pilihan = MENU[pilih - 1]
         tulis("")
         tulis(f"--- {judul} ---")
@@ -854,6 +1001,9 @@ def main() -> int:
     ap.add_argument("--printer", metavar="NAMA",
                     help="Nama printer persis seperti di Windows (lihat daftar saat pilih printer); "
                          "melewati tanya pilih printer. Dipakai UI desktop (server_ui.py)")
+    ap.add_argument("--lanjut-sebagian", action="store_true",
+                    help="Lanjutkan file yang terputus di tengah cetak, hanya dari halaman yang "
+                         "belum tercetak (logs/cetak_sebagian.json). Tidak bisa digabung opsi pilih file")
     ap.add_argument("--abaikan-kunci", action="store_true",
                     help="ambil alih kunci serah-terima yang dipegang perangkat lain (hanya kalau "
                          "yakin perangkat itu sudah berhenti; lihat serah_terima.py)")
@@ -862,6 +1012,9 @@ def main() -> int:
     if per_file and (args.jenis or args.paket or args.folder or args.semua_sesi or args.ulang):
         ap.error("--file/--file-dari tidak bisa digabung dengan --jenis, --paket, --folder, "
                  "--semua-sesi, atau --ulang")
+    if args.lanjut_sebagian and (per_file or args.jenis or args.paket or args.folder
+                                 or args.semua_sesi or args.ulang):
+        ap.error("--lanjut-sebagian tidak bisa digabung dengan opsi pemilih file/jenis lain")
     if args.semua_sesi and (args.folder or args.ulang):
         ap.error("--semua-sesi tidak bisa digabung dengan --folder atau --ulang")
     if args.hari < 1:
@@ -882,8 +1035,24 @@ def main() -> int:
         serah_terima.lepas()
 
 
+def _lanjut_sebagian(args) -> int:
+    if not baca_sebagian():
+        print("Tidak ada file terputus yang perlu dilanjutkan.")
+        return 0
+    sumatra = cari_sumatra()
+    if args.printer:
+        printer = args.printer
+    else:
+        printer = pilih_printer(daftar_printer())
+    sisa = lanjutkan_sebagian(sumatra, printer, dukungan_pemantauan_job(),
+                              interaktif=not args.tanpa_konfirmasi)
+    return 1 if sisa else 0
+
+
 def _cetak(args, per_file: bool) -> int:
     try:
+        if args.lanjut_sebagian:
+            return _lanjut_sebagian(args)
         if args.ulang:
             file_pdf = baca_daftar_ulang(args.ulang)
             log.info("Cetak ULANG %d file dari daftar %s", len(file_pdf), args.ulang)
@@ -908,6 +1077,8 @@ def _cetak(args, per_file: bool) -> int:
             if jenis_list is None:
                 log.info("Keluar dari menu, tidak ada yang dicetak.")
                 return 0
+            if jenis_list == LANJUT_SEBAGIAN:
+                return _lanjut_sebagian(args)
             nama_jenis = ", ".join(j.upper() for j in jenis_list)
             semua_sesi = args.semua_sesi
             if not semua_sesi and not args.folder and not (args.jenis or args.paket):
@@ -1000,8 +1171,11 @@ def _cetak(args, per_file: bool) -> int:
 
         file_daftar_gagal = simpan_daftar_gagal(gagal)
         print(f"\n=== {len(gagal)} FILE GAGAL/DILEWATI SAAT CETAK ===")
+        terputus = baca_sebagian()
         for f in gagal:
-            print(f"  {f.name}")
+            d = terputus.get(str(f.resolve()))
+            print(f"  {f.name}" + (f"  [TERPUTUS: {d['halaman_tercetak']}/{d['total']} halaman "
+                                   "tercetak - lanjutkan lewat menu LANJUTKAN]" if d else ""))
         print(f"Daftar disimpan di: {file_daftar_gagal}")
         print("Rekomendasi: cetak ULANG hanya file yang gagal ini lewat:")
         print(f'  bat\\cetak-label.bat --ulang "{file_daftar_gagal}"')
