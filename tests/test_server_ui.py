@@ -58,7 +58,7 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
         _buat(label / hari_ini.isoformat() / "1" / "JNT_SPESIAL", j)   # harus tampil "Spesial J&T", BUKAN "Spesial"
         _buat(label / kemarin / "3" / "KOMBINASI", "PICK-000000003_KOMBINASI-REGULER-LANTAI1_x.pdf")
         _buat(label / lama / "1" / "SPESIAL", "PICK-000000009_SPESIAL_Z_x.pdf")     # di luar 3 hari
-        _buat(label / hari_ini.isoformat() / "2" / "SPX_PAGI", "PICK-000000010_SHOPEE-PAGI-LANTAI1_x.pdf")  # bukan jenis utama: tetap tampil per nama subfolder
+        _buat(label / hari_ini.isoformat() / "2" / "SPX_PAGI", "PICK-000000010_SHOPEE-PAGI-LANTAI1_x.pdf")  # tampil sebagai "Shopee Pagi"
         log_dir.mkdir()
         rel_a = f"{hari_ini.isoformat()}/1/SPESIAL/{a}"
         (log_dir / "sudah_dicetak.txt").write_text(str((label / rel_a).resolve()) + "\n", encoding="utf-8")
@@ -86,7 +86,7 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
                 assert tanggal == [kemarin, hari_ini.isoformat()], tanggal
                 sesi_hari_ini = d["hari"][1]["sesi"]
                 assert [s["no"] for s in sesi_hari_ini] == [1, 2], "sesi 2 (SPX_PAGI) ikut tampil"
-                assert [(j["nama"], len(j["files"])) for j in sesi_hari_ini[1]["jenis"]] == [("SPX_PAGI", 1)]
+                assert [(j["nama"], len(j["files"])) for j in sesi_hari_ini[1]["jenis"]] == [("Shopee Pagi", 1)]
                 jenis = {j["nama"]: j["files"] for j in sesi_hari_ini[0]["jenis"]}
                 assert set(jenis) == {"Spesial", "Satuan", "Spesial J&T"}, jenis
                 assert [x["f"] for x in jenis["Spesial J&T"]] == [j] and [x["f"] for x in jenis["Spesial"]] == [a], jenis

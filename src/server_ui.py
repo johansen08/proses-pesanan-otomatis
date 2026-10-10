@@ -32,7 +32,7 @@ API (JSON):
   POST /api/operator             {"aksi": "tambah"|"aktif", "nama": "..."} (ganti operator aktif -> 409
                                  kalau proses harian/download ulang berjalan; lihat operator_aktif.py)
 Jenis yang ditampilkan (JENIS_UI): spesial/satuan/kombinasi per kurir (J&T, SPX, SPX Hemat, SPX Hemat Pagi)
-+ sisanya tanpa kurir, gtl-sicepat. PDF lain (spx-pagi, jnt-siang, dst) tampil per nama subfolder.
++ sisanya tanpa kurir, gtl-sicepat. PDF lain (event, dst) tampil per nama subfolder.
 """
 from __future__ import annotations
 
@@ -65,7 +65,8 @@ JENIS_UI = [(f"{dasar} {kurir}", f"{kode}-{kk}")
             for kurir, kk in (("J&T", "jnt"), ("SPX", "spx"),
                               ("SPX Hemat", "spx-hemat"), ("SPX Hemat Pagi", "spx-hemat-pagi"))]
 JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
-             ("GTL-SiCepat", "gtl-sicepat")]
+             ("GTL-SiCepat", "gtl-sicepat"),
+             ("Shopee Pagi", "spx-pagi"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
 BARIS_LOG_MAKS = 400
 
 _jobs: dict[str, dict] = {}      # kunci = nama printer: printer BERBEDA boleh mencetak bersamaan
