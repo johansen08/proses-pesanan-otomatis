@@ -685,7 +685,7 @@ $('#sbgBtn').onclick=()=>{
   modal(`<h2>Cetak terputus</h2>
    <div>${SBG.map((d,i)=>`<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis" title="${esc(d.f)}"><b>${esc(d.f)}</b><br><small>${d.tercetak} dari ${d.total} halaman tercetak</small></span>
      <input type="number" class="sbgN" data-i="${i}" min="1" max="${d.total}" value="${Math.min(d.total,d.tercetak+1)}" style="width:70px" title="Mulai dari halaman">
-     <button class="btn sm sbgGo" data-i="${i}">Lanjutkan</button></div>`).join('')}</div>
+     <button class="btn auto sm sbgGo" data-i="${i}">Lanjutkan</button></div>`).join('')}</div>
    <div class="acts"><button class="btn line" onclick="tutup()">Tutup</button></div>`);
   $$('.sbgGo').forEach(b=>b.onclick=async()=>{
     const d=SBG[+b.dataset.i],mulai=+document.querySelector('.sbgN[data-i="'+b.dataset.i+'"]').value,printer=$('#printer').value;
