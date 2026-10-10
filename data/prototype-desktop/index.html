@@ -248,7 +248,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
     <div class="bar"><label class="allrow" id="allRow" title="Pilih semua" aria-label="Pilih semua"><span class="cb" id="allCb"><svg><use href="#check"/></svg></span></label></div>
     <div class="slist" id="slist"></div>
     <div class="dock">
-      <b id="cInfo">Belum ada yang dipilih</b><div class="jobs" id="jobs"></div><div class="sp"></div>
+      <b id="cInfo">Belum ada yang dipilih</b><button class="pill" id="sbgBtn" hidden style="cursor:pointer;background:var(--badbg);color:var(--bad)"></button><div class="jobs" id="jobs"></div><div class="sp"></div>
       <select id="printer"><option>Printer Thermal 100×150 — Ruang Resi</option><option>Printer Thermal 2 — Lantai 2</option><option>Simpan sebagai PDF</option></select>
       <button class="btn auto" id="cetakBtn" disabled><svg><use href="#print"/></svg>Cetak</button>
     </div>
@@ -623,7 +623,7 @@ $('#swBelum').onclick=()=>{sembunyi=!sembunyi;$('#swBelum').classList.toggle('on
 
 /* ---------- job cetak per printer ---------- */
 const cjobs={};let modalPrinter=null;
-function updBtn(){const p=$('#printer').value,j=cjobs[p],sibuk=!!(j&&j.status==='jalan');$('#cetakBtn').disabled=!pil.size||sibuk;$('#cetakBtn').title=sibuk?'Printer ini sedang mencetak — pilih printer lain':''}
+function updBtn(){const p=$('#printer').value,j=cjobs[p],sibuk=!!(j&&j.status==='jalan');$('#cetakBtn').disabled=!pil.size||sibuk||(API&&!p);$('#cetakBtn').title=sibuk?'Printer ini sedang mencetak — pilih printer lain':''}
 $('#printer').onchange=updBtn;
 function gambarJobs(){
   $('#jobs').innerHTML=Object.keys(cjobs).map(p=>{const j=cjobs[p],run=j.status==='jalan';
@@ -656,7 +656,7 @@ async function tickCetak(p){
     c.lines=j.lines||[];c.total=j.total||c.total;
     const m=[...c.lines].reverse().map(x=>x.match(/\[(\d+)\/(\d+)\] Mencetak/)).find(Boolean);if(m)c.maju=+m[1]-1;
     if(j.status!=='jalan'){clearInterval(c.iv);c.status=j.status;c.maju=c.total;
-      await muatData();pangkasPilihan();gambarCetak();toast(j.status==='selesai'?`${p}: selesai dicetak ✓`:`${p}: selesai dengan masalah`)}
+      await muatData();await muatSebagian();pangkasPilihan();gambarCetak();toast(j.status==='selesai'?`${p}: selesai dicetak ✓`:`${p}: selesai dengan masalah`)}
   }catch(e){clearInterval(c.iv);c.status='gagal';c.lines.push('Koneksi ke server terputus: '+e.message)}
   gambarJobs();renderJob();
 }
@@ -675,6 +675,23 @@ $('#cetakBtn').onclick=()=>{
     c.iv=setInterval(()=>{if(c.maju<c.total)c.lines.push(`[${c.maju+1}/${c.total}] Mencetak ${mark[c.maju].f}`);c.maju++;
       if(c.maju>=c.total){clearInterval(c.iv);c.status='selesai';mark.forEach(f=>f.done=true);toast('Selesai dicetak ✓');gambarCetak()}gambarJobs();renderJob()},500)};
 };
+let SBG=[];
+async function muatSebagian(){
+  try{SBG=(await api('/api/sebagian')).daftar}catch(e){SBG=[]}
+  const b=$('#sbgBtn');b.hidden=!SBG.length;b.textContent='Terputus · '+SBG.length;
+}
+$('#sbgBtn').onclick=()=>{
+  if(!SBG.length)return;
+  modal(`<h2>Cetak terputus</h2>
+   <div>${SBG.map((d,i)=>`<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis" title="${esc(d.f)}"><b>${esc(d.f)}</b><br><small>${d.tercetak} dari ${d.total} halaman tercetak</small></span>
+     <input type="number" class="sbgN" data-i="${i}" min="1" max="${d.total}" value="${Math.min(d.total,d.tercetak+1)}" style="width:70px" title="Mulai dari halaman">
+     <button class="btn sm sbgGo" data-i="${i}">Lanjutkan</button></div>`).join('')}</div>
+   <div class="acts"><button class="btn line" onclick="tutup()">Tutup</button></div>`);
+  $$('.sbgGo').forEach(b=>b.onclick=async()=>{
+    const d=SBG[+b.dataset.i],mulai=+document.querySelector('.sbgN[data-i="'+b.dataset.i+'"]').value,printer=$('#printer').value;
+    try{await postJ('/api/sebagian/lanjut',{item:[{rel:d.rel,mulai}],printer})}catch(e){return toast('Gagal mulai: '+e.message)}
+    tutup();lacak(printer,1);tampilJob(printer)});
+};
 async function muatData(){
   const d=await api('/api/sesi');Object.keys(CACHE).forEach(k=>delete CACHE[k]);
   HARI0=new Date(d.hari_ini+'T00:00:00');
@@ -683,11 +700,16 @@ async function muatData(){
 }
 async function initCetak(){
   if(TERSAMBUNG){
-    try{const dd=await muatData();tgl=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0);
-      const p=await api('/api/printer');$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');
+    // Daftar sesi/file digambar segera; printer (Get-Printer bisa lambat) diisi menyusul di latar.
+    try{const dd=await muatData();tgl=dd.hari.length?dd.hari[dd.hari.length-1].tanggal:iso(HARI0)}
+    catch(e){toast('Server UI error: '+e.message)}
+    gambarCetak();
+    try{
+      const p=await api('/api/printer');$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');updBtn();
+      await muatSebagian();
       try{const jj=(await api('/api/jobs')).jobs;Object.keys(jj).forEach(n=>{if(jj[n].status==='jalan')lacak(n,jj[n].total)})}catch(e){}
-      
-    }catch(e){toast('Server UI error: '+e.message)}
+    }catch(e){toast('Printer: '+e.message)}
+    return;
   }
   gambarCetak();
 }

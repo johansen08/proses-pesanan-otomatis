@@ -91,6 +91,7 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
                 assert jenis["Satuan"][0]["done"] is False
 
                 # --- /api/printer
+                su._cache_printer = None
                 assert _panggil(port, "/api/printer") == (200, {"printer": ["PRINTER-X"]})
 
                 # --- penjagaan: host asing, bukan JSON, path di luar folder, printer kosong
@@ -298,6 +299,109 @@ def uji_server_ui_download_ulang_picklist_terhenti():
                 su._lanjut = None
                 pg._file_peringatan = None
     print("  server_ui: picklist terhenti dikumpulkan, validasi pilihan, download ulang berurutan dengan argumen asal")
+
+
+def uji_server_ui_daftar_printer_di_cache():
+    """Get-Printer lambat (proses PowerShell): dipanggil sekali per TTL, bukan tiap tab/permintaan;
+    kegagalan tidak di-cache; setelah TTL dibaca ulang."""
+    su._cache_printer = None
+    try:
+        with mock.patch.object(ps, "daftar_printer", return_value=["P1", "P2"]) as m:
+            server = ThreadingHTTPServer(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                for _ in range(3):
+                    assert _panggil(port, "/api/printer") == (200, {"printer": ["P1", "P2"]})
+                assert m.call_count == 1, m.call_count
+
+                # hasil cache yang dikembalikan salinan: perubahan pemanggil tidak merusak cache
+                su.daftar_printer_cache().append("X")
+                assert su.daftar_printer_cache() == ["P1", "P2"]
+
+                # setelah TTL lewat -> dibaca ulang
+                waktu, daftar = su._cache_printer
+                su._cache_printer = (waktu - su.TTL_PRINTER_S - 1, daftar)
+                m.return_value = ["P3"]
+                assert _panggil(port, "/api/printer") == (200, {"printer": ["P3"]})
+                assert m.call_count == 2
+
+                # kegagalan tidak di-cache: panggilan berikutnya mencoba lagi
+                su._cache_printer = None
+                m.side_effect = ps.CetakError("Tidak ada printer")
+                assert _panggil(port, "/api/printer")[0] == 500
+                m.side_effect = None
+                m.return_value = ["P4"]
+                assert _panggil(port, "/api/printer") == (200, {"printer": ["P4"]})
+
+                # panggilan bersamaan (tab dibuka serentak) hanya memicu satu Get-Printer
+                su._cache_printer = None
+                m.reset_mock()
+
+                def lambat():
+                    time.sleep(0.3)
+                    return ["P5"]
+                m.side_effect = lambat
+                hasil = []
+                ts = [threading.Thread(target=lambda: hasil.append(su.daftar_printer_cache())) for _ in range(4)]
+                [t.start() for t in ts]
+                [t.join() for t in ts]
+                assert m.call_count == 1 and hasil == [["P5"]] * 4, (m.call_count, hasil)
+            finally:
+                server.shutdown()
+    finally:
+        su._cache_printer = None
+    print("  server_ui: daftar printer di-cache (TTL), salinan aman, gagal tidak di-cache, serentak = 1 panggilan")
+
+
+def uji_server_ui_halaman_cetak_digambar_sebelum_printer():
+    """Regresi freeze: gambarCetak() harus dipanggil SEBELUM menunggu /api/printer di initCetak."""
+    html = (ROOT / "data" / "prototype-desktop" / "index.html").read_text(encoding="utf-8")
+    badan = html[html.index("async function initCetak()"):html.index("/* ---------- init")]
+    assert badan.index("gambarCetak()") < badan.index("/api/printer"), "daftar sesi harus digambar dulu"
+    print("  index.html: initCetak menggambar sesi sebelum menunggu printer")
+
+
+def uji_server_ui_lanjut_cetak_terputus():
+    """/api/sebagian mendaftar file terputus; /api/sebagian/lanjut menjalankan print_spesial.py
+    --lanjut-sebagian --mulai-dari <path>=<halaman>; file tak tercatat / halaman di luar rentang ditolak."""
+    hari_ini = date.today().isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        log_dir = Path(tmp) / "logs"
+        log_dir.mkdir()
+        nama = ["PICK-000000001_SPESIAL_A_x.pdf", "PICK-000000002_SPESIAL_B_x.pdf"]
+        _buat(label / hari_ini / "1" / "SPESIAL", *nama)
+        rel = [f"{hari_ini}/1/SPESIAL/{n}" for n in nama]
+        catatan = log_dir / "cetak_sebagian.json"
+        diluncurkan = []
+        popen_asli = subprocess.Popen
+
+        def popen_palsu(perintah, **kw):
+            diluncurkan.append(perintah)
+            return popen_asli([sys.executable, "-c", "print('lanjut palsu')"], stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+        su._jobs.clear()
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir), \
+                mock.patch.object(ps, "FILE_SEBAGIAN", catatan), mock.patch.object(su.subprocess, "Popen", popen_palsu):
+            ps.catat_sebagian(label / rel[0], "PRINTER-A", "5", 4, 10)
+            server = su.Server(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                kode, isi = _panggil(port, "/api/sebagian")
+                assert kode == 200 and [(d["rel"], d["tercetak"], d["total"]) for d in isi["daftar"]] == [(rel[0], 4, 10)], isi
+                assert _panggil(port, "/api/sebagian/lanjut", {"item": [{"rel": rel[1], "mulai": 1}], "printer": "P"})[0] == 400
+                assert _panggil(port, "/api/sebagian/lanjut", {"item": [{"rel": rel[0], "mulai": 11}], "printer": "P"})[0] == 400
+                assert _panggil(port, "/api/sebagian/lanjut", {"item": [{"rel": rel[0], "mulai": 5}], "printer": "PRINTER-A"})[0] == 200
+                perintah = diluncurkan[0]
+                assert "--lanjut-sebagian" in perintah and "--tanpa-konfirmasi" in perintah, perintah
+                assert perintah[perintah.index("--mulai-dari") + 1].endswith("SPESIAL_A_x.pdf=5"), perintah
+            finally:
+                server.shutdown()
+                server.server_close()
+        print("  server_ui: /api/sebagian daftar file terputus, lanjut dari halaman pilihan, validasi ditolak")
 
 
 if __name__ == "__main__":

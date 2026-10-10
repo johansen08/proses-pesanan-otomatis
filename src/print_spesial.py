@@ -760,17 +760,20 @@ def rentang_lanjut(mulai: int, total: int) -> str:
 
 
 def lanjutkan_sebagian(sumatra: Path, printer: str, pantau: bool, interaktif: bool = True,
-                       baca=input, tulis=print) -> int:
+                       baca=input, tulis=print, mulai_dari: dict[str, int] | None = None) -> int:
     """Lanjutkan file yang terputus, hanya halaman yang belum tercetak (print-settings
     "N-total" di SumatraPDF). Default mulai = halaman tercetak + 1; user boleh menggantinya
-    (mis. kalau halaman terakhir macet di printer). Return jumlah file yang masih belum selesai."""
+    (mis. kalau halaman terakhir macet di printer). `mulai_dari` {path_pdf: halaman} (dari UI):
+    HANYA file itu yang dilanjutkan, dari halaman yang ditentukan, tanpa tanya. Return jumlah
+    file yang masih belum selesai."""
     data = baca_sebagian()
     antrean = []
+    pilihan = {str(Path(k).resolve()): v for k, v in (mulai_dari or {}).items()}
     for p, d in data.items():
-        if Path(p).exists():
-            antrean.append((Path(p), d))
-        else:
+        if not Path(p).exists():
             hapus_sebagian(Path(p))
+        elif mulai_dari is None or p in pilihan:
+            antrean.append((Path(p), d))
     if not antrean:
         tulis("Tidak ada file terputus yang perlu dilanjutkan.")
         return 0
@@ -784,7 +787,9 @@ def lanjutkan_sebagian(sumatra: Path, printer: str, pantau: bool, interaktif: bo
     for f, d in antrean:
         total = int(d["total"])
         mulai = int(d["halaman_tercetak"]) + 1
-        if interaktif:
+        if pilihan:
+            mulai = min(max(1, int(pilihan[str(f.resolve())])), total + 1)
+        elif interaktif:
             teks = baca(f"{f.name}: mulai dari halaman [{mulai}] (Enter = {mulai}): ").strip()
             if teks.isdigit() and 1 <= int(teks) <= total:
                 mulai = int(teks)
@@ -1004,6 +1009,9 @@ def main() -> int:
     ap.add_argument("--lanjut-sebagian", action="store_true",
                     help="Lanjutkan file yang terputus di tengah cetak, hanya dari halaman yang "
                          "belum tercetak (logs/cetak_sebagian.json). Tidak bisa digabung opsi pilih file")
+    ap.add_argument("--mulai-dari", action="append", metavar="PDF=HALAMAN",
+                    help="Dengan --lanjut-sebagian: lanjutkan HANYA file ini mulai dari HALAMAN "
+                         "itu (boleh diulang). Dipakai UI desktop")
     ap.add_argument("--abaikan-kunci", action="store_true",
                     help="ambil alih kunci serah-terima yang dipegang perangkat lain (hanya kalau "
                          "yakin perangkat itu sudah berhenti; lihat serah_terima.py)")
@@ -1012,6 +1020,8 @@ def main() -> int:
     if per_file and (args.jenis or args.paket or args.folder or args.semua_sesi or args.ulang):
         ap.error("--file/--file-dari tidak bisa digabung dengan --jenis, --paket, --folder, "
                  "--semua-sesi, atau --ulang")
+    if args.mulai_dari and not args.lanjut_sebagian:
+        ap.error("--mulai-dari hanya untuk --lanjut-sebagian")
     if args.lanjut_sebagian and (per_file or args.jenis or args.paket or args.folder
                                  or args.semua_sesi or args.ulang):
         ap.error("--lanjut-sebagian tidak bisa digabung dengan opsi pemilih file/jenis lain")
@@ -1044,8 +1054,17 @@ def _lanjut_sebagian(args) -> int:
         printer = args.printer
     else:
         printer = pilih_printer(daftar_printer())
+    mulai_dari = None
+    if args.mulai_dari:
+        mulai_dari = {}
+        for item in args.mulai_dari:
+            path, _, hal = item.rpartition("=")
+            if not path or not hal.isdigit():
+                raise CetakError(f"--mulai-dari harus berbentuk PDF=HALAMAN, bukan {item!r}")
+            mulai_dari[path] = int(hal)
     sisa = lanjutkan_sebagian(sumatra, printer, dukungan_pemantauan_job(),
-                              interaktif=not args.tanpa_konfirmasi)
+                              interaktif=not args.tanpa_konfirmasi and mulai_dari is None,
+                              mulai_dari=mulai_dari)
     return 1 if sisa else 0
 
 

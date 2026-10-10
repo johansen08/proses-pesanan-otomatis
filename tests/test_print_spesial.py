@@ -900,6 +900,17 @@ def uji_cetak_terputus_dicatat_dan_dilanjutkan_dari_halaman_sisa():
             sisa = ps.lanjutkan_sebagian(Path("s.exe"), "P", True, interaktif=False)
             assert sisa == 0 and panggilan == ["5-10"], (sisa, panggilan)
             assert dicatat == [pdf] and ps.baca_sebagian(catatan) == {}
+        # dari UI: hanya file terpilih, halaman mulai ditentukan, tanpa tanya
+        pdf2 = folder / "b.pdf"
+        pdf2.write_bytes(b"%PDF-1.4")
+        with mock.patch.object(ps, "FILE_SEBAGIAN", catatan):
+            ps.catat_sebagian(pdf, "P", "7", 4, 10)
+            ps.catat_sebagian(pdf2, "P", "8", 1, 3)
+        panggilan.clear()
+        with mock.patch.object(ps, "FILE_SEBAGIAN", catatan),                 mock.patch.object(ps, "cetak", lambda s, p, f, pt, halaman=None: panggilan.append((f.name, halaman)) or True),                 mock.patch.object(ps, "_buang_job_sisa", lambda p, j: None),                 mock.patch.object(ps, "catat_sudah_dicetak", lambda f: None),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0):
+            ps.lanjutkan_sebagian(Path("s.exe"), "P", True, interaktif=False, mulai_dari={str(pdf2): 2})
+            assert panggilan == [("b.pdf", "2-3")], panggilan
+            assert list(ps.baca_sebagian(catatan)) == [str(pdf.resolve())]
         assert ps.rentang_lanjut(10, 10) == "10"
         print("  cetak terputus: halaman tercetak dicatat, dilanjutkan dari halaman sisa (5-10), catatan dibersihkan")
 

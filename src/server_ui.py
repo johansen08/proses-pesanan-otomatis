@@ -10,6 +10,9 @@ Jalankan:  .venv\\Scripts\\python src\\server_ui.py [--port 8765] [--buka]
 
 API (JSON):
   GET  /api/sesi     sesi label 3 hari terakhir -> jenis -> file PDF (+ status sudah dicetak)
+  GET  /api/sebagian file terputus di tengah cetak (halaman tercetak/total)
+  POST /api/sebagian/lanjut {"item": [{"rel": "...pdf", "mulai": N}], "printer": "..."} -> lanjut cetak
+                     dari halaman N saja (`print_spesial.py --lanjut-sebagian --mulai-dari`)
   GET  /api/printer  nama printer yang terhubung
   POST /api/cetak    {"files": ["2026-10-07/1/SPESIAL/PICK-....pdf", ...], "printer": "...",
                       "ulang": false} -> {"job": id}; satu job sekaligus (409 kalau masih jalan)
@@ -39,6 +42,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from datetime import date, datetime
@@ -112,7 +116,66 @@ def data_sesi(hari_ini: date | None = None) -> dict:
             "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
 
 
-def mulai_cetak(files: list[str], printer: str, ulang: bool = False) -> str:
+TTL_PRINTER_S = 60
+_cache_printer: tuple[float, list[str]] | None = None   # (waktu monotonic, daftar nama)
+_kunci_printer = threading.Lock()
+
+
+def daftar_printer_cache() -> list[str]:
+    """Daftar printer dengan cache TTL_PRINTER_S detik. Get-Printer memulai proses PowerShell
+    (~3 detik, jauh lebih lama saat PC sibuk menjalankan proses harian/event), padahal printer
+    jarang berubah - tanpa cache tiap tab baru menunggu selama itu. Kegagalan tidak di-cache.
+    Kunci menyerialkan panggilan: tab yang dibuka bersamaan menunggu satu PowerShell yang sama."""
+    global _cache_printer
+    with _kunci_printer:
+        sekarang = time.monotonic()
+        if _cache_printer and sekarang - _cache_printer[0] < TTL_PRINTER_S:
+            return list(_cache_printer[1])
+        daftar = ps.daftar_printer()
+        _cache_printer = (time.monotonic(), daftar)
+        return list(daftar)
+
+
+def _hangatkan_printer() -> None:
+    try:
+        daftar_printer_cache()
+    except Exception:   # hangat-hangatan saja; kegagalan muncul lagi (dengan pesan) saat UI memintanya
+        pass
+
+
+def info_sebagian() -> list[dict]:
+    """File yang terputus di tengah cetak (logs/cetak_sebagian.json) dan masih ada di disk."""
+    hasil = []
+    for p, d in ps.baca_sebagian().items():
+        f = Path(p)
+        try:
+            rel = _rel(f)
+        except ValueError:
+            continue
+        if f.exists():
+            hasil.append({"f": f.name, "rel": rel, "tercetak": int(d["halaman_tercetak"]),
+                          "total": int(d["total"]), "printer": d["printer"], "waktu": d["waktu"]})
+    return hasil
+
+
+def mulai_lanjut_sebagian(item: list[dict], printer: str) -> str:
+    """Lanjutkan file terputus dari halaman pilihan UI: [{"rel": ..., "mulai": N}, ...]."""
+    tercatat = {x["rel"]: x for x in info_sebagian()}
+    mulai_dari = {}
+    for it in item:
+        rel, mulai = it.get("rel"), it.get("mulai")
+        if rel not in tercatat:
+            raise ps.CetakError(f"Bukan file terputus: {rel}")
+        if not isinstance(mulai, int) or not 1 <= mulai <= tercatat[rel]["total"]:
+            raise ps.CetakError(f"Halaman mulai harus 1-{tercatat[rel]['total']}: {rel}")
+        mulai_dari[rel] = mulai
+    if not mulai_dari:
+        raise ps.CetakError("Tidak ada file yang dipilih")
+    return mulai_cetak(list(mulai_dari), printer, mulai_dari=mulai_dari)
+
+
+def mulai_cetak(files: list[str], printer: str, ulang: bool = False,
+                mulai_dari: dict[str, int] | None = None) -> str:
     """Validasi pilihan lalu jalankan print_spesial.py --file-dari di proses terpisah.
     Melempar ps.CetakError (pilihan tidak valid) atau RuntimeError (printer itu masih mencetak /
     file yang sama sedang dicetak printer lain). Printer BERBEDA boleh jalan bersamaan."""
@@ -135,6 +198,11 @@ def mulai_cetak(files: list[str], printer: str, ulang: bool = False) -> str:
                     "--file-dari", str(daftar), "--printer", printer, "--tanpa-konfirmasi"]
         if ulang:
             perintah.append("--cetak-ulang-semua")
+        if mulai_dari:
+            perintah = [sys.executable, str(Path(__file__).with_name("print_spesial.py")),
+                        "--lanjut-sebagian", "--printer", printer, "--tanpa-konfirmasi"]
+            for rel, hal in mulai_dari.items():
+                perintah += ["--mulai-dari", f"{ps.FOLDER_LABEL.resolve() / rel}={hal}"]
         env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
         proses = subprocess.Popen(
             perintah, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -283,7 +351,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/sesi":
                 return self._kirim(200, data_sesi())
             if url.path == "/api/printer":
-                return self._kirim(200, {"printer": ps.daftar_printer()})
+                return self._kirim(200, {"printer": daftar_printer_cache()})
             if url.path == "/api/job":
                 nama = parse_qs(url.query).get("printer", [_terakhir])[0]
                 return self._kirim(200, _publik(_jobs.get(nama)))
@@ -292,6 +360,8 @@ class Handler(BaseHTTPRequestHandler):
                                                       "id": j["id"]} for n, j in _jobs.items()}})
             if url.path == "/api/operator":
                 return self._kirim(200, info_operator())
+            if url.path == "/api/sebagian":
+                return self._kirim(200, {"daftar": info_sebagian()})
             if url.path == "/api/terhenti":
                 return self._kirim(200, info_terhenti())
             if url.path == "/api/harian/info":
@@ -309,7 +379,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._kirim(403, {"error": "host ditolak"})
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
         if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan",
-                             "/api/terhenti/jalankan", "/api/operator") \
+                             "/api/terhenti/jalankan", "/api/operator", "/api/sebagian/lanjut") \
                 or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
@@ -329,6 +399,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._kirim(200, {"dihentikan": jh.hentikan()})
             if self.path == "/api/harian/jalankan":
                 return self._kirim(200, {"job": jh.mulai(data.get("langkah"), data.get("judul"))})
+            if self.path == "/api/sebagian/lanjut":
+                item, printer = data.get("item"), data.get("printer")
+                if not isinstance(item, list) or not all(isinstance(x, dict) for x in item) \
+                        or not isinstance(printer, str):
+                    return self._kirim(400, {"error": "item (daftar) dan printer wajib diisi"})
+                return self._kirim(200, {"job": mulai_lanjut_sebagian(item, printer)})
             files, printer = data.get("files"), data.get("printer")
             if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
                 return self._kirim(400, {"error": "files harus daftar path"})
@@ -363,6 +439,7 @@ def main() -> int:
         if args.buka:
             webbrowser.open(url)
         return 0
+    threading.Thread(target=_hangatkan_printer, daemon=True).start()   # tab pertama tidak menunggu Get-Printer
     print(f"UI berjalan di {url}  (Ctrl+C atau tutup jendela ini untuk berhenti)")
     if args.buka:
         webbrowser.open(url)
