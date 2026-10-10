@@ -350,12 +350,15 @@ def uji_cetak_timeout_jadi_cetak_error_dan_batch_lanjut():
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
         dicatat = []
-        with mock.patch.object(ps.subprocess, "run", palsu),                 mock.patch.object(ps, "catat_sudah_dicetak", dicatat.append),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0):
+        with mock.patch.object(ps.subprocess, "run", palsu),                 mock.patch.object(ps, "catat_sudah_dicetak", dicatat.append),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0),                 mock.patch.object(ps, "JEDA_ULANG_CETAK_S", 0):
             berhasil, gagal = ps.cetak_semua(Path("SumatraPDF.exe"), "P", [a, b], False)
         assert gagal == [a] and berhasil == [b], (berhasil, gagal)
+        sumatra_a = [c for c in panggilan if c[0] != "powershell" and str(a) in c]
+        assert len(sumatra_a) == 1 + ps.PERCOBAAN_ULANG_CETAK, "file gagal harus dicoba ulang otomatis"
         assert not any(c[0] == "taskkill" for c in panggilan), "taskkill /IM mematikan cetak printer lain"
         mati = [c for c in panggilan if c[0] == "powershell" and "Stop-Process" in c[-1]]
-        assert len(mati) == 1 and str(a) in mati[0][-1] and str(b) not in mati[0][-1], mati
+        assert len(mati) == 1 + ps.PERCOBAAN_ULANG_CETAK, mati
+        assert all(str(a) in m[-1] and str(b) not in m[-1] for m in mati), mati
         print("  cetak: timeout SumatraPDF -> file masuk gagal, hanya proses milik file itu dimatikan, batch lanjut")
 
 

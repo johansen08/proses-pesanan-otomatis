@@ -254,6 +254,9 @@ def _timeout_sumatra() -> int:
 
 TIMEOUT_SUMATRA_S = _timeout_sumatra()
 TIMEOUT_POWERSHELL_S = 20
+TUNGGU_PRINTER_PULIH_S = 180   # tanpa konsol: tunggu printer pulih sebelum melewati 1 file
+PERCOBAAN_ULANG_CETAK = 2      # percobaan tambahan per file yang gagal (timeout/SumatraPDF error)
+JEDA_ULANG_CETAK_S = 5
 
 # Status job (Get-PrintJob -> JobStatus, dari PrintManagement module) yang dianggap
 # "printer butuh perhatian user" - job tidak akan maju sendiri sampai masalahnya
@@ -550,6 +553,7 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
     (selesai atau tidak ada masalah), False = user pilih "lewati" file ini karena
     printer tetap bermasalah (dicatat sebagai gagal oleh pemanggil)."""
     pernah_bermasalah = False
+    batas_tunggu = None   # hanya dipakai tanpa konsol interaktif (lihat EOFError di bawah)
     while True:
         status = _job_status(printer, job_id)
         if status is None:
@@ -563,13 +567,27 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str) -> bool:
             log.warning('Printer "%s" bermasalah saat mencetak %s (status job: %s)',
                        printer, nama_file, status)
             pernah_bermasalah = True
-        print()
-        print(f'!!! PRINTER BERMASALAH ({status}) saat mencetak: {nama_file}')
-        print("    Perbaiki printer (isi kertas / buka yang macet, dst), lalu tekan ENTER untuk melanjutkan")
-        print('    (ketik "lewati" lalu ENTER untuk melewati file ini saja dan lanjut ke berikutnya)')
-        try:
-            aksi = input("> ").strip().lower()
-        except EOFError:   # tanpa konsol interaktif (dijalankan server_ui.py): jangan menggantung
+        if batas_tunggu is not None:
+            aksi = None   # sudah diketahui tanpa konsol: jangan cetak pesan/prompt berulang
+        else:
+            print()
+            print(f'!!! PRINTER BERMASALAH ({status}) saat mencetak: {nama_file}')
+            print("    Perbaiki printer (isi kertas / buka yang macet, dst), lalu tekan ENTER untuk melanjutkan")
+            print('    (ketik "lewati" lalu ENTER untuk melewati file ini saja dan lanjut ke berikutnya)')
+            try:
+                aksi = input("> ").strip().lower()
+            except EOFError:
+                aksi = None
+        if aksi is None:
+            # Tanpa konsol interaktif (dijalankan server_ui.py, stdin=DEVNULL): jangan langsung
+            # melewati file - status Offline/Error sering hanya sesaat. Tunggu pulih dulu,
+            # baru lewati kalau melebihi batas (insiden 2026-10-10: file LANTAI1/2 gagal beruntun).
+            sekarang = time.monotonic()
+            if batas_tunggu is None:
+                batas_tunggu = sekarang + TUNGGU_PRINTER_PULIH_S
+            if sekarang < batas_tunggu:
+                time.sleep(3)
+                continue
             aksi = "lewati"
         if aksi == "lewati":
             log.warning('File %s DILEWATI manual oleh user (status job terakhir: %s)', nama_file, status)
@@ -602,6 +620,10 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool) -> bool:
             capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
     except subprocess.TimeoutExpired:
         _matikan_sumatra(sumatra, file)
+        if pantau and (_job_ids(printer) - sebelum):
+            # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
+            # cukup pantau job-nya seperti biasa.
+            return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)), file.name)
         raise CetakError(
             f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
             "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
@@ -625,10 +647,20 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
     for i, f in enumerate(file_pdf, 1):
         print(f"[{i}/{len(file_pdf)}] Mencetak {f.name} ...")
         mulai = time.monotonic()
-        try:
-            ok = cetak(sumatra, printer, f, pantau)
-        except CetakError as e:
-            log.error("GAGAL cetak %s: %s", f.name, e)
+        ok, error = None, None
+        for percobaan in range(1 + PERCOBAAN_ULANG_CETAK):
+            if percobaan:
+                log.warning("Mencoba ulang %s (percobaan %d/%d) ...",
+                            f.name, percobaan + 1, 1 + PERCOBAAN_ULANG_CETAK)
+                time.sleep(JEDA_ULANG_CETAK_S)
+            try:
+                ok = cetak(sumatra, printer, f, pantau)
+                error = None
+                break
+            except CetakError as e:
+                error = e
+                log.error("GAGAL cetak %s: %s", f.name, e)
+        if error is not None:
             gagal.append(f)
             continue
         durasi = time.monotonic() - mulai
