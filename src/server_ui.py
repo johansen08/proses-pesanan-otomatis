@@ -320,6 +320,13 @@ class Server(ThreadingHTTPServer):
     # matikan supaya klik dua kali tombol buka app terdeteksi lewat OSError di main().
     allow_reuse_address = False
 
+    def handle_error(self, request, client_address):
+        # Klien (tab/browser) menutup koneksi sebelum jawaban terkirim - mis. tab ditutup atau
+        # di-refresh saat Get-Printer masih jalan. Tidak berbahaya; jangan cetak traceback.
+        if isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "UIcetak"
