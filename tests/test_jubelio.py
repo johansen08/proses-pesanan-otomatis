@@ -385,6 +385,40 @@ def uji_recheck_stok_http_gagal():
     print("  recheck_stok: HTTP bukan 200 -> JubelioError")
 
 
+# -------------------------------------------------- retry timeout/koneksi putus
+def uji_retry_timeout_lalu_berhasil():
+    import requests
+    jeda, panggilan = [], []
+
+    def fn():
+        panggilan.append(1)
+        if len(panggilan) < 3:
+            raise requests.exceptions.ReadTimeout("Read timed out")
+        return Resp(200, data={"ok": 1})
+
+    r = jb._kirim_dengan_retry429(fn, tidur=jeda.append)
+    assert r.status_code == 200 and len(panggilan) == 3
+    assert jeda == [jb.JEDA_COBA_KONEKSI_S, jb.JEDA_COBA_KONEKSI_S * 2], jeda
+    print("  retry: 2x ReadTimeout lalu sukses -> diulang dengan jeda bertambah")
+
+
+def uji_retry_timeout_habis_jatah_melempar_error():
+    import requests
+    panggilan = []
+
+    def fn():
+        panggilan.append(1)
+        raise requests.exceptions.ReadTimeout("Read timed out")
+
+    try:
+        jb._kirim_dengan_retry429(fn, tidur=lambda s: None)
+    except requests.exceptions.ReadTimeout:
+        assert len(panggilan) == jb.MAKS_COBA_KONEKSI
+    else:
+        raise AssertionError("seharusnya ReadTimeout setelah jatah habis")
+    print("  retry: timeout terus-menerus -> menyerah setelah MAKS_COBA_KONEKSI")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

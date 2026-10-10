@@ -62,6 +62,13 @@ MAKS_WORKER_PARALEL = 5
 MAKS_COBA_429 = 5
 JEDA_COBA_429_S = 15
 
+# Read timeout 60 detik saat ambil daftar pesanan (200/halaman, 2000+ pesanan saat ramai, kejadian
+# 10-10-2026 08:35 di "SPX HEMAT SPESIAL": gagal total tanpa percobaan ulang) - sekarang diulang
+# MAKS_COBA_KONEKSI kali dengan jeda bertambah; read timeout daftar pesanan juga dilonggarkan.
+MAKS_COBA_KONEKSI = 3
+JEDA_COBA_KONEKSI_S = 5
+TIMEOUT_DAFTAR_PESANAN_S = 120
+
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36")
 HEADER_DASAR = {
@@ -112,10 +119,20 @@ def _jeda_retry_after(r: requests.Response, bawaan: float) -> float:
 
 def _kirim_dengan_retry429(fn, *a, tidur=time.sleep, **kw) -> requests.Response:
     """Panggil `fn` (requests.get/post), ulangi kalau Jubelio membalas HTTP 429 - lihat
-    MAKS_COBA_429."""
+    MAKS_COBA_429 - atau koneksi putus/timeout - lihat MAKS_COBA_KONEKSI. Timeout & 429
+    berbagi satu jatah percobaan (MAKS_COBA_429)."""
     r = None
     for coba in range(1, MAKS_COBA_429 + 1):
-        r = fn(*a, **kw)
+        try:
+            r = fn(*a, **kw)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if coba == MAKS_COBA_KONEKSI:
+                raise
+            jeda = JEDA_COBA_KONEKSI_S * coba
+            log.warning("Koneksi ke Jubelio putus/timeout (percobaan %d/%d): %s -> ulangi %d "
+                        "detik lagi", coba, MAKS_COBA_KONEKSI, e, jeda)
+            tidur(jeda)
+            continue
         if r.status_code != 429 or coba == MAKS_COBA_429:
             return r
         tidur(_jeda_retry_after(r, JEDA_COBA_429_S * coba))
@@ -180,7 +197,8 @@ def ambil_url_pesanan(token: str, dari: date, sampai: date, timeout: int = 60) -
 
 
 def _halaman_pesanan(sesi: requests.Session, token: str, page: int, q: str = "",
-                     page_size: int = UKURAN_HALAMAN_PESANAN, timeout: int = 60) -> dict:
+                     page_size: int = UKURAN_HALAMAN_PESANAN,
+                     timeout: int = TIMEOUT_DAFTAR_PESANAN_S) -> dict:
     r = _kirim_dengan_retry429(sesi.get, URL_PESANAN, headers=_header(token), timeout=timeout,
                                params={"page": page, "q": q, "sort_by": "transaction_date",
                                        "page_size": page_size, "sort_direction": "DESC"})
