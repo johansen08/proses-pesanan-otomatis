@@ -88,10 +88,19 @@ project secara umum, root tidak boleh berisi file `.py`):
   Hanya `bat\cetak-label.bat` + 4 pintasan harian yang boleh ada sebagai `.bat` cetak (dikunci
   `tests/test_print_spesial.py`) — jenis baru cukup ditambah di `JENIS_LABEL` + `MENU`/`PAKET`,
   JANGAN membuat `.bat` per jenis lagi.
+  **Cetak terputus & lanjut per halaman** (insiden 2026-10-10: file LANTAI1/2 gagal beruntun): file yang
+  tidak selesai ("lewati" saat printer bermasalah, job hilang dari antrean, atau batas tunggu habis)
+  dicatat beserta `PagesPrinted`/`TotalPages` (Get-PrintJob) di `logs/cetak_sebagian.json`. Lanjut lewat
+  menu "LANJUTKAN cetak yang terputus" / `--lanjut-sebagian [--mulai-dari PDF=HALAMAN ...]` — hanya halaman
+  sisa (SumatraPDF `-print-settings "N-total"`), sisa job lama dibuang dulu (`Remove-PrintJob`) supaya tidak
+  dobel. Tanpa konsol (stdin=DEVNULL, dari UI) status printer bermasalah ditunggu `TUNGGU_PRINTER_PULIH_S`
+  (180 dtk) sebelum file dilewati, dan file gagal dicoba ulang otomatis `PERCOBAAN_ULANG_CETAK`x. Akurasi
+  halaman bergantung driver melapor ke spooler (printer thermal tertentu tidak) — makanya halaman mulai
+  bisa diganti user. Tes: `tests/test_print_spesial.py`.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
   `data/prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
   API `/api/sesi` (3 hari, jenis spesial/satuan/kombinasi/gtl-sicepat, file PDF + status tercetak),
-  `/api/printer`, `/api/cetak`, `/api/job`. Cetak SELALU lewat proses terpisah
+  `/api/printer`, `/api/cetak`, `/api/job`. Cetak terputus: `/api/sebagian` + `/api/sebagian/lanjut` (tombol "Terputus" di UI, lewat `--lanjut-sebagian --mulai-dari`). Cetak SELALU lewat proses terpisah
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
   server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
   satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
