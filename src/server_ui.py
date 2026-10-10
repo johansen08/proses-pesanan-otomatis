@@ -31,8 +31,8 @@ API (JSON):
   GET  /api/operator             {"aktif", "daftar", "terkunci"} (terkunci = proses harian/download ulang jalan)
   POST /api/operator             {"aksi": "tambah"|"aktif", "nama": "..."} (ganti operator aktif -> 409
                                  kalau proses harian/download ulang berjalan; lihat operator_aktif.py)
-Jenis yang ditampilkan: spesial, satuan, kombinasi, gtl-sicepat (JENIS_UI). Jenis lain
-(spx-pagi, jnt-siang, event, dst) tetap lewat cetak-label.bat.
+Jenis yang ditampilkan (JENIS_UI): spesial/satuan/kombinasi per kurir (J&T, SPX, SPX Hemat, SPX Hemat Pagi)
++ sisanya tanpa kurir, gtl-sicepat. PDF lain (spx-pagi, jnt-siang, dst) tampil per nama subfolder.
 """
 from __future__ import annotations
 
@@ -57,8 +57,15 @@ import print_spesial as ps
 ROOT = ps.ROOT
 HTML_UI = ROOT / "data" / "prototype-desktop" / "index.html"
 HARI_UI = 3                      # hari ini, kemarin, 2 hari lalu
-JENIS_UI = [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
-            ("GTL-SiCepat", "gtl-sicepat")]
+# Urutan penting: PDF dimiliki kelompok PERTAMA yang cocok (`terpakai` di data_sesi), jadi varian
+# per kurir (subfolder JNT_/SPX_/SPXHEMAT_...) harus sebelum kelompok gabungan ("Spesial" dst),
+# yang tinggal memuat sisanya (subfolder tanpa awalan kurir).
+JENIS_UI = [(f"{dasar} {kurir}", f"{kode}-{kk}")
+            for dasar, kode in (("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"))
+            for kurir, kk in (("J&T", "jnt"), ("SPX", "spx"),
+                              ("SPX Hemat", "spx-hemat"), ("SPX Hemat Pagi", "spx-hemat-pagi"))]
+JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
+             ("GTL-SiCepat", "gtl-sicepat")]
 BARIS_LOG_MAKS = 400
 
 _jobs: dict[str, dict] = {}      # kunci = nama printer: printer BERBEDA boleh mencetak bersamaan

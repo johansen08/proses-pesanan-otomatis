@@ -54,6 +54,8 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
         b = "PICK-000000002_1QTY-REGULER-2A_x.pdf"
         _buat(label / hari_ini.isoformat() / "1" / "SPESIAL", a)
         _buat(label / hari_ini.isoformat() / "1" / "SATUAN", b)
+        j = "PICK-000000004_SPESIAL_J_x.pdf"
+        _buat(label / hari_ini.isoformat() / "1" / "JNT_SPESIAL", j)   # harus tampil "Spesial J&T", BUKAN "Spesial"
         _buat(label / kemarin / "3" / "KOMBINASI", "PICK-000000003_KOMBINASI-REGULER-LANTAI1_x.pdf")
         _buat(label / lama / "1" / "SPESIAL", "PICK-000000009_SPESIAL_Z_x.pdf")     # di luar 3 hari
         _buat(label / hari_ini.isoformat() / "2" / "SPX_PAGI", "PICK-000000010_SHOPEE-PAGI-LANTAI1_x.pdf")  # bukan jenis utama: tetap tampil per nama subfolder
@@ -86,7 +88,8 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
                 assert [s["no"] for s in sesi_hari_ini] == [1, 2], "sesi 2 (SPX_PAGI) ikut tampil"
                 assert [(j["nama"], len(j["files"])) for j in sesi_hari_ini[1]["jenis"]] == [("SPX_PAGI", 1)]
                 jenis = {j["nama"]: j["files"] for j in sesi_hari_ini[0]["jenis"]}
-                assert set(jenis) == {"Spesial", "Satuan"}, jenis
+                assert set(jenis) == {"Spesial", "Satuan", "Spesial J&T"}, jenis
+                assert [x["f"] for x in jenis["Spesial J&T"]] == [j] and [x["f"] for x in jenis["Spesial"]] == [a], jenis
                 assert jenis["Spesial"][0] == {"f": a, "rel": rel_a, "kb": 2, "done": True}, jenis
                 assert jenis["Satuan"][0]["done"] is False
 
