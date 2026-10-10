@@ -1702,8 +1702,11 @@ def _mulai_backoff(awal: float, maks: float, faktor: float = 1.5):
 
 # ============================================================== 3. selesaikan picking
 def _picking_selesai(p: dict) -> bool:
-    return bool(p.get("is_completed")) and all(
-        i.get("wms_status") == "FINISH_PICK" for i in p.get("items") or [])
+    # item CANCELED (pesanan dibatalkan customer setelah masuk picklist) tidak akan pernah
+    # FINISH_PICK — jangan ditunggu (insiden 2026-10-10: JNT-1QTY-REGULER-1B/2A macet 90 dtk)
+    aktif = [i for i in p.get("items") or [] if i.get("wms_status") != "CANCELED"]
+    return bool(p.get("is_completed")) and bool(aktif) and all(
+        i.get("wms_status") == "FINISH_PICK" for i in aktif)
 
 
 def selesaikan_picking(k: Klien, picklist_id: int) -> None:
