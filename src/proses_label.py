@@ -670,6 +670,21 @@ def buat_picklist_channel(k: Klien, ids: list[int]) -> tuple[int, str, list[int]
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
+# Channel yang DIKECUALIKAN dari skenario urgent tertentu. JNE-LEX lintas channel, tapi Lazada juga
+# memakai kurir JNE/LEX - pesanan Lazada HARUS tetap di picklist Lazada (termasuk yang masih
+# ditahan jam tunda, tidak boleh bocor ke JNE-LEX) dan tidak boleh tercampur ke picklist JNE-LEX.
+KECUALI_CHANNEL_URGENT = {"JNE-LEX": {CHANNEL_ID_LAZADA}}
+
+
+def _ambil_pesanan_urgent(k: Klien, nama: str, channel_ids: list[int] | None,
+                          couriers: list[str] | None) -> list[dict]:
+    """ambil_pesanan_channel() untuk skenario urgent `nama`, minus channel di
+    KECUALI_CHANNEL_URGENT (disaring di sisi kita, bukan cuma percaya filter API)."""
+    pesanan = ambil_pesanan_channel(k, channel_ids, couriers)
+    kecuali = KECUALI_CHANNEL_URGENT.get(nama)
+    return [o for o in pesanan if o.get("source") not in kecuali] if kecuali else pesanan
+
+
 def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int | None,
                        sekarang: datetime | None = None) -> tuple[list[dict], int]:
     """Terapkan jam tunda urgent (lihat JAM_CUTOFF_URGENT_LAZADA/JAM_CUTOFF_URGENT_GTL_SICEPAT
@@ -700,7 +715,7 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
     Skenario `per_lantai` (GTL-SiCepat) ditampilkan dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA
     (lihat _kelompok_kombinasi_per_lantai())."""
     for nama, channel_ids, couriers, jam_cutoff, per_lantai in skenario or SKENARIO_URGENT:
-        mentah = ambil_pesanan_channel(k, channel_ids, couriers)
+        mentah = _ambil_pesanan_urgent(k, nama, channel_ids, couriers)
         pesanan, ditahan = _saring_jam_urgent(mentah, jam_cutoff, sekarang)
         tunda = (f" (+{ditahan} ditahan, jam pesan di atas {jam_cutoff:02d}.00 WIB, lanjut "
                 f"otomatis setelah jam {JAM_LANJUT_URGENT:02d}.00)" if ditahan else "")
@@ -869,7 +884,7 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     for nama, channel_ids, couriers, jam_cutoff, per_lantai in skenario or SKENARIO_URGENT:
         label = nama.upper()
         try:
-            mentah = ambil_pesanan_channel(k, channel_ids, couriers)
+            mentah = _ambil_pesanan_urgent(k, nama, channel_ids, couriers)
             pesanan, ditahan = _saring_jam_urgent(mentah, jam_cutoff, sekarang)
             if ditahan:
                 log.info("  %d pesanan %s ditahan (jam pesan di atas %02d.00 WIB), lanjut "

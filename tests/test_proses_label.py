@@ -479,6 +479,11 @@ class JubelioPalsuUrgent:
              "shipper": "JNE-MP JNE", "grand_total": "35900.0000"},
             {"salesorder_id": 501, "salesorder_no": "SP-LEX-501", "source": 64,
              "shipper": "LEX ID", "grand_total": "35900.0000"},
+            # Lazada berkurir JNE/LEX (mis. masih ditahan jam tunda Lazada): TIDAK boleh ikut JNE-LEX
+            {"salesorder_id": 502, "salesorder_no": "LZ-JNE-502", "source": 4,
+             "shipper": "JNE-MP JNE", "grand_total": "35900.0000"},
+            {"salesorder_id": 503, "salesorder_no": "LZ-LEX-503", "source": 4,
+             "shipper": "LEX ID", "grand_total": "35900.0000"},
         ]
         self.picklist_no = 0
         self.stok_kosong_ids: set[int] = set()
@@ -738,13 +743,19 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     finally:
         pl.lanjutkan_picklist = asli
     assert [(h["SKU"], h["Total Pesanan"]) for h in hasil] == [("JNE-LEX", 2)], hasil
-    print("  --channel jne-lex: hanya picklist JNE-LEX (JNE Tokopedia asli + LEX Shopee, 2 pesanan)")
+    assert pl._ambil_pesanan_urgent(k, "JNE-LEX", None, pl.KURIR_FILTER_URGENT_JNE_LEX)         and {o["salesorder_id"] for o in pl._ambil_pesanan_urgent(
+            k, "JNE-LEX", None, pl.KURIR_FILTER_URGENT_JNE_LEX)} == {500, 501}
+    assert {o["salesorder_id"] for o in pl._ambil_pesanan_urgent(
+        k, "Lazada", [pl.CHANNEL_ID_LAZADA], None)} == {100, 101, 102}, "skenario lain tidak terpengaruh"
+    print("  --channel jne-lex: hanya picklist JNE-LEX (JNE Tokopedia asli + LEX Shopee, 2 pesanan); "
+          "pesanan Lazada berkurir JNE/LEX TIDAK ikut (tetap milik picklist Lazada)")
 
     # tanpa jam tunda: jam pesan di atas cutoff Lazada/GTL pun tidak ditahan, sebelum jam 16
     import datetime as dt
     for o in j.pesanan_jne_lex:
         o["transaction_date"] = "2026-10-02T09:30:00Z"      # 16:30 WIB
-    pakai, ditahan = pl._saring_jam_urgent(j.pesanan_jne_lex, None,
+    pakai, ditahan = pl._saring_jam_urgent(
+        pl._ambil_pesanan_urgent(k, "JNE-LEX", None, pl.KURIR_FILTER_URGENT_JNE_LEX), None,
                                            dt.datetime(2026, 10, 2, 10, 0, tzinfo=pl.WIB))
     assert ditahan == 0 and len(pakai) == 2, (pakai, ditahan)
     print("  JNE-LEX tanpa jam tunda (jam_cutoff None): tidak pernah ditahan")

@@ -221,8 +221,9 @@ reguler (bagian 3 di bawah), sama-sama lewat `ambil_pesanan_channel()`.
   masing-masing dipecah lagi kalau > 200 pesanan.
 - **JNE-LEX**: semua pesanan kurir **JNE** (mis. `JNE-MP JNE`) atau **LEX** (`LEX ID`),
   lintas channel, digabung jadi 1 picklist (volumenya kecil, tidak dipecah per lantai), TANPA
-  jam tunda. Dijalankan SETELAH Lazada & GTL-SiCepat, jadi LEX milik Lazada sudah terambil di
-  skenario Lazada; yang tersisa hanya kurir ini di channel lain. Label/nama file `JNE-LEX`,
+  jam tunda. Dijalankan SETELAH Lazada & GTL-SiCepat, dan channel **Lazada DIKECUALIKAN** (Lazada juga
+  memakai JNE/LEX, tapi tetap milik picklist Lazada - termasuk yang masih ditahan jam tunda - dan tidak
+  boleh tercampur; lihat `KECUALI_CHANNEL_URGENT`); yang masuk hanya kurir ini di channel lain. Label/nama file `JNE-LEX`,
   di subfolder `URGENT`. Sebelumnya kurir ini tidak punya alur sama sekali (insiden
   09/10/2026: resi `TG...` JNE tidak pernah masuk picklist). Dicetak manual (tidak ada cetak bulk).
 

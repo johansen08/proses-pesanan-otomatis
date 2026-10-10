@@ -143,8 +143,8 @@ project secara umum, root tidak boleh berisi file `.py`):
   lain). Peringatan di `logs/pesanan_tak_tersentuh.jsonl`, dicetak ulang di rekap waktu; kegagalan API/login
   hanya jadi warning. Channel `TP-` (128) sekarang ikut alur reguler/J&T Siang lewat
   `CHANNEL_IDS_TIKTOK_TOKOPEDIA`; kurir JNE/LEX punya skenario urgent `JNE-LEX` sendiri (langkah "Urgent JNE
-  & LEX" di semua .bat/KATALOG/UI, setelah Lazada & GTL-SiCepat, tanpa jam tunda, label `JNE-LEX` di subfolder
-  URGENT, dicetak manual). Tes: `tests/test_peringatan_sisa.py`.
+  & LEX" di semua .bat/KATALOG/UI, setelah Lazada & GTL-SiCepat, tanpa jam tunda, channel Lazada dikecualikan lewat
+  `KECUALI_CHANNEL_URGENT` karena Lazada juga berkurir JNE/LEX, label `JNE-LEX` di subfolder URGENT, dicetak manual). Tes: `tests/test_peringatan_sisa.py`.
 - `src/peringatan_gagal.py` — persistensi lintas-proses (pola sama, `logs/picklist_bermasalah.
   jsonl`) untuk picklist/proses yang TERHENTI/GAGAL (lihat `main.cetak_bermasalah()`, dipicu
   mis. timeout unduh label PDF di `proses_label.py`). `main.cetak_bermasalah()` sendiri sudah
