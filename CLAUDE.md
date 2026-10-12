@@ -44,7 +44,7 @@ bat\jalankan.bat --label --sku <SKU> --jalankan
 
 Tidak ada test runner (pytest dsb) terpasang sebagai framework — tiap file test adalah skrip
 mandiri yang dijalankan langsung dengan `python`, memakai server Jubelio tiruan
-(`JubelioPalsu`/mock di `test_proses_label.py`, berbasis rekaman HAR di `sniff/sniff_output/`)
+(`JubelioPalsu`/mock di `test_proses_label.py`, berbasis fixture kecil `tests/fixtures/rekaman_report_jubelio.har` hasil ringkasan rekaman HAR sniff 2026-09-26)
 atau `requests.get`/`post`/`Session` yang ditiru langsung (`test_jubelio.py`), bukan
 `unittest`/`pytest` assertions berjalan via CLI test discovery. Jalankan satu file sekaligus
 seperti di atas untuk "menjalankan satu test". `test_sku_spesial.py` dan `test_main.py` murni

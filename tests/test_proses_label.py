@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import proses_label as pl  # noqa: E402
 
-REKAMAN = ROOT / "sniff" / "sniff_output" / "sniff_jubel_20260926_092943.har"
+REKAMAN = ROOT / "tests" / "fixtures" / "rekaman_report_jubelio.har"
 SKU = "T01-BSBI-5"
 
 
