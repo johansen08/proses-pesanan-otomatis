@@ -611,16 +611,7 @@ def _main() -> int:
 
         proses_sungguhan = args.label and args.jalankan
 
-        excel = args.excel or download(log, token)
-        log.info("Excel: %s", excel)
-        df = baca_excel(excel)
-
-        nilai = None
-        if not args.tanpa_cek_nilai:
-            import jubelio
-            kandidat = resi_kandidat(df, kurir_hitung(args))
-            log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
-            nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
+        df, nilai = muat_data_excel(log, args, token)
 
         tabel, ringkasan = hitung_sku_spesial(df, nilai, kurir_hitung(args))
         log.info("Baris %d | resi %d | lolos 1 baris %d | qty1 %d | J&T/SPX %d | "
@@ -801,45 +792,9 @@ def recheck_stok_pesanan(log: logging.Logger, args) -> int:
     return 0
 
 
-def sampel_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    k = proses_label.Klien(login(log))
-    if not args.jalankan:
-        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_sampel(k)
-        return 0
-    hasil = proses_label.proses_sampel(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
-    gagal = cetak_bermasalah(hasil)
-    log.info("SELESAI sampel: %d picklist dibuat%s", len(hasil) - len(gagal),
-             f", {len(gagal)} bermasalah" if gagal else "")
-    return 1 if gagal else 0
-
-
-def urgent_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    skenario = ([s for s in proses_label.SKENARIO_URGENT if s[0].lower() == args.channel]
-               if args.channel else None)
-    if args.channel and not skenario:
-        raise SystemExit(f"Channel tidak dikenal: {args.channel}")
-
-    k = proses_label.Klien(login(log))
-    if not args.jalankan:
-        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_urgent(k, skenario)
-        return 0
-    hasil = proses_label.proses_urgent(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, skenario)
-    gagal = cetak_bermasalah(hasil)
-    log.info("SELESAI urgent: %d picklist dibuat%s", len(hasil) - len(gagal),
-             f", {len(gagal)} bermasalah" if gagal else "")
-    return 1 if gagal else 0
-
-
-def reguler_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    token = login(log)
+def muat_data_excel(log: logging.Logger, args, token: str | None):
+    """Excel laporan Siap Proses (`--excel` atau diunduh) + nilai pesanan kandidat dari API
+    (None kalau --tanpa-cek-nilai). Return (DataFrame, nilai)."""
     excel = args.excel or download(log, token)
     log.info("Excel: %s", excel)
     df = baca_excel(excel)
@@ -849,6 +804,50 @@ def reguler_picklist(log: logging.Logger, args) -> int:
         kandidat = resi_kandidat(df, kurir_hitung(args))
         log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
         nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
+    return df, nilai
+
+
+def _jalankan_picklist(log: logging.Logger, args, nama: str, rencana, proses) -> int:
+    """Kerangka alur picklist berdiri sendiri (sampel, urgent, Shopee Pagi, J&T Siang, SPX
+    Standard): login, mode uji -> `rencana(proses_label, k)` saja, sungguhan ->
+    `proses(proses_label, k)` lalu laporkan picklist bermasalah. Exit 1 kalau ada yang bermasalah."""
+    import proses_label
+
+    k = proses_label.Klien(login(log))
+    if not args.jalankan:
+        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
+        rencana(proses_label, k)
+        return 0
+    hasil = proses(proses_label, k)
+    gagal = cetak_bermasalah(hasil)
+    log.info("SELESAI %s: %d picklist dibuat%s", nama, len(hasil) - len(gagal),
+             f", {len(gagal)} bermasalah" if gagal else "")
+    return 1 if gagal else 0
+
+
+def sampel_picklist(log: logging.Logger, args) -> int:
+    return _jalankan_picklist(
+        log, args, "sampel", lambda pl, k: pl.rencana_sampel(k),
+        lambda pl, k: pl.proses_sampel(k, FILE_RIWAYAT, FOLDER_LABEL_SESI))
+
+
+def urgent_picklist(log: logging.Logger, args) -> int:
+    import proses_label
+
+    skenario = ([s for s in proses_label.SKENARIO_URGENT if s[0].lower() == args.channel]
+               if args.channel else None)
+    if args.channel and not skenario:
+        raise SystemExit(f"Channel tidak dikenal: {args.channel}")
+    return _jalankan_picklist(
+        log, args, "urgent", lambda pl, k: pl.rencana_urgent(k, skenario),
+        lambda pl, k: pl.proses_urgent(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, skenario))
+
+
+def reguler_picklist(log: logging.Logger, args) -> int:
+    import proses_label
+
+    token = login(log)
+    df, nilai = muat_data_excel(log, args, token)
     _, ringkasan = hitung_sku_spesial(df, nilai, kurir_hitung(args))
     resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
     log.info("%d resi SKU spesial hari ini (dikeluarkan dari picklist reguler)",
@@ -928,48 +927,22 @@ def nama_pdf_spesial(waktu: datetime, args) -> str:
 
 
 def spx_standard_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    k = proses_label.Klien(login(log))
-    if not args.jalankan:
-        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_spx_standard(k, args.pagi)
-        return 0
-    hasil = proses_label.proses_spx_standard(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, args.pagi)
-    gagal = cetak_bermasalah(hasil)
-    log.info("SELESAI SPX Standard%s: %d picklist dibuat%s", " (Shopee Pagi)" if args.pagi else "",
-             len(hasil) - len(gagal), f", {len(gagal)} bermasalah" if gagal else "")
-    return 1 if gagal else 0
+    return _jalankan_picklist(
+        log, args, "SPX Standard" + (" (Shopee Pagi)" if args.pagi else ""),
+        lambda pl, k: pl.rencana_spx_standard(k, args.pagi),
+        lambda pl, k: pl.proses_spx_standard(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, args.pagi))
 
 
 def shopee_pagi_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    k = proses_label.Klien(login(log))
-    if not args.jalankan:
-        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_shopee_pagi(k)
-        return 0
-    hasil = proses_label.proses_shopee_pagi(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
-    gagal = cetak_bermasalah(hasil)
-    log.info("SELESAI Shopee Pagi: %d picklist dibuat%s", len(hasil) - len(gagal),
-             f", {len(gagal)} bermasalah" if gagal else "")
-    return 1 if gagal else 0
+    return _jalankan_picklist(
+        log, args, "Shopee Pagi", lambda pl, k: pl.rencana_shopee_pagi(k),
+        lambda pl, k: pl.proses_shopee_pagi(k, FILE_RIWAYAT, FOLDER_LABEL_SESI))
 
 
 def jnt_siang_picklist(log: logging.Logger, args) -> int:
-    import proses_label
-
-    k = proses_label.Klien(login(log))
-    if not args.jalankan:
-        log.info("MODE UJI - tidak ada perubahan di Jubelio. Tambahkan --jalankan untuk memproses.")
-        proses_label.rencana_jnt_siang(k)
-        return 0
-    hasil = proses_label.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI)
-    gagal = cetak_bermasalah(hasil)
-    log.info("SELESAI J&T Resi Siang: %d picklist dibuat%s", len(hasil) - len(gagal),
-             f", {len(gagal)} bermasalah" if gagal else "")
-    return 1 if gagal else 0
+    return _jalankan_picklist(
+        log, args, "J&T Resi Siang", lambda pl, k: pl.rencana_jnt_siang(k),
+        lambda pl, k: pl.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI))
 
 
 def lanjut_picklist(log: logging.Logger, args) -> int:
