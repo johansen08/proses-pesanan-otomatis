@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import jalankan_harian as jh  # noqa: E402
 
+# tes tidak boleh bergantung pada jam jalan (jendela Transfer Stok); dicek di test_transfer_stok.py
+jh.transfer_stok.pesan = lambda sekarang=None: None
+
 
 def _tunggu(selesai=lambda j: j["status"] != "jalan", batas=15.0):
     mulai = time.time()

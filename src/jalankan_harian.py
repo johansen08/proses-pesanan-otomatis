@@ -26,6 +26,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import transfer_stok
+
 ROOT = Path(__file__).resolve().parent.parent
 FOLDER_LOG = ROOT / "logs"
 SRC = Path(__file__).resolve().parent
@@ -153,6 +155,8 @@ def mulai(langkah: list[str], judul: str) -> str:
     urut = [nama for nama, _ in katalog if nama in set(langkah)]
     if not urut:
         raise HarianError("Tidak ada langkah dipilih")
+    if set(urut) != {LANGKAH_IRESIS} and (teks := transfer_stok.pesan()):
+        raise HarianError(teks.replace("\n", " "))
     with _kunci:
         if _job and _job["status"] == "jalan":
             raise HarianError("Masih ada proses harian yang berjalan")

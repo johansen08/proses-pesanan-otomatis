@@ -187,6 +187,10 @@ project secara umum, root tidak boleh berisi file `.py`):
   `conflicted copy`, `nama (1).ext`, `nama-NAMAPC.ext`) di logs/, data/, sesi 3 hari terakhir:
   peringatan di awal proses, atau `main.py --cek-sinkron` (exit 1 kalau ada konflik/kunci dipegang
   lain). `.venv/`, `.env`, `data/operator.json` jangan disinkronkan. Tes: `tests/test_serah_terima.py`.
+- `src/transfer_stok.py` — jendela Transfer Stok (07.50-08.00, 09.00-09.10, 11.00-11.10, 13.00-13.10,
+  15.00-15.10, 16.00-16.10): `main.py --jalankan/--lanjut` menolak (pop up Windows + log, exit 1) dan
+  `jalankan_harian.mulai()` melempar `HarianError` (muncul di UI) — kecuali job hanya berisi upload IRESIS.
+  Mode uji tidak terpengaruh; paksa dengan `--abaikan-transfer-stok`. Ubah jam di `JENDELA`. Tes: `tests/test_transfer_stok.py`.
 - `src/iresis.py` — upload Excel "Daftar Penjualan Faktur" (diunduh lewat
   `jubelio.ambil_url_faktur()` + `unduh_excel()`) ke menu Upload Resi IRESIS (server lokal
   `192.168.3.37`, login form + multipart `receiptFile`, sniff 2026-10-07), lewat

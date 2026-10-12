@@ -116,6 +116,7 @@ import peringatan_resi
 import peringatan_sisa
 import rekap_master_excel
 import serah_terima
+import transfer_stok
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
                          lantai_per_pesanan, rak_dominan_per_sku, resi_kandidat,
@@ -489,6 +490,8 @@ def _main() -> int:
     ap.add_argument("--abaikan-kunci", action="store_true",
                     help="ambil alih kunci serah-terima yang dipegang perangkat lain (hanya kalau "
                         "yakin perangkat itu sudah berhenti)")
+    ap.add_argument("--abaikan-transfer-stok", action="store_true",
+                    help="tetap proses walau sedang jendela Transfer Stok (lihat transfer_stok.py)")
     ap.add_argument("--sku", action="append",
                     help="hanya proses SKU ini (boleh diulang)")
     ap.add_argument("--jalankan", action="store_true",
@@ -518,6 +521,11 @@ def _main() -> int:
     if args.cek_sinkron:
         return cek_sinkron()
     log = siapkan_log()
+    if (args.jalankan or args.lanjut) and not args.upload_iresis and not args.abaikan_transfer_stok \
+            and (teks := transfer_stok.pesan()):
+        log.error(teks.replace(chr(10), " "))
+        transfer_stok.popup(teks)
+        return 1
     if (galat := ambil_kunci(log, args)):
         log.error(galat)
         return 1
