@@ -55,10 +55,9 @@ def cetak(peringatan: list[str],
 
 
 def _waktu_pesan(o: dict) -> datetime | None:
-    ts = o.get("transaction_date")
-    if not ts:
-        return None
-    return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
+    import proses_label as pl
+
+    return pl.waktu_pesan(o)
 
 
 def alasan(o: dict) -> str:

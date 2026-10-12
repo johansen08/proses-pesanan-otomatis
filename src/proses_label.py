@@ -485,21 +485,21 @@ def batas_untuk_kurir(kurir: str | None, sekarang: datetime | None = None) -> da
     return batas_jam_hari_ini(jam, sekarang) if jam is not None else None
 
 
+def waktu_pesan(o: dict) -> datetime | None:
+    """Jam pesan `o` (transaction_date, ISO 8601 UTC dari Jubelio) dalam WIB; None kalau tidak ada."""
+    ts = o.get("transaction_date")
+    if not ts:
+        return None
+    return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
+
+
 def saring_sampai_batas(pesanan: list[dict], batas: datetime | None) -> list[dict]:
     """Pesanan yang jam pesannya (WIB) maksimal `batas` (pas di batas ikut). `batas` None =
     tidak menyaring sama sekali. Pesanan tanpa transaction_date dibuang - sama dengan aturan
     ambil_pesanan_shopee_pagi()/ambil_pesanan_jnt_siang()."""
     if batas is None:
         return pesanan
-    hasil = []
-    for o in pesanan:
-        ts = o.get("transaction_date")
-        if not ts:
-            continue
-        waktu = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
-        if waktu <= batas:
-            hasil.append(o)
-    return hasil
+    return [o for o in pesanan if (waktu := waktu_pesan(o)) is not None and waktu <= batas]
 
 
 def cari_pesanan(k: Klien, sku: str, kurir: str | None = None,
@@ -717,8 +717,8 @@ def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int | None,
     batas = now.replace(hour=jam_cutoff, minute=0, second=0, microsecond=0)
     pakai, ditahan = [], 0
     for o in pesanan:
-        ts = o.get("transaction_date")
-        if ts and datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB) > batas:
+        waktu = waktu_pesan(o)
+        if waktu is not None and waktu > batas:
             ditahan += 1
             continue
         pakai.append(o)
@@ -742,12 +742,8 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
             continue
         log.info("[UJI] Urgent %-10s pesanan siap proses %3d, dipecah per lantai%s",
                  nama, len(pesanan), tunda)
-        per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=channel_ids,
-                                                couriers=couriers)
-        for lt, sub in per_lt.items():
-            batch = bagi_batch([o["salesorder_id"] for o in sub])
-            log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
-                     _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+        _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
+            k, pesanan, channel_ids=channel_ids, couriers=couriers))
 
 
 class Gelombang:
@@ -913,9 +909,8 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
                          "otomatis setelah jam %02d.00", ditahan, nama, jam_cutoff,
                          JAM_LANJUT_URGENT)
             if per_lantai:
-                per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=channel_ids,
-                                                        couriers=couriers)
-                subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+                subkelompok = _kelompok_per_lantai_berlabel(
+                    k, pesanan, channel_ids=channel_ids, couriers=couriers)
                 hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat,
                                              folder_label, kurir=None, prefix="Urgent",
                                              subfolder=SUBFOLDER_URGENT)
@@ -1320,6 +1315,31 @@ def _label_lantai(lantai: str) -> str:
     return f"LANTAI{lantai}" if lantai in LANTAI_RAK else lantai
 
 
+def _kelompok_per_lantai_berlabel(k: Klien, pesanan: list[dict], *args,
+                                  **kw) -> dict[str, list[dict]]:
+    """_kelompok_kombinasi_per_lantai() dengan key sudah berformat LANTAI1/2/3/LAINNYA (siap
+    dipakai _proses_subkelompok())."""
+    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, *args, **kw)
+    return {_label_lantai(lt): p for lt, p in per_lt.items()}
+
+
+def _log_rencana_subkelompok(subkelompok: dict[str, list[dict]]) -> None:
+    """Baris mode uji per sub-kelompok: jumlah pesanan -> jumlah picklist."""
+    for nama, sub in subkelompok.items():
+        batch = bagi_batch([o["salesorder_id"] for o in sub])
+        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
+                 nama, len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+
+
+def _subkelompok_reguler(k: Klien, kunci: str, pesanan: list[dict],
+                         grup_dari_excel: dict[str, str] | None,
+                         lantai_dari_excel: dict[str, str] | None) -> dict[str, list[dict]]:
+    """Sub-kelompok satu bagian reguler: "1qty" per grup rak, "kombinasi" per lantai."""
+    if kunci == "1qty":
+        return _kelompok_1qty_per_rak(k, pesanan, grup_dari_excel)
+    return _kelompok_per_lantai_berlabel(k, pesanan, lantai_dari_excel)
+
+
 def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, list[dict]],
                         file_riwayat: Path, folder_label: Path, kurir: str | None,
                         prefix: str = "Reguler", subfolder: str | None = None,
@@ -1372,11 +1392,8 @@ def rencana_reguler(k: Klien, resi_spesial_semua: set[str], bagian: str | None =
     for kunci, (nama, _, idx, _subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
-        if kunci == "1qty":
-            subkelompok = _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel)
-        else:   # "kombinasi"
-            per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
-            subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
+        subkelompok = _subkelompok_reguler(k, kunci, kelompok[idx], grup_dari_excel,
+                                           lantai_dari_excel)
         for sub, pesanan in subkelompok.items():
             batch = bagi_batch([o["salesorder_id"] for o in pesanan])
             log.info("[UJI] Reguler %-20s pesanan siap proses %3d -> %d picklist "
@@ -1409,11 +1426,8 @@ def proses_reguler(k: Klien, resi_spesial_semua: set[str], file_riwayat: Path,
     for kunci, (nama, label, idx, subfolder) in _BAGIAN_REGULER.items():
         if bagian and bagian != kunci:
             continue
-        if kunci == "1qty":
-            subkelompok = _kelompok_1qty_per_rak(k, kelompok[idx], grup_dari_excel)
-        else:   # "kombinasi"
-            per_lantai = _kelompok_kombinasi_per_lantai(k, kelompok[idx], lantai_dari_excel)
-            subkelompok = {_label_lantai(lt): p for lt, p in per_lantai.items()}
+        subkelompok = _subkelompok_reguler(k, kunci, kelompok[idx], grup_dari_excel,
+                                           lantai_dari_excel)
         hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat, folder_label,
                                      kurir, subfolder=_gabung_kurir(subfolder, kurir),
                                      gelombang=gelombang)
@@ -1428,16 +1442,7 @@ def ambil_pesanan_shopee_pagi(k: Klien, jam: int = JAM_CUTOFF_SHOPEE_PAGI,
     yang masuk sebelum jam 12 siang harus sudah masuk picklist ini). `sekarang`: dipakai
     tes, default waktu sungguhan (WIB) saat dipanggil."""
     pesanan = ambil_pesanan_channel(k, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI)
-    batas = (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
-    hasil = []
-    for o in pesanan:
-        ts = o.get("transaction_date")
-        if not ts:
-            continue
-        waktu = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
-        if waktu <= batas:
-            hasil.append(o)
-    return hasil
+    return saring_sampai_batas(pesanan, batas_jam_hari_ini(jam, sekarang))
 
 
 def rencana_shopee_pagi(k: Klien) -> None:
@@ -1447,12 +1452,8 @@ def rencana_shopee_pagi(k: Klien) -> None:
     pesanan = ambil_pesanan_shopee_pagi(k)
     log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
              "per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
-                                            couriers=KURIR_FILTER_SHOPEE_PAGI)
-    for lt, sub in per_lt.items():
-        batch = bagi_batch([o["salesorder_id"] for o in sub])
-        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
-                 _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+    _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
+        k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE], couriers=KURIR_FILTER_SHOPEE_PAGI))
 
 
 def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
@@ -1463,9 +1464,8 @@ def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list
     "SHOPEE-PAGI" polos. Dipanggil MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
-                                            couriers=KURIR_FILTER_SHOPEE_PAGI)
-    subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+    subkelompok = _kelompok_per_lantai_berlabel(
+        k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE], couriers=KURIR_FILTER_SHOPEE_PAGI)
     return _proses_subkelompok(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, subkelompok,
                                file_riwayat, folder_label, kurir=None, prefix="",
                                subfolder=SUBFOLDER_SPX_PAGI)
@@ -1480,16 +1480,7 @@ def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
     sudah masuk picklist ini). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil."""
     pesanan = ambil_pesanan_channel(k, CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"])
-    batas = (sekarang or datetime.now(WIB)).replace(hour=jam, minute=0, second=0, microsecond=0)
-    hasil = []
-    for o in pesanan:
-        ts = o.get("transaction_date")
-        if not ts:
-            continue
-        waktu = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).astimezone(WIB)
-        if waktu <= batas:
-            hasil.append(o)
-    return hasil
+    return saring_sampai_batas(pesanan, batas_jam_hari_ini(jam, sekarang))
 
 
 def rencana_jnt_siang(k: Klien) -> None:
@@ -1500,12 +1491,8 @@ def rencana_jnt_siang(k: Klien) -> None:
     pesanan = ambil_pesanan_jnt_siang(k)
     log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
              "per lantai", JAM_CUTOFF_JNT_SIANG, len(pesanan))
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA,
-                                            couriers=["j&t"])
-    for lt, sub in per_lt.items():
-        batch = bagi_batch([o["salesorder_id"] for o in sub])
-        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
-                 _label_lantai(lt), len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+    _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
+        k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"]))
 
 
 def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
@@ -1516,9 +1503,8 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[d
     bukan "JNT-SIANG" polos. Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA,
-                                            couriers=["j&t"])
-    subkelompok = {_label_lantai(lt): p for lt, p in per_lt.items()}
+    subkelompok = _kelompok_per_lantai_berlabel(
+        k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"])
     return _proses_subkelompok(k, "J&T Resi Siang", LABEL_JNT_SIANG, subkelompok,
                                file_riwayat, folder_label, kurir=None, prefix="",
                                subfolder=SUBFOLDER_JNT_SIANG)
@@ -1556,10 +1542,8 @@ def _kelompok_spx_standard(k: Klien, pesanan: list[dict], pagi: bool,
                            lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
     """Peta lantai -> pesanan (key sudah berformat LANTAI1/2/3/LAINNYA, lihat _label_lantai())."""
     channel_ids, _ = _lingkup_spx_standard(pagi, None)
-    per_lt = _kelompok_kombinasi_per_lantai(k, pesanan, lantai_dari_excel,
-                                            channel_ids=channel_ids,
-                                            couriers=KURIR_FILTER_SPX_STANDARD)
-    return {_label_lantai(lt): p for lt, p in per_lt.items()}
+    return _kelompok_per_lantai_berlabel(k, pesanan, lantai_dari_excel, channel_ids=channel_ids,
+                                         couriers=KURIR_FILTER_SPX_STANDARD)
 
 
 def rencana_spx_standard(k: Klien, pagi: bool = False, sekarang: datetime | None = None,
@@ -1568,10 +1552,7 @@ def rencana_spx_standard(k: Klien, pagi: bool = False, sekarang: datetime | None
     pesanan = ambil_pesanan_spx_standard(k, pagi, sekarang)
     log.info("[UJI] %s pesanan siap proses %3d, dipecah per lantai",
              "Shopee Pagi SPX Standard" if pagi else "SPX Standard", len(pesanan))
-    for lt, sub in _kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel).items():
-        batch = bagi_batch([o["salesorder_id"] for o in sub])
-        log.info("  %-8s pesanan %3d -> %d picklist (maks %d/picklist)",
-                 lt, len(sub), len(batch), MAKS_PESANAN_PICKLIST)
+    _log_rencana_subkelompok(_kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel))
 
 
 def proses_spx_standard(k: Klien, file_riwayat: Path, folder_label: Path, pagi: bool = False,
