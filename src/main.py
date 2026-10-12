@@ -119,6 +119,7 @@ import peringatan_sisa
 import rekap_master_excel
 import serah_terima
 import transfer_stok
+import util_umum
 from proses_label import durasi
 from sku_spesial import (baca_excel, buat_pdf, grup_rak_per_pesanan, hitung_sku_spesial,
                          lantai_per_pesanan, rak_dominan_per_sku, resi_kandidat,
@@ -283,16 +284,7 @@ def muat_env(path: Path) -> None:
 
 
 def siapkan_log() -> logging.Logger:
-    FOLDER_LOG.mkdir(exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%d %H:%M",
-        handlers=[
-            logging.FileHandler(FOLDER_LOG / f"run_{datetime.now():%Y-%m}.log", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
+    util_umum.atur_log(FOLDER_LOG, "run", "%Y-%m-%d %H:%M")
     return logging.getLogger("sku-spesial")
 
 

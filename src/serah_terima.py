@@ -28,6 +28,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import util_umum
+
 TTL_DETIK = 3 * 3600          # kunci tanpa pembaruan selama ini dianggap basi
 JEDA_SINKRON_DETIK = 10 * 60  # perangkat lain baru selesai < ini lalu = peringatan sinkron
 
@@ -61,10 +63,7 @@ def _baca() -> dict:
 
 
 def _tulis(d: dict) -> None:
-    _file_kunci.parent.mkdir(parents=True, exist_ok=True)
-    sementara = _file_kunci.with_name(f"{_file_kunci.name}.{os.getpid()}.tmp")
-    sementara.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(sementara, _file_kunci)
+    util_umum.tulis_json_atomik(_file_kunci, d)
 
 
 def _aktif(d: dict, sekarang: float) -> bool:

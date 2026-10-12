@@ -123,6 +123,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import serah_terima
+import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
                            SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
                            SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
@@ -287,16 +288,7 @@ class CetakError(RuntimeError):
 
 
 def siapkan_log() -> logging.Logger:
-    FOLDER_LOG.mkdir(exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.FileHandler(FOLDER_LOG / f"cetak_{datetime.now():%Y-%m}.log", encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
+    util_umum.atur_log(FOLDER_LOG, "cetak", "%Y-%m-%d %H:%M:%S")
     return log
 
 
@@ -726,12 +718,7 @@ def baca_sebagian(file_catatan: Path | None = None) -> dict:
 
 
 def _simpan_sebagian(data: dict, file_catatan: Path | None = None) -> None:
-    import json
-    tujuan = file_catatan or FILE_SEBAGIAN
-    tujuan.parent.mkdir(exist_ok=True)
-    sementara = tujuan.with_name(f"{tujuan.name}.{os.getpid()}.tmp")
-    sementara.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    os.replace(sementara, tujuan)
+    util_umum.tulis_json_atomik(file_catatan or FILE_SEBAGIAN, data)
 
 
 def catat_sebagian(file: Path, printer: str, job_id: str, dicetak: int, total: int,

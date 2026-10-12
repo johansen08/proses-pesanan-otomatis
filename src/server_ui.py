@@ -78,6 +78,14 @@ def _rel(f: Path) -> str:
     return f.resolve().relative_to(ps.FOLDER_LABEL.resolve()).as_posix()
 
 
+def _info_file(f: Path, sudah: set, waktu: list[float]) -> dict:
+    """Entri file PDF untuk UI; mtime-nya ditambahkan ke `waktu` (penentu jam sesi)."""
+    st = f.stat()
+    waktu.append(st.st_mtime)
+    return {"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
+            "done": str(f.resolve()) in sudah}
+
+
 def data_sesi(hari_ini: date | None = None) -> dict:
     """Sesi label HARI_UI hari terakhir (terlama -> terbaru di dalam tiap hari), tiap jenis
     berisi file PDF urut nomor PICK; PDF di luar jenis itu ikut per nama subfolder. Kosong tidak dimasukkan."""
@@ -92,10 +100,7 @@ def data_sesi(hari_ini: date | None = None) -> dict:
                 if f in terpakai:
                     continue
                 terpakai.add(f)
-                st = f.stat()
-                waktu.append(st.st_mtime)
-                files.append({"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
-                              "done": str(f.resolve()) in sudah})
+                files.append(_info_file(f, sudah, waktu))
             if files:
                 jenis_out.append({"nama": nama, "files": files})
         # Semua PDF lain di sesi (subfolder JNT_SIANG/SPX_PAGI/URGENT/event/dst atau langsung di
@@ -109,10 +114,7 @@ def data_sesi(hari_ini: date | None = None) -> dict:
         for nama, daftar in sisa.items():
             files = []
             for f in daftar:
-                st = f.stat()
-                waktu.append(st.st_mtime)
-                files.append({"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
-                              "done": str(f.resolve()) in sudah})
+                files.append(_info_file(f, sudah, waktu))
             jenis_out.append({"nama": nama, "files": files})
         if not jenis_out:
             continue   # sesi tanpa label jenis yang ditampilkan (mis. baru dibuat/kosong)

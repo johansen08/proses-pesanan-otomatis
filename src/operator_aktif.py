@@ -13,6 +13,8 @@ import json
 import os
 from pathlib import Path
 
+import util_umum
+
 FILE = Path(__file__).resolve().parent.parent / "data" / "operator.json"
 DAFTAR_AWAL = ["PUTRI", "ALFIANA", "SAHRUL", "DENADA", "SELVI"]
 
@@ -47,10 +49,7 @@ def _baca() -> dict:
 
 
 def _tulis(d: dict) -> None:
-    FILE.parent.mkdir(parents=True, exist_ok=True)
-    sementara = FILE.with_name(f"{FILE.name}.{os.getpid()}.tmp")
-    sementara.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
-    os.replace(sementara, FILE)
+    util_umum.tulis_json_atomik(FILE, d, indent=2)
 
 
 def ambil_aktif() -> str:

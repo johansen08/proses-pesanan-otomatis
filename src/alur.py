@@ -12,13 +12,18 @@ Modul ini murni data + fungsi kecil: tanpa I/O, tanpa import berat.
 """
 from __future__ import annotations
 
-# (nama langkah di UI/konsol, flag main.py tanpa --jalankan). Urutan = urutan eksekusi.
-KATALOG: list[tuple[str, list[str]]] = [
+# Langkah pembuka yang sama di menu harian dan event.
+_LANGKAH_DASAR: list[tuple[str, list[str]]] = [
     ("Recheck stok", ["--recheck-stok"]),
     ("Sampel TikTok (nilai 0)", ["--sampel"]),
     ("Urgent Lazada", ["--urgent", "--channel", "lazada"]),
     ("Urgent GTL & SiCepat", ["--urgent", "--channel", "gtl-sicepat"]),
     ("Urgent JNE & LEX", ["--urgent", "--channel", "jne-lex"]),
+]
+
+# (nama langkah di UI/konsol, flag main.py tanpa --jalankan). Urutan = urutan eksekusi.
+KATALOG: list[tuple[str, list[str]]] = [
+    *_LANGKAH_DASAR,
     ("SPX ≤ 12.00 (Resi Pagi)", ["--shopee-pagi"]),
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
     ("SPX-J&T Spesial", ["--label", "--tanpa-reguler"]),
@@ -36,11 +41,7 @@ KATALOG: list[tuple[str, list[str]]] = [
 # Menu EVENT (10.10/11.11/12.12 dst): J&T, SPX Hemat, SPX Standard dipisah seharian (`--event`).
 # Nama langkah dipisah dari KATALOG karena nama yang sama ("J&T Spesial") punya flag berbeda.
 KATALOG_EVENT: list[tuple[str, list[str]]] = [
-    ("Recheck stok", ["--recheck-stok"]),
-    ("Sampel TikTok (nilai 0)", ["--sampel"]),
-    ("Urgent Lazada", ["--urgent", "--channel", "lazada"]),
-    ("Urgent GTL & SiCepat", ["--urgent", "--channel", "gtl-sicepat"]),
-    ("Urgent JNE & LEX", ["--urgent", "--channel", "jne-lex"]),
+    *_LANGKAH_DASAR,
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
     ("SPX Standard Pagi ≤ 12.00 (per lantai)", ["--spx-standard", "--pagi"]),
     ("SPX Hemat Pagi Spesial", ["--label", "--event", "--kurir", "spx-hemat-pagi", "--tanpa-reguler"]),
