@@ -1991,7 +1991,11 @@ _wb_cache: dict[Path, "Workbook"] = {}
 _lock_wb = threading.Lock()
 
 
-def _wb_riwayat(file: Path) -> tuple["Workbook", "Worksheet"]:
+def _wb_buka(file: Path, judul: str, kolom: list[str], lebar: tuple[int, ...],
+             perbaiki_lama=None) -> tuple["Workbook", "Worksheet"]:
+    """Workbook `file` dari cache _wb_cache; belum ada di cache -> dimuat dari disk, atau dibuat
+    baru (sheet `judul`, header `kolom`, lebar kolom A.. `lebar`). `perbaiki_lama(ws)`: dipanggil
+    hanya untuk file lama yang baru dimuat dari disk. Panggil dengan _lock_wb dipegang."""
     from openpyxl import Workbook, load_workbook
 
     key = file.resolve()
@@ -2001,18 +2005,29 @@ def _wb_riwayat(file: Path) -> tuple["Workbook", "Worksheet"]:
     if file.exists():
         wb = load_workbook(file)
         ws = wb.active
-        if ws.cell(1, len(KOLOM_RIWAYAT)).value is None:    # file lama belum punya kolom Durasi
-            ws.cell(1, len(KOLOM_RIWAYAT), KOLOM_RIWAYAT[-1])
-            ws.column_dimensions["H"].width = 18
+        if perbaiki_lama:
+            perbaiki_lama(ws)
     else:
+        file.parent.mkdir(parents=True, exist_ok=True)
         wb = Workbook()
         ws = wb.active
-        ws.title = "Riwayat"
-        ws.append(KOLOM_RIWAYAT)
-        for kol, lebar in zip("ABCDEFGH", (18, 16, 18, 14, 12, 60, 60, 18)):
-            ws.column_dimensions[kol].width = lebar
+        ws.title = judul
+        ws.append(kolom)
+        for kol, lbr in zip("ABCDEFGH", lebar):
+            ws.column_dimensions[kol].width = lbr
     _wb_cache[key] = wb
     return wb, ws
+
+
+def _tambah_kolom_durasi(ws) -> None:
+    if ws.cell(1, len(KOLOM_RIWAYAT)).value is None:    # file lama belum punya kolom Durasi
+        ws.cell(1, len(KOLOM_RIWAYAT), KOLOM_RIWAYAT[-1])
+        ws.column_dimensions["H"].width = 18
+
+
+def _wb_riwayat(file: Path) -> tuple["Workbook", "Worksheet"]:
+    return _wb_buka(file, "Riwayat", KOLOM_RIWAYAT, (18, 16, 18, 14, 12, 60, 60, 18),
+                    _tambah_kolom_durasi)
 
 
 def catat_riwayat(file: Path, baris: dict) -> None:
@@ -2032,25 +2047,7 @@ def catat_riwayat(file: Path, baris: dict) -> None:
 
 
 def _wb_detail_spesial(file: Path) -> tuple["Workbook", "Worksheet"]:
-    from openpyxl import Workbook, load_workbook
-
-    key = file.resolve()
-    if key in _wb_cache:
-        wb = _wb_cache[key]
-        return wb, wb.active
-    if file.exists():
-        wb = load_workbook(file)
-        ws = wb.active
-    else:
-        file.parent.mkdir(parents=True, exist_ok=True)
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Detail"
-        ws.append(KOLOM_DETAIL_SPESIAL)
-        for kol, lebar in zip("ABCD", (18, 16, 22, 18)):
-            ws.column_dimensions[kol].width = lebar
-    _wb_cache[key] = wb
-    return wb, ws
+    return _wb_buka(file, "Detail", KOLOM_DETAIL_SPESIAL, (18, 16, 22, 18))
 
 
 def catat_detail_spesial(folder_label: Path, nama_file: str, baris_list: list[dict]) -> None:
