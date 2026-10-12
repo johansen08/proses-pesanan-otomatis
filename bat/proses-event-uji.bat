@@ -2,6 +2,11 @@
 setlocal
 cd /d "%~dp0.."
 
+rem Sesi folder label dihitung SEKALI di sini (bertahan selama proses-event-uji.bat ini berjalan).
+rem Ditutup lalu dijalankan ulang -> sesi baru (angka lanjut dari yang terbesar hari ini).
+for /f "delims=" %%i in ('.venv\Scripts\python.exe -c "import sys; sys.path.insert(0, 'src'); from main import sesi_label_baru; print(sesi_label_baru())"') do set "LABEL_SESI_DIR=%%i"
+echo Sesi label: %LABEL_SESI_DIR%
+
 :menu
 cls
 echo ==================================================================
