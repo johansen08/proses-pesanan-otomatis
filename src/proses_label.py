@@ -783,8 +783,11 @@ class _AntreanTugas(list):
 
 def _antre_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
                          label_file: str | None = None,
-                         subfolder: str | None = None) -> _AntreanTugas:
-    """FASE 1 (serial): pecah `pesanan` jadi batch (maks MAKS_PESANAN_PICKLIST) dan buat 1
+                         subfolder: str | None = None,
+                         folder_label: Path | None = None) -> _AntreanTugas:
+    """`folder_label`: kalau diisi, picklist yang baru dibuat langsung dijurnal ke disk
+    (peringatan_gagal.catat_dibuat()) supaya tidak hilang jejak kalau proses mati mendadak.
+    FASE 1 (serial): pecah `pesanan` jadi batch (maks MAKS_PESANAN_PICKLIST) dan buat 1
     picklist per batch SAJA (langkah 1-2) - harus berurutan karena deteksi picklist terlompat
     (peringatan_picklist.ambil_nomor_hilang()) butuh urutan pasti nomor yang baru dibuat. Hasilnya
     antrean tugas untuk _jalankan_antrean(). Kalau pembuatan picklist batch ke-n melempar error,
@@ -808,6 +811,9 @@ def _antre_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
             tugas.galat = e
             return tugas
         nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
+        if folder_label is not None:
+            peringatan_gagal.catat_dibuat(pno, label_file or label, folder_label,
+                                          subfolder=subfolder)
         log.info("  [%d/%d] Picklist %s dibuat, %d pesanan - lanjut diproses paralel",
                  n, len(batch), pno, len(ids_pakai))
         tugas.append({"mulai": mulai, "pid": pid, "pno": pno, "jumlah": len(ids_pakai),
@@ -874,7 +880,7 @@ def _proses_channel_batch(k: Klien, nama: str, label: str, pesanan: list[dict],
     hanya lokasi penyimpanan PDF-nya. Dipakai proses_urgent() & proses_reguler(); kegagalan
     1 batch tidak menghentikan yang lain. Error pembuatan picklist (bukan Lewati) dilempar
     SETELAH tugas yang sudah dibuat selesai dijalankan."""
-    tugas = _antre_channel_batch(k, nama, label, pesanan, label_file, subfolder)
+    tugas = _antre_channel_batch(k, nama, label, pesanan, label_file, subfolder, folder_label)
     hasil = _jalankan_antrean(k, tugas, file_riwayat, folder_label)
     if tugas.galat:
         raise tugas.galat
@@ -1337,7 +1343,7 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
             tugas = _antre_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
                                          _label_kurir(label_x, kurir), pesanan,
                                          label_file=_label_kurir_file(label_x, kurir),
-                                         subfolder=subfolder)
+                                         subfolder=subfolder, folder_label=folder_label)
             antrean += tugas
             if tugas.galat:
                 raise tugas.galat
@@ -2211,6 +2217,7 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
 
+    peringatan_gagal.tandai_selesai(picklist_no)
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
             "No Picklist": picklist_no, "Total Pesanan": jumlah, "Resi Keluar": len(ada_resi),
             "File Label": file_label, "Catatan": catatan, "Tanpa Resi": tanpa_resi}
@@ -2283,6 +2290,7 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
                          "detik": detik, "Durasi": durasi(detik)}
         else:
             nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
+            peringatan_gagal.catat_dibuat(pno, sku, folder_label, tag=_tag_spesial(kurir))
             log.info("  Picklist %s dibuat, %d pesanan - lanjut diproses paralel", pno, len(ids))
             tugas.append((idx, mulai, pid, pno, len(ids), sku, nomor_terlompat))
 

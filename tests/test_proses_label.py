@@ -2380,6 +2380,38 @@ def uji_jnt_ndd_event_dipisah_dari_jnt_lain():
     print("  jnt-ndd: tag/subfolder/label JNTNDD_* sendiri; jnt-event membuang NDD, jnt harian tetap semua")
 
 
+def uji_jurnal_picklist_dibuat_terlihat_sebagai_yatim_kalau_proses_mati():
+    import time
+
+    asli_buat, asli_hilang = pl.buat_picklist_channel, pl.peringatan_picklist.ambil_nomor_hilang
+    pl.buat_picklist_channel = lambda k, ids: (ids[0], f"PICK-{ids[0]}", ids)
+    pl.peringatan_picklist.ambil_nomor_hilang = lambda: []
+    pg = pl.peringatan_gagal
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            pg.atur_folder(Path(d))
+            sesi = Path(d) / "2026-10-12" / "1"
+            pl._antre_channel_batch(None, "X", "LBL", [{"salesorder_id": 1}, ], subfolder="URGENT",
+                                    folder_label=sesi)
+            pl._antre_channel_batch(None, "X", "LBL", [{"salesorder_id": 2}], folder_label=sesi)
+            pl._antre_channel_batch(None, "X", "LBL", [{"salesorder_id": 3}], folder_label=sesi)
+            sekarang = time.time()
+            assert pg.daftar_terhenti(sekarang) == [], "masih baru = dianggap berjalan"
+            nanti = sekarang + pg.UMUR_YATIM_S + 5
+            assert {x["picklist"] for x in pg.daftar_terhenti(nanti)} == {"PICK-1", "PICK-2", "PICK-3"}
+            pg.tandai_selesai("PICK-1")                        # sukses sampai akhir
+            pg.catat_terhenti("PICK-2", "LBL", sesi, "timeout")  # gagal biasa: alasan asli menang
+            sisa = {x["picklist"]: x for x in pg.daftar_terhenti(nanti)}
+            assert set(sisa) == {"PICK-2", "PICK-3"}, sisa
+            assert sisa["PICK-2"]["alasan"] == "timeout"
+            assert sisa["PICK-3"]["sesi"] == "2026-10-12/1" and sisa["PICK-3"]["op"] == "dibuat"
+            assert len(pg.pesan_yatim(nanti)) == 1 and "PICK-3" in pg.pesan_yatim(nanti)[0]
+    finally:
+        pl.buat_picklist_channel, pl.peringatan_picklist.ambil_nomor_hilang = asli_buat, asli_hilang
+        pg._file_peringatan = None
+    print("  jurnal 'dibuat': picklist yatim muncul setelah UMUR_YATIM_S; selesai/gagal menggantikan")
+
+
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.WARNING)

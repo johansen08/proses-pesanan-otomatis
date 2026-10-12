@@ -404,6 +404,8 @@ def main() -> int:
     peringatan_gagal.atur_folder(FOLDER_LOG)
     peringatan_sisa.atur_folder(FOLDER_LOG)
     serah_terima.atur_folder(FOLDER_LOG)
+    peringatan_gagal.cetak(peringatan_gagal.pesan_yatim(),
+                           "PERHATIAN: PICKLIST YATIM (PROSES SEBELUMNYA MATI MENDADAK)")
     try:
         return _main()
     finally:

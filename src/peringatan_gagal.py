@@ -20,6 +20,12 @@ from pathlib import Path
 
 _file_peringatan: Path | None = None
 
+# Picklist 'dibuat' tanpa catatan selesai/gagal selama ini dianggap yatim. Satu picklist normal
+# selesai dalam hitungan menit; batas ini dibuat longgar supaya proses yang masih berjalan
+# (mis. menunggu resi lama) tidak salah dituding.
+UMUR_YATIM_S = 60 * 60
+ALASAN_YATIM = "proses berhenti mendadak sebelum picklist selesai (tidak ada catatan selesai/gagal)"
+
 
 def atur_folder(folder_log: Path) -> None:
     global _file_peringatan
@@ -71,8 +77,27 @@ def catat_terhenti(picklist_no: str, nama: str, folder_label: Path, alasan: str,
         fh.write(json.dumps(baris, ensure_ascii=False) + "\n")
 
 
+def catat_dibuat(picklist_no: str, nama: str, folder_label: Path,
+                 tag: str | None = None, subfolder: str | None = None) -> None:
+    """Jurnal tulis-dulu: panggil SEGERA setelah picklist berhasil dibuat di Jubelio (aksi yang
+    tidak bisa diulang). Kalau proses mati mendadak (PC mati/sleep, konsol ditutup, dimatikan)
+    sebelum langkah 3-6 selesai, tidak ada kode yang sempat mencatat apa pun - catatan ini yang
+    membuat picklist yatim tetap terlihat di daftar_terhenti() setelah UMUR_YATIM_S. Dihapus
+    oleh tandai_selesai() (sukses) atau diganti catat_terhenti() (gagal biasa)."""
+    f = _file_terhenti()
+    if not f:
+        return
+    baris = {"op": "dibuat", "epoch": datetime.now().timestamp(),
+             "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "picklist": picklist_no,
+             "nama": nama, "tag": tag, "subfolder": subfolder,
+             "sesi": f"{folder_label.parent.name}/{folder_label.name}",
+             "alasan": ALASAN_YATIM}
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(baris, ensure_ascii=False) + "\n")
+
+
 def tandai_selesai(picklist_no: str) -> None:
-    """Picklist yang tadinya terhenti sudah berhasil dilanjutkan -> keluar dari daftar."""
+    """Picklist sudah berhasil sampai akhir (atau berhasil dilanjutkan) -> keluar dari daftar."""
     f = _file_terhenti()
     if not f:
         return
@@ -81,23 +106,43 @@ def tandai_selesai(picklist_no: str) -> None:
                              "picklist": picklist_no}) + "\n")
 
 
-def daftar_terhenti() -> list[dict]:
+def daftar_terhenti(sekarang: float | None = None) -> list[dict]:
     """Picklist yang masih terhenti (belum ada catatan 'selesai' setelah catatan terakhirnya),
-    terbaru di atas. Tiap item: picklist, nama, tag, subfolder, sesi, alasan, waktu."""
+    terbaru di atas. Tiap item: picklist, nama, tag, subfolder, sesi, alasan, waktu. Termasuk
+    picklist YATIM: tercatat 'dibuat' tapi tidak pernah selesai/gagal dan sudah lebih tua dari
+    UMUR_YATIM_S (prosesnya diduga mati mendadak); yang lebih muda dianggap masih berjalan."""
     f = _file_terhenti()
     if not f or not f.exists():
         return []
+    sekarang = datetime.now().timestamp() if sekarang is None else sekarang
     aktif: dict[str, dict] = {}
+    dibuat: dict[str, dict] = {}
     for baris in f.read_text(encoding="utf-8").splitlines():
         try:
             d = json.loads(baris)
         except ValueError:
             continue
-        if d.get("op") == "tambah" and d.get("picklist"):
-            aktif[d["picklist"]] = d
+        no = d.get("picklist")
+        if d.get("op") == "tambah" and no:
+            aktif[no] = d
+            dibuat.pop(no, None)
+        elif d.get("op") == "dibuat" and no:
+            dibuat[no] = d
         elif d.get("op") == "selesai":
-            aktif.pop(d.get("picklist"), None)
+            aktif.pop(no, None)
+            dibuat.pop(no, None)
+    for no, d in dibuat.items():
+        if sekarang - d.get("epoch", 0) >= UMUR_YATIM_S:
+            aktif[no] = d
     return sorted(aktif.values(), key=lambda d: d.get("epoch", 0), reverse=True)
+
+
+def pesan_yatim(sekarang: float | None = None) -> list[str]:
+    """Peringatan siap cetak untuk picklist yatim saja (lihat daftar_terhenti())."""
+    return [f"{d['picklist']} ({d.get('nama')}, sesi {d.get('sesi')}) dibuat {d.get('waktu')} "
+            f"tapi tidak pernah selesai - proses sebelumnya diduga mati mendadak. "
+            f"Lanjutkan dari UI (tombol Terputus/Download ulang) atau main.py --lanjut."
+            for d in daftar_terhenti(sekarang) if d.get("op") == "dibuat"]
 
 
 def cetak(peringatan: list[str],
