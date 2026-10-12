@@ -229,8 +229,8 @@ KURIR_FILTER_REGULER = ["j&t", "spx"]
 LABEL_REGULER_1QTY = "1QTY-REGULER"     # 1 SKU, qty 1, tidak spesial
 LABEL_REGULER_KOMBINASI = "KOMBINASI-REGULER"   # sisanya (multi-baris/qty>1), tidak spesial
 
-# Pecah lagi bagian "1qty reguler" per grup rak gudang (lihat docs/superpowers/specs/
-# 2026-10-02-pecah-1qty-per-rak-design.md) - grup 1A sengaja tidak ada (tidak dipakai di
+# Pecah lagi bagian "1qty reguler" per grup rak gudang (lihat docs/
+# desain-pecah-1qty-per-rak.md) - grup 1A sengaja tidak ada (tidak dipakai di
 # gudang ini, dikonfirmasi lewat sniff 02-10-2026). Urutan di sini = urutan pembuatan
 # picklist (bukan alfabetis) - diminta tim operasional supaya picker jalan runtut.
 GRUP_RAK = ["2A", "3A", "1B", "2B", "3B"]

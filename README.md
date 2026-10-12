@@ -346,7 +346,7 @@ yang **bukan** bagian SKU spesial hari itu digabung jadi picklist, dipecah 2 bag
   gudang ini), supaya picker tidak bolak-balik antar zona. Pesanan yang rak-nya di luar 5
   grup itu digabung jadi 1 picklist `LAINNYA`. Grup yang tidak ada pesanannya dilewati (tidak
   bikin picklist kosong). Lihat
-  [docs/superpowers/specs/2026-10-02-pecah-1qty-per-rak-design.md](docs/superpowers/specs/2026-10-02-pecah-1qty-per-rak-design.md)
+  [docs/desain-pecah-1qty-per-rak.md](docs/desain-pecah-1qty-per-rak.md)
   untuk detail mekanismenya (endpoint `zones-racks-combination` + filter `combination[]`).
 - **Kombinasi Reguler**: sisanya — pesanan qty > 1 (multi-baris/multi-SKU atau 1 SKU qty > 1),
   TIDAK dipecah per rak (tetap 1 picklist gabungan seperti sebelumnya).
