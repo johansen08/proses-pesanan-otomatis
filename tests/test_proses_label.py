@@ -2349,6 +2349,37 @@ def uji_gelombang_bersama_reguler_dibuat_selagi_spesial_menunggu():
 
 JEDA_RESI = pl.JEDA_RESI_S
 
+def uji_jnt_ndd_event_dipisah_dari_jnt_lain():
+    # nama file/subfolder/label: NDD sendiri (JNTNDD_*), jnt-event sama dgn jnt (JNT_*)
+    assert pl._tag_spesial("jnt-ndd") == "JNTNDD_SPESIAL"
+    assert pl._gabung_kurir(pl.SUBFOLDER_SATUAN, "jnt-ndd") == "JNTNDD_SATUAN"
+    assert pl._label_kurir("1QTY-REGULER-2A", "jnt-ndd") == "J&T-NDD-1QTY-REGULER-2A"
+    assert pl._tag_spesial("jnt-event") == pl._tag_spesial("jnt") == "JNT_SPESIAL"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "JNTNDD_SPESIAL")         == "detail-resi-spesial-jntndd.xlsx"
+    assert pl.nama_detail_per_kurir("detail-resi-spesial.xlsx", "JNT_SPESIAL")         == "detail-resi-spesial-jnt.xlsx"
+    assert pl.KURIR_PILIHAN["jnt-ndd"] == "j&t express next-day delivery"
+    assert pl.KURIR_PILIHAN["jnt-event"] == pl.KURIR_PILIHAN["jnt"] == "j&t"
+    # buang NDD hanya untuk jnt-event
+    ndd = {"salesorder_no": "A", "shipper": "J&T Express NEXT-DAY DELIVERY"}
+    std = {"salesorder_no": "B", "shipper": "J&T Express Standard"}
+    hemat = {"salesorder_no": "C", "shipper": "J&T Express Hemat"}
+    semua = [ndd, std, hemat]
+    assert pl._buang_kurir_kecuali(semua, "jnt-event") == [std, hemat]
+    for kurir in (None, "jnt", "jnt-ndd", "spx"):
+        assert pl._buang_kurir_kecuali(semua, kurir) == semua, kurir
+    # saring() (alur spesial): jnt-event menolak NDD, jnt-ndd hanya menerima NDD
+    spesial = {"A", "B", "C"}
+    for o in semua:
+        o.update(grand_total="1000", total_qty="1")
+    pakai, buang = pl.saring(semua, spesial, "jnt-event")
+    assert [o["salesorder_no"] for o in pakai] == ["B", "C"] and [n for n, _ in buang] == ["A"]
+    pakai, buang = pl.saring(semua, spesial, "jnt-ndd")
+    assert [o["salesorder_no"] for o in pakai] == ["A"] and len(buang) == 2
+    pakai, _ = pl.saring(semua, spesial, "jnt")
+    assert len(pakai) == 3
+    print("  jnt-ndd: tag/subfolder/label JNTNDD_* sendiri; jnt-event membuang NDD, jnt harian tetap semua")
+
+
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.WARNING)

@@ -397,6 +397,23 @@ def uji_event_kunci_kurir_hitung_sama_dengan_kurir_pilihan_proses_label():
     print("  kunci KURIR_AWALAN_HITUNG sama dengan proses_label.KURIR_PILIHAN")
 
 
+def uji_event_jnt_ndd_dipisah_dari_jnt_standard_dan_hemat():
+    df = _df(_resi("N", "J&T Express NEXT-DAY DELIVERY", 3) + _resi("S", "J&T Express Standard", 2)
+             + _resi("H", "J&T Express Hemat", 2))
+    df["Kurir"] = df["Kurir"].astype("string").str.strip()
+    # jnt-ndd: hanya NDD (3 resi -> spesial)
+    _, r = ss.hitung_sku_spesial(df, kurir_hitung="jnt-ndd")
+    assert r["resi_per_sku"] == {"X": ["N0", "N1", "N2"]}, r["resi_per_sku"]
+    assert ss.resi_kandidat(df, "jnt-ndd") == {"N0", "N1", "N2"}
+    # jnt-event: Standard + Hemat saja (4 resi -> spesial), NDD tidak ikut
+    _, r = ss.hitung_sku_spesial(df, kurir_hitung="jnt-event")
+    assert r["resi_per_sku"] == {"X": ["H0", "H1", "S0", "S1"]}, r["resi_per_sku"]
+    assert ss.resi_kandidat(df, "jnt-event") == {"S0", "S1", "H0", "H1"}
+    # jnt polos (harian/TIPE 2-3) tetap menyertakan NDD
+    assert ss.resi_kandidat(df, "jnt") == set(df["No pesanan"])
+    print("  event: jnt-ndd hanya NEXT-DAY DELIVERY; jnt-event = J&T Standard+Hemat tanpa NDD; jnt polos tetap semua")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

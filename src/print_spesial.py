@@ -23,6 +23,9 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
   --jenis jnt-siang  -> subfolder JNT_SIANG (--jnt-siang), SEMUA PDF ikut (JNT-SIANG-LANTAI*).
   Mode EVENT (proses-event.bat, lihat docs/jadwal-proses.md) - jenis TERPISAH, tidak ikut
   jenis gabungan di atas (spesial/satuan/kombinasi tetap hanya folder harian):
+  --jenis spesial-jnt-ndd / satuan-jnt-ndd / kombinasi-jnt-ndd -> subfolder JNTNDD_SPESIAL /
+                        JNTNDD_SATUAN / JNTNDD_KOMBINASI (--event --kurir jnt-ndd, J&T NEXT-DAY
+                        DELIVERY). `--kurir jnt` mode event = J&T TANPA NDD (jenis "-jnt").
   --jenis spesial-spx-hemat / satuan-spx-hemat / kombinasi-spx-hemat -> subfolder
                         SPXHEMAT_SPESIAL / SPXHEMAT_SATUAN / SPXHEMAT_KOMBINASI (--event --kurir
                         spx-hemat). J&T mode event memakai jenis yang SUDAH ada (spesial-jnt dst).
@@ -33,7 +36,7 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         masuk SPX_PAGI, tercetak lewat --jenis spx-pagi.
 Beberapa jenis bisa dicetak dalam SATU sesi (printer dipilih sekali, konfirmasi sekali):
   --jenis spesial-jnt,satuan-jnt,kombinasi-jnt   (daftar jenis dipisah koma, dicetak berurutan)
-  --paket event-semua   (paket tetap, lihat PAKET: jnt, spx, spx-hemat, spx-hemat-pagi,
+  --paket event-semua   (paket tetap, lihat PAKET: jnt, jnt-ndd, spx, spx-hemat, spx-hemat-pagi,
                          spx-standard, event-semua)
   tanpa --jenis/--paket -> MENU bertingkat (HARIAN / EVENT / PER KURIR / satu jenis), lihat
                          menu_pilih_jenis() - inilah isi cetak-label.bat.
@@ -188,7 +191,7 @@ JENIS_LABEL: dict[str, list[str]] = {
     **{f"{dasar}-{kode}": [f"{KURIR_LABEL_FILE_EVENT[kode]}_{sub}"]
        for dasar, sub in (("spesial", TAG_SPESIAL), ("satuan", SUBFOLDER_SATUAN),
                           ("kombinasi", SUBFOLDER_KOMBINASI))
-       for kode in ("spx-hemat", "spx-hemat-pagi")},
+       for kode in ("jnt-ndd", "spx-hemat", "spx-hemat-pagi")},
     "spx-standard": [SUBFOLDER_SPX_STANDARD],   # SPX Standard seharian (--spx-standard)
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
@@ -201,17 +204,19 @@ JENIS_LABEL: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------------------
 _JNT = ["spesial-jnt", "satuan-jnt", "kombinasi-jnt"]
 _SPX = ["spesial-spx", "satuan-spx", "kombinasi-spx"]
+_JNT_NDD = ["spesial-jnt-ndd", "satuan-jnt-ndd", "kombinasi-jnt-ndd"]
 _HEMAT = ["spesial-spx-hemat", "satuan-spx-hemat", "kombinasi-spx-hemat"]
 _HEMAT_PAGI = ["spesial-spx-hemat-pagi", "satuan-spx-hemat-pagi", "kombinasi-spx-hemat-pagi"]
 _STANDARD = ["spx-pagi", "spx-standard"]
 PAKET: dict[str, tuple[str, list[str]]] = {
     "jnt": ("Semua J&T (spesial + satuan + kombinasi)", _JNT),
     "spx": ("Semua SPX (spesial + satuan + kombinasi, hasil TIPE 2 & 3)", _SPX),
+    "jnt-ndd": ("Semua J&T NEXT-DAY DELIVERY (spesial + satuan + kombinasi)", _JNT_NDD),
     "spx-hemat": ("Semua SPX Hemat (spesial + satuan + kombinasi)", _HEMAT),
     "spx-hemat-pagi": ("Semua SPX Hemat Pagi (spesial + satuan + kombinasi)", _HEMAT_PAGI),
     "spx-standard": ("SPX Standard (pagi + seharian)", _STANDARD),
-    "event-semua": ("SEMUA EVENT berurutan: J&T -> SPX Hemat Pagi -> SPX Hemat -> SPX Standard",
-                    _JNT + _HEMAT_PAGI + _HEMAT + _STANDARD),
+    "event-semua": ("SEMUA EVENT berurutan: J&T -> J&T NDD -> SPX Hemat Pagi -> SPX Hemat -> SPX Standard",
+                    _JNT + _JNT_NDD + _HEMAT_PAGI + _HEMAT + _STANDARD),
 }
 
 
@@ -231,8 +236,8 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
         ("SHOPEE PAGI (SPX s.d. 12.00)", ["spx-pagi"]),
         ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
     ]),
-    ("EVENT (J&T / SPX Hemat / SPX Standard dipisah)", [
-        _paket("event-semua"), _paket("jnt"), _paket("spx-hemat-pagi"),
+    ("EVENT (J&T / J&T NDD / SPX Hemat / SPX Standard dipisah)", [
+        _paket("event-semua"), _paket("jnt"), _paket("jnt-ndd"), _paket("spx-hemat-pagi"),
         _paket("spx-hemat"), _paket("spx-standard"),
     ]),
     ("PER KURIR (harian, hasil TIPE 2 & 3)", [_paket("jnt"), _paket("spx")]),

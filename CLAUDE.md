@@ -216,8 +216,11 @@ kurir saat PEMBUATAN saja — penentuan SKU "spesial" itu sendiri selalu menggab
 menu: EVENT - TIPE 1-4 + MALAM): J&T, SPX Hemat, SPX Standard dipisah seharian. Flag `--event` (bersama `--label`/
 `--reguler` + `--kurir jnt|spx-hemat|spx-hemat-pagi`) membuat penentuan SKU spesial dihitung PER
 KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesial — hanya
-`--spx-standard [--pagi]`, dipecah per lantai. `--kurir spx-hemat`/`spx-hemat-pagi` tanpa
-`--event` ditolak (`main.pesan_salah_mode_event`). Kunci kurir event TIDAK boleh ditambahkan ke
+`--spx-standard [--pagi]`, dipecah per lantai. `--kurir spx-hemat`/`spx-hemat-pagi`/`jnt-ndd` tanpa
+`--event` ditolak (`main.pesan_salah_mode_event`). J&T NEXT-DAY DELIVERY (NDD) dipisah dari J&T lain: di mode event
+`--kurir jnt` diterjemahkan `main.terapkan_kurir_event()` menjadi kunci internal `jnt-event` (filter `j&t`, NDD dibuang
+di sisi klien; nama file/subfolder tetap `JNT_*`), sedangkan NDD = `--kurir jnt-ndd` (`JNTNDD_*`); tanpa `--event` `jnt`
+tetap memuat NDD. `KATALOG_EVENT`/`.bat` event punya 3 langkah "J&T NDD" setelah J&T Kombinasi. Kunci kurir event TIDAK boleh ditambahkan ke
 `KURIR_LABEL_FILE` (yang menurunkan jenis cetak harian di `print_spesial.py`) — pakai
 `KURIR_LABEL_FILE_EVENT`/`KURIR_KODE_FILE_SEMUA`. Detail & jadwal:
 [docs/jadwal-proses.md](docs/jadwal-proses.md) bagian "bat\proses-event.bat — mode event".

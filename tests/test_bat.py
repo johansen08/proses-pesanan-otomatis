@@ -37,9 +37,9 @@ BAT_DI_ROOT = ["proses-pesanan.bat"]      # satu-satunya .bat yang boleh di root
 MENU_EVENT = ("proses-event.bat", "proses-event-uji.bat")
 POLA_PANGGIL_MAIN = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
 # proses-event.bat: (pilihan menu, label blok, judul rekap, jumlah langkah)
-PILIHAN_EVENT = (("1", "event1", "EVENT - TIPE 1", 13), ("2", "event2", "EVENT - TIPE 2", 17),
-                 ("3", "event3", "EVENT - TIPE 3", 13), ("4", "event4", "EVENT - TIPE 4", 14),
-                 ("5", "event5", "EVENT - MALAM", 10))
+PILIHAN_EVENT = (("1", "event1", "EVENT - TIPE 1", 16), ("2", "event2", "EVENT - TIPE 2", 20),
+                 ("3", "event3", "EVENT - TIPE 3", 16), ("4", "event4", "EVENT - TIPE 4", 17),
+                 ("5", "event5", "EVENT - MALAM", 13))
 
 # main.py & rekap_waktu.py palsu untuk simulasi: cuma mencatat argumen, tanpa Jubelio.
 MAIN_PALSU = '''import sys

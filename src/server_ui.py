@@ -62,7 +62,7 @@ HARI_UI = 3                      # hari ini, kemarin, 2 hari lalu
 # yang tinggal memuat sisanya (subfolder tanpa awalan kurir).
 JENIS_UI = [(f"{dasar} {kurir}", f"{kode}-{kk}")
             for dasar, kode in (("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"))
-            for kurir, kk in (("J&T", "jnt"), ("SPX", "spx"),
+            for kurir, kk in (("J&T", "jnt"), ("J&T NDD", "jnt-ndd"), ("SPX", "spx"),
                               ("SPX Hemat", "spx-hemat"), ("SPX Hemat Pagi", "spx-hemat-pagi"))]
 JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
              ("GTL-SiCepat", "gtl-sicepat"),

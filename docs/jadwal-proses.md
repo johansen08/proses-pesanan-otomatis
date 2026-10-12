@@ -5,6 +5,12 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
+**Revisi 2026-10-12**: mode event memisahkan **J&T Express NEXT-DAY DELIVERY (NDD)** dari J&T Standard &
+Hemat. `--event --kurir jnt` kini = J&T TANPA NDD; NDD punya alur sendiri `--event --kurir jnt-ndd` (spesial, 1 qty,
+kombinasi; subfolder/label `JNTNDD_*`, jenis cetak `*-jnt-ndd`, paket `jnt-ndd`). Tiga langkah "J&T NDD ..." ditambahkan
+tepat setelah J&T Kombinasi di semua pilihan menu event (TIPE 1-4 + MALAM), `KATALOG_EVENT` dan UI. Tanpa `--event`
+(alur harian) J&T tetap menyertakan NDD. Hitungan SKU spesial juga terpisah (NDD punya ambang 3 resi sendiri).
+
 **Revisi 2026-10-09**: menu `bat\proses-event.bat` jadi 5 pilihan (EVENT - TIPE 1-4 + MALAM, sama dengan menu
 Event di UI desktop), menggantikan 2 pilihan lama (SESI BIASA / TEPAT JAM 13.00); J&T Resi Siang kini langkah
 tetap TIPE 4. Lihat bagian "bat\proses-event.bat — mode event".
@@ -380,7 +386,7 @@ pengawasan.
   yang benar-benar dipicklist saat proses SKU spesial itu berjalan — bukan
   mengubah daftar SKU spesial itu sendiri. **Satu-satunya pengecualian**
   adalah mode event (`bat\proses-event.bat`, flag `--event`): di sana hitungan
-  dilakukan per kurir (J&T dan SPX Hemat terpisah, SPX Standard tidak ikut).
+  dilakukan per kurir (J&T tanpa NDD, J&T NDD, dan SPX Hemat terpisah, SPX Standard tidak ikut).
   Pengecualian ini tidak pernah aktif tanpa `--event`.
 
 ---

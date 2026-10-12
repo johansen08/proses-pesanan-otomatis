@@ -103,7 +103,7 @@ import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 import rekap_master_excel
-from sku_spesial import AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
+from sku_spesial import AWALAN_JNT_NDD, AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
 
 # Host server report (Telerik) Jubelio, urut dari yang dicoba PERTAMA. report.jubelio.com lebih
 # stabil; report-prod.jubelio.com (host bawaan URL dari API Jubelio) sering bermasalah (410/504/
@@ -125,8 +125,23 @@ KURIR_FILTER = ["j&t", "spx"]           # nilai filter kurir di web Jubelio
 # "spx-hemat-pagi" = SPX Hemat untuk Shopee Pagi mode event (pesanan jam pesan <= 12:00 saja -
 # lihat KURIR_BERBATAS): filter kurirnya SAMA dengan "spx-hemat", tapi diberi kunci sendiri
 # supaya tag/subfolder/label/nama file-nya TERPISAH dari SPX Hemat sisa hari (SPXHEMATPAGI_*).
+#
+# J&T NEXT-DAY DELIVERY (NDD) dipisah di mode event: "jnt-ndd" = hanya NDD; "jnt-event" = nilai
+# --kurir jnt + --event (diterjemahkan main.terapkan_kurir_event()) = filter "j&t" yang SAMA dengan
+# "jnt" tetapi NDD dibuang di sisi klien (KURIR_KECUALI_SHIPPER), supaya jenis J&T lain yang
+# belum dikenal tetap ikut (bukan didaftar satu per satu). "jnt" polos (harian) tetap menyertakan NDD.
 KURIR_PILIHAN = {"jnt": "j&t", "spx": "spx", "spx-hemat": "spx hemat",
-                 "spx-hemat-pagi": "spx hemat", "spx-standard": "spx standard"}
+                 "spx-hemat-pagi": "spx hemat", "spx-standard": "spx standard",
+                 "jnt-event": "j&t", "jnt-ndd": "j&t express next-day delivery"}
+KURIR_KECUALI_SHIPPER = {"jnt-event": AWALAN_JNT_NDD}
+
+
+def _buang_kurir_kecuali(pesanan: list[dict], kurir: str | None) -> list[dict]:
+    """Buang pesanan yang shipper-nya diawali KURIR_KECUALI_SHIPPER[kurir] (NDD untuk jnt-event)."""
+    kecuali = KURIR_KECUALI_SHIPPER.get(kurir) if kurir else None
+    if not kecuali:
+        return pesanan
+    return [o for o in pesanan if not str(o.get("shipper", "")).upper().startswith(kecuali)]
 # Penanda di nama file label PDF DAN nama subfolder tempat labelnya disimpan
 # (folder_label / tag), HANYA untuk picklist SKU spesial (Alur 1 - proses()/
 # lanjutkan_picklist() dipanggil dari proses()); lanjutkan() (--lanjut) hanya memakainya kalau
@@ -504,7 +519,7 @@ def cari_pesanan(k: Klien, sku: str, kurir: str | None = None,
         data = j.get("data") or []
         hasil += data
         if not data or len(hasil) >= int(j.get("totalCount") or 0):
-            return saring_sampai_batas(hasil, batas)
+            return saring_sampai_batas(_buang_kurir_kecuali(hasil, kurir), batas)
         page += 1
 
 
@@ -523,7 +538,8 @@ def saring(pesanan: list[dict], resi_spesial: set[str],
             buang.append((no, "nilai pesanan 0 (kreator)"))
         elif _angka(o.get("total_qty")) != 1:
             buang.append((no, f"total qty {o.get('total_qty')}"))
-        elif not str(o.get("shipper", "")).upper().startswith(awalan):
+        elif (not str(o.get("shipper", "")).upper().startswith(awalan)
+              or _buang_kurir_kecuali([o], kurir) == []):
             buang.append((no, f"kurir {o.get('shipper')}"))
         else:
             pakai.append(o)
@@ -915,7 +931,9 @@ def ambil_pesanan_reguler(k: Klien, kurir: str | None = None,
     J&T/SPX (atau 1 kurir saja, lihat cari_pesanan()), lintas SKU (belum dipisah spesial/
     1 qty/kombinasi, lihat pisah_reguler()). `batas`: lihat cari_pesanan()."""
     return saring_sampai_batas(
-        ambil_pesanan_channel(k, CHANNEL_IDS_REGULER, _filter_kurir(kurir, KURIR_FILTER_REGULER)),
+        _buang_kurir_kecuali(
+            ambil_pesanan_channel(k, CHANNEL_IDS_REGULER,
+                                  _filter_kurir(kurir, KURIR_FILTER_REGULER)), kurir),
         batas)
 
 
@@ -1249,7 +1267,8 @@ _BAGIAN_REGULER = {
     "kombinasi": ("Kombinasi Reguler", LABEL_REGULER_KOMBINASI, 1, SUBFOLDER_KOMBINASI),
 }
 KURIR_LABEL = {"jnt": "J&T", "spx": "SPX", "spx-hemat": "SPX-HEMAT",
-               "spx-hemat-pagi": "SPX-HEMAT-PAGI", "spx-standard": "SPX-STANDARD"}   # awalan nama/label saat kurir dipisah (tampilan)
+               "spx-hemat-pagi": "SPX-HEMAT-PAGI", "spx-standard": "SPX-STANDARD",
+               "jnt-event": "J&T", "jnt-ndd": "J&T-NDD"}   # awalan nama/label saat kurir dipisah (tampilan)
 # nama file tidak boleh mengandung "&" (dibuang _nama_file()), jadi nama picklist/PDF
 # tetap pakai varian tanpa simbol; kolom SKU di riwayat & log tetap pakai KURIR_LABEL.
 KURIR_LABEL_FILE = {"jnt": "JNT", "spx": "SPX"}
@@ -1257,7 +1276,9 @@ KURIR_LABEL_FILE = {"jnt": "JNT", "spx": "SPX"}
 # menurunkan daftar jenis cetak/subfolder-nya dari KURIR_LABEL_FILE, jadi menambahkan di sana
 # otomatis mengubah perilaku cetak harian. Dipakai lewat KURIR_KODE_FILE_SEMUA di bawah.
 KURIR_LABEL_FILE_EVENT = {"spx-hemat": "SPXHEMAT", "spx-hemat-pagi": "SPXHEMATPAGI",
-                          "spx-standard": "SPXSTD"}
+                          "spx-standard": "SPXSTD",
+                          "jnt-event": "JNT",       # J&T tanpa NDD: nama file/subfolder SAMA dgn "jnt"
+                          "jnt-ndd": "JNTNDD"}
 KURIR_KODE_FILE_SEMUA = {**KURIR_LABEL_FILE, **KURIR_LABEL_FILE_EVENT}
 
 

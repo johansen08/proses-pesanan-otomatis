@@ -33,8 +33,15 @@ MIN_RESI = 3                       # minimal resi per SKU (J&T + SPX digabung)
 # --kurir CLI (sama dengan proses_label.KURIR_PILIHAN), nilai = awalan teks kolom Kurir Excel
 # (huruf besar). Hanya dipakai kalau `kurir_hitung` diisi; default None = J&T+SPX digabung
 # seperti semula (alur harian TIDAK berubah).
+#
+# J&T NEXT-DAY DELIVERY (NDD) dipisah dari J&T lain (Standard/Hemat) di mode event: "jnt-ndd" hanya
+# NDD, sedangkan "jnt-event" (nilai --kurir jnt + --event, lihat main.terapkan_kurir_event()) =
+# J&T tanpa NDD (KURIR_KECUALI_HITUNG). "jnt" polos (harian) tetap menyertakan NDD.
+AWALAN_JNT_NDD = "J&T EXPRESS NEXT-DAY"
 KURIR_AWALAN_HITUNG = {"jnt": "J&T", "spx": "SPX", "spx-hemat": "SPX HEMAT",
-                       "spx-hemat-pagi": "SPX HEMAT", "spx-standard": "SPX STANDARD"}
+                       "spx-hemat-pagi": "SPX HEMAT", "spx-standard": "SPX STANDARD",
+                       "jnt-event": "J&T", "jnt-ndd": AWALAN_JNT_NDD}
+KURIR_KECUALI_HITUNG = {"jnt-event": AWALAN_JNT_NDD}
 
 # Awalan SKU yang SENGAJA tidak pernah dihitung spesial walau jumlah resinya >= MIN_RESI -
 # dicocokkan dengan awalan teks SKU (bukan exact match), jadi semua varian seperti
@@ -99,7 +106,10 @@ def _lolos_kurir(df: pd.DataFrame, kurir_hitung: str | None = None) -> pd.Series
     if kurir_hitung not in KURIR_AWALAN_HITUNG:
         raise ValueError(f"kurir_hitung tidak dikenal: {kurir_hitung!r} "
                          f"(pilihan: {sorted(KURIR_AWALAN_HITUNG)})")
-    return df["Kurir"].fillna("").str.upper().str.startswith(KURIR_AWALAN_HITUNG[kurir_hitung])
+    teks = df["Kurir"].fillna("").str.upper()
+    lolos = teks.str.startswith(KURIR_AWALAN_HITUNG[kurir_hitung])
+    kecuali = KURIR_KECUALI_HITUNG.get(kurir_hitung)
+    return lolos & ~teks.str.startswith(kecuali) if kecuali else lolos
 
 
 def resi_kandidat(df: pd.DataFrame, kurir_hitung: str | None = None) -> set[str]:

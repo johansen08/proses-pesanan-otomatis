@@ -59,10 +59,12 @@ dipicklist:
 Mode EVENT (hari 10.10/11.11/12.12 dst, lihat docs/jadwal-proses.md; proses-event.bat): J&T,
 SPX Hemat, dan SPX Standard dipisah SEPANJANG HARI. Berdiri sendiri dari alur harian - tanpa
 --event, perilaku semua flag di atas TIDAK berubah. J&T dan SPX Hemat: spesial, satuan, kombinasi
-(penentuan SKU spesial dihitung PER KURIR, bukan digabung) lewat --event + --kurir jnt|spx-hemat;
+(penentuan SKU spesial dihitung PER KURIR, bukan digabung) lewat --event + --kurir jnt|jnt-ndd|spx-hemat
+(jnt = J&T Standard+Hemat TANPA NEXT-DAY DELIVERY; jnt-ndd = hanya J&T NEXT-DAY DELIVERY);
 SPX Standard: hanya dipecah per lantai (1/2/3/LAINNYA) lewat --spx-standard. Versi Shopee Pagi
 (jam pesan s.d. 12:00, folder hasil TERPISAH): --kurir spx-hemat-pagi dan --spx-standard --pagi:
     python src/main.py --label --event --kurir jnt --tanpa-reguler --jalankan
+    python src/main.py --label --event --kurir jnt-ndd --tanpa-reguler --jalankan
     python src/main.py --reguler --event --kurir spx-hemat --bagian 1qty --jalankan
     python src/main.py --label --event --kurir spx-hemat-pagi --tanpa-reguler --jalankan
     python src/main.py --spx-standard --jalankan
@@ -428,17 +430,18 @@ def _main() -> int:
                         "(tanpa --jalankan = mode uji)")
     ap.add_argument("--bagian", choices=["1qty", "kombinasi"],
                     help="dipakai bersama --reguler: batasi ke 1 bagian saja")
-    ap.add_argument("--kurir", choices=["jnt", "spx", "spx-hemat", "spx-hemat-pagi"],
+    ap.add_argument("--kurir", choices=["jnt", "spx", "jnt-ndd", "spx-hemat", "spx-hemat-pagi"],
                     help="dipakai bersama --label atau --reguler: pisahkan J&T dan SPX jadi "
                         "picklist sendiri-sendiri, bukan digabung (dipakai TIPE 2 & TIPE 3 - "
                         "lihat proses-harian.bat/docs/jadwal-proses.md); tanpa --kurir = J&T "
-                        "dan SPX digabung seperti semula (TIPE 1/TIPE 4). spx-hemat & "
-                        "spx-hemat-pagi (s.d. jam 12:00, folder hasil terpisah) hanya untuk "
-                        "mode event dan WAJIB bersama --event")
+                        "dan SPX digabung seperti semula (TIPE 1/TIPE 4). jnt-ndd (J&T "
+                        "NEXT-DAY DELIVERY), spx-hemat & spx-hemat-pagi (s.d. jam 12:00, "
+                        "folder hasil terpisah) hanya untuk mode event dan WAJIB bersama "
+                        "--event; di mode event --kurir jnt = J&T TANPA NEXT-DAY DELIVERY")
     ap.add_argument("--event", action="store_true",
                     help="mode event, dipakai bersama --label atau --reguler dan --kurir jnt|"
-                        "spx-hemat|spx-hemat-pagi: penentuan SKU spesial dihitung hanya dari "
-                        "kurir itu (bukan J&T+SPX digabung). Tanpa --event perilaku harian")
+                        "jnt-ndd|spx-hemat|spx-hemat-pagi: penentuan SKU spesial dihitung hanya "
+                        "dari kurir itu (bukan J&T+SPX digabung). Tanpa --event perilaku harian")
     ap.add_argument("--spx-standard", action="store_true",
                     help="hanya buat picklist SPX Standard (mode event): semua pesanan SPX "
                         "Standard, TANPA dipisah spesial/satuan/kombinasi, dipecah per lantai "
@@ -513,6 +516,7 @@ def _main() -> int:
     args = ap.parse_args()
     if (pesan := pesan_salah_mode_event(args)):
         ap.error(pesan)
+    terapkan_kurir_event(args)
 
     if args.operator is not None or args.tambah_operator:
         return atur_operator(args)
@@ -845,8 +849,17 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     return 1 if gagal else 0
 
 
-KURIR_MODE_EVENT = ("jnt", "spx-hemat", "spx-hemat-pagi")      # nilai --kurir yang sah dgn --event
-KURIR_HANYA_EVENT = ("spx-hemat", "spx-hemat-pagi")            # nilai --kurir yang WAJIB --event
+KURIR_MODE_EVENT = ("jnt", "jnt-ndd", "spx-hemat", "spx-hemat-pagi")   # nilai --kurir yang sah dgn --event
+KURIR_HANYA_EVENT = ("jnt-ndd", "spx-hemat", "spx-hemat-pagi")         # nilai --kurir yang WAJIB --event
+
+
+def terapkan_kurir_event(args) -> None:
+    """Mode event: `--kurir jnt` berarti J&T TANPA NEXT-DAY DELIVERY (NDD punya `--kurir jnt-ndd`
+    sendiri), jadi diterjemahkan ke kunci internal "jnt-event" (filter j&t, NDD dibuang - lihat
+    proses_label.KURIR_KECUALI_SHIPPER & sku_spesial.KURIR_KECUALI_HITUNG). Tanpa --event "jnt"
+    TETAP menyertakan NDD (alur harian tidak berubah). Dipanggil sekali setelah validasi flag."""
+    if args.event and args.kurir == "jnt":
+        args.kurir = "jnt-event"
 
 
 def pesan_salah_mode_event(args) -> str | None:
@@ -880,7 +893,7 @@ def kurir_hitung(args) -> str | None:
 def nama_pdf_spesial(waktu: datetime, args) -> str:
     """Nama PDF ringkasan SKU spesial. Mode event diberi akhiran kurir supaya hitungan J&T dan
     SPX Hemat (dijalankan berturut-turut, bisa dalam menit yang sama) tidak saling menimpa."""
-    akhiran = f"_{args.kurir}" if kurir_hitung(args) else ""
+    akhiran = f"_{args.kurir.removesuffix('-event')}" if kurir_hitung(args) else ""
     return f"SKU_Spesial_{waktu:%Y-%m-%d_%H%M}{akhiran}.pdf"
 
 

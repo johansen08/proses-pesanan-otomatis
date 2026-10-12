@@ -38,6 +38,7 @@ perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya 
 
 | Jenis (`--jenis`) | `.bat` | Subfolder dicari | Dibuat alur |
 |---|---|---|---|
+| `spesial-jnt-ndd` / `satuan-jnt-ndd` / `kombinasi-jnt-ndd` | menu: EVENT | `JNTNDD_SPESIAL` / `JNTNDD_SATUAN` / `JNTNDD_KOMBINASI` | `--event --kurir jnt-ndd` (J&T NEXT-DAY DELIVERY) |
 | `spesial-spx-hemat` / `satuan-spx-hemat` / `kombinasi-spx-hemat` | menu: EVENT | `SPXHEMAT_SPESIAL` / `SPXHEMAT_SATUAN` / `SPXHEMAT_KOMBINASI` | `--event --kurir spx-hemat` |
 | `spesial-spx-hemat-pagi` / `satuan-spx-hemat-pagi` / `kombinasi-spx-hemat-pagi` | menu: EVENT | `SPXHEMATPAGI_SPESIAL` / `SPXHEMATPAGI_SATUAN` / `SPXHEMATPAGI_KOMBINASI` | `--event --kurir spx-hemat-pagi` (Shopee Pagi, s.d. 12:00) |
 | `spx-standard` | menu: EVENT | `SPX_STANDARD` (`SPX-STANDARD-LANTAI*`) — semua PDF | `--spx-standard` |

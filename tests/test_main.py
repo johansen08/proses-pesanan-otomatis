@@ -465,7 +465,7 @@ def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
                     total += 1
                 except SystemExit as e:
                     raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-    assert total == 2 * (13 + 17 + 13 + 14 + 10), total      # TIPE 1-4 + MALAM, sungguhan & uji (+1 langkah Urgent JNE & LEX tiap blok)
+    assert total == 2 * (16 + 20 + 16 + 17 + 13), total      # TIPE 1-4 + MALAM, sungguhan & uji (+3 langkah J&T NDD tiap blok)
     print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
 
 
@@ -537,6 +537,28 @@ def uji_perintah_di_bat_harian_lolos_argparse():
             assert {x for x in per_tipe[t]} == {("--non-wajib", "spx")}, per_tipe[t]
         assert jumlah > 30, jumlah
     print("  proses-harian(.uji).bat: perintah lolos argparse; non wajib hanya di SPX TIPE 2/3 & SPX-J&T TIPE 4 + TIPE 1 (sore)")
+
+
+def uji_mode_event_jnt_ndd_validasi_dan_terjemahan_kurir():
+    salah = m.pesan_salah_mode_event
+    # jnt-ndd wajib --event (seperti spx-hemat)
+    assert "--event" in salah(_args(label=True, kurir="jnt-ndd"))
+    assert salah(_args(event=True, label=True, kurir="jnt-ndd")) is None
+    assert salah(_args(event=True, reguler=True, kurir="jnt-ndd")) is None
+    # --event --kurir jnt -> J&T tanpa NDD (kunci internal jnt-event); tanpa --event tetap "jnt"
+    a = _args(event=True, label=True, kurir="jnt")
+    m.terapkan_kurir_event(a)
+    assert a.kurir == "jnt-event" and m.kurir_hitung(a) == "jnt-event"
+    a = _args(label=True, kurir="jnt")
+    m.terapkan_kurir_event(a)
+    assert a.kurir == "jnt" and m.kurir_hitung(a) is None
+    a = _args(event=True, label=True, kurir="jnt-ndd")
+    m.terapkan_kurir_event(a)
+    assert a.kurir == "jnt-ndd"
+    waktu = datetime(2026, 10, 10, 13, 5)
+    assert m.nama_pdf_spesial(waktu, _args(event=True, kurir="jnt-event"))         == "SKU_Spesial_2026-10-10_1305_jnt.pdf"
+    assert m.nama_pdf_spesial(waktu, _args(event=True, kurir="jnt-ndd"))         == "SKU_Spesial_2026-10-10_1305_jnt-ndd.pdf"
+    print("  jnt-ndd: wajib --event; --event --kurir jnt diterjemahkan jnt-event (tanpa NDD), harian tidak berubah")
 
 
 if __name__ == "__main__":
