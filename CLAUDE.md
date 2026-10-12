@@ -39,6 +39,7 @@ bat\jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_operator_aktif.py
 .venv\Scripts\python tests\test_peringatan_sisa.py
 .venv\Scripts\python tests\test_jalankan_harian.py
+.venv\Scripts\python tests\test_alur.py     # definisi langkah/TIPE + menu konsol (WAJIB setelah mengubah langkah/flag)
 .venv\Scripts\python tests\test_bat.py      # WAJIB setelah mengubah file .bat apa pun
 ```
 
@@ -113,17 +114,25 @@ project secara umum, root tidak boleh berisi file `.py`):
   printer lain; `_matikan_sumatra()` hanya mematikan proses yang command line-nya memuat path file
   itu), `catat_sudah_dicetak()` memakai kunci file (`_kunci_catatan`), dan nama file daftar
   gagal/pilihan unik per proses (PID/uuid). Tes: `tests/test_server_ui.py`.
+- `src/alur.py` — SATU-SATUNYA sumber definisi alur menu: `KATALOG`/`KATALOG_EVENT` (nama langkah -> flag
+  `main.py`), `PRESET` (isi tiap TIPE 1-4/MALAM, harian & `EVENT - ...`), `susun_argumen()` (menambah
+  `--jalankan`, `--lewati-malam` hanya judul TIPE 1/KUSTOM/EVENT 1,3,4, `--non-wajib*`), teks menu konsol.
+  Ubah langkah/urutan/flag HANYA di sini (dulu disalin di 6 `.bat` + KATALOG UI). Preset di
+  `data/prototype-desktop/index.html` (JS) masih salinan terpisah: `tests/test_alur.py` hanya memastikan
+  semua nama langkah ada di sana — kalau mengubah isi TIPE, ubah JS-nya juga. Tes: `tests/test_alur.py`
+  (tiap langkah diterima argparse `main.py` sungguhan, aturan bisnis tiap TIPE, menu konsol dengan ketikan palsu).
+- `src/menu_konsol.py` — menu konsol (`menu_konsol.py harian|event|malam [--uji]`) yang dipanggil SEMUA
+  `bat\proses-harian/event/malam[-uji].bat` (kini peluncur tipis 1 baris, tanpa label/goto/daftar langkah).
+  Tiap langkah = SATU proses `main.py` berurutan, langkah gagal tidak menghentikan berikutnya, rekap waktu di
+  akhir TIPE, `LABEL_SESI_DIR` dihitung sekali per peluncuran. Nama langkah memakai `<=` (bukan `≤`) di konsol.
+  Cek jam memakai `MENU_JAM` (EVENT - TIPE 2 memakai kunci "2", bukan "E2" — perilaku .bat lama dipertahankan).
 - `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
-  Jubelio): tiap langkah di `KATALOG` = satu proses `main.py <flag> --jalankan` berurutan (BUKAN
-  memanggil fungsi langsung), lalu `rekap_waktu.py`. Meniru `.bat`: `LABEL_SESI_DIR` dihitung sekali
-  per hari, langkah gagal tidak menghentikan berikutnya, `--lewati-malam` hanya judul TIPE 1/KUSTOM.
-  `KATALOG` HARUS tetap sama dengan perintah di `bat\proses-harian.bat`/`bat\proses-malam.bat` (dikunci
-  `tests/test_jalankan_harian.py`: tiap flag diterima argparse `main.py` & punya padanan di `.bat`) —
-  ubah langkah/flag di `.bat` berarti ubah `KATALOG` juga (dan nama langkah di UI). Jangan pernah
-  menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
+  Jubelio): tiap langkah di `KATALOG` (dari `alur.py`) = satu proses `main.py <flag> --jalankan` berurutan
+  (BUKAN memanggil fungsi langsung), lalu `rekap_waktu.py`. Perilaku sama dengan `menu_konsol.py` (satu
+  `susun_argumen()`): `LABEL_SESI_DIR` dihitung sekali per hari, langkah gagal tidak menghentikan berikutnya.
+  Jangan pernah menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
   Menu Event di UI memakai judul `EVENT - TIPE 1..4`/`EVENT - MALAM`/`EVENT - KUSTOM` dan `KATALOG_EVENT`
-  (padanan `bat\proses-event.bat`, flag `--event`; blok `event1..event5` di .bat = TIPE 1-4/MALAM;
-  MALAM menolak IRESIS). `KATALOG_EVENT` juga dikunci `tests/test_jalankan_harian.py` terhadap .bat event.
+  (flag `--event`; MALAM menolak IRESIS).
 - `src/peringatan_picklist.py` — deteksi nomor picklist yang terlompat (picklist batal/gagal
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
@@ -223,20 +232,15 @@ KURIR (`kurir_hitung` di `sku_spesial.py`); SPX Standard tidak punya jalur spesi
 `--event` ditolak (`main.pesan_salah_mode_event`). J&T NEXT-DAY DELIVERY (NDD) dipisah dari J&T lain: di mode event
 `--kurir jnt` diterjemahkan `main.terapkan_kurir_event()` menjadi kunci internal `jnt-event` (filter `j&t`, NDD dibuang
 di sisi klien; nama file/subfolder tetap `JNT_*`), sedangkan NDD = `--kurir jnt-ndd` (`JNTNDD_*`); tanpa `--event` `jnt`
-tetap memuat NDD. `KATALOG_EVENT`/`.bat` event punya 3 langkah "J&T NDD" setelah J&T Kombinasi. Kunci kurir event TIDAK boleh ditambahkan ke
+tetap memuat NDD. `KATALOG_EVENT` (alur.py) punya 3 langkah "J&T NDD" setelah J&T Kombinasi. Kunci kurir event TIDAK boleh ditambahkan ke
 `KURIR_LABEL_FILE` (yang menurunkan jenis cetak harian di `print_spesial.py`) — pakai
 `KURIR_LABEL_FILE_EVENT`/`KURIR_KODE_FILE_SEMUA`. Detail & jadwal:
 [docs/jadwal-proses.md](docs/jadwal-proses.md) bagian "bat\proses-event.bat — mode event".
 
-`bat\proses-event.bat` dan `bat\proses-event-uji.bat` ditulis terpisah tetapi dijaga identik (selain
-`--jalankan`) oleh `tests/test_bat.py` — edit keduanya sekaligus, dan setiap perintahnya divalidasi
-argparse sungguhan oleh `tests/test_main.py` — jalankan keduanya setelah mengubah `.bat` event
-atau flag di `main.py`.
-
-`bat\proses-harian.bat` (sungguhan) dan `bat\proses-harian-uji.bat` (mode uji, struktur sama) adalah
-menu interaktif 4 TIPE yang masing-masing menjalankan rangkaian flag `bat\jalankan.bat` di atas
-secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
-[docs/jadwal-proses.md](docs/jadwal-proses.md).
+`bat\proses-harian.bat`/`proses-event.bat`/`proses-malam.bat` (sungguhan) dan kembaran `-uji`-nya (mode uji)
+hanya meluncurkan `src\menu_konsol.py`; isi tiap TIPE ada di `src/alur.py` (`PRESET`) — urutan lengkap tiap TIPE
+ada di [docs/jadwal-proses.md](docs/jadwal-proses.md). Jalankan `tests/test_alur.py` setelah mengubah langkah/flag
+di `alur.py` atau flag di `main.py` (argparse tiap langkah divalidasi di sana).
 
 ## Konvensi penting lain
 
@@ -264,8 +268,8 @@ secara berurutan dalam satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
   SUNGGUHAN, lalu menu "0. Keluar" malah melanjutkan "8/8 SPX KOMBINASI" (kembali ke `call`
   yang belum selesai). Alat edit (termasuk Claude) sering menulis file baru sebagai LF, dan git
   tidak mengubah working copy saat commit, jadi `.gitattributes` saja tidak cukup — cek
-  ulang CRLF setelah mengedit `.bat`; `tests/test_bat.py` menolak `.bat` LF dan
-  menyimulasikan tiap TIPE di cmd.exe (python palsu) untuk memastikan urutan langkahnya.
+  ulang CRLF setelah mengedit `.bat`; `tests/test_bat.py` menolak `.bat` LF dan memastikan bat menu
+  hanya peluncur tipis (tanpa label/goto/daftar langkah — risiko lompat label hilang sejak menu pindah ke Python).
   Jangan juga mengedit `.bat` yang sedang berjalan (cmd membaca ulang file per baris
   berdasarkan posisi byte).
 - `.env` (tidak dikomit) berisi `JUBELIO_EMAIL`/`JUBELIO_PASSWORD` — lihat

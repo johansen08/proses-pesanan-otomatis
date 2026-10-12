@@ -439,36 +439,6 @@ def uji_dalam_jam_menu_event_pilihan_2_setelah_jam_12():
     print("  menu event pilihan 2 (Shopee Pagi): valid 12.00-15.59, di luar itu diberi peringatan")
 
 
-def uji_perintah_di_bat_event_lolos_argparse_dan_validasi_mode_event():
-    """Setiap baris `main.py ...` di proses-event.bat & proses-event-uji.bat diuji lewat argparse
-    SUNGGUHAN (_main berhenti tepat setelah parse, sebelum muat_env/login): salah ketik flag atau
-    kombinasi yang ditolak pesan_salah_mode_event() ketahuan di sini, bukan di hari event."""
-    import re
-    import shlex
-
-    class Berhenti(Exception):
-        pass
-
-    pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
-    total = 0
-    for nama in ("proses-event.bat", "proses-event-uji.bat"):
-        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
-            cocok = pola.match(baris)
-            if not cocok:
-                continue
-            args = shlex.split(cocok.group(1), posix=False)
-            with mock.patch.object(sys, "argv", ["main.py", *args]), \
-                    mock.patch.object(m, "muat_env", side_effect=Berhenti):
-                try:
-                    m._main()
-                except Berhenti:
-                    total += 1
-                except SystemExit as e:
-                    raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-    assert total == 2 * (16 + 20 + 16 + 17 + 13), total      # TIPE 1-4 + MALAM, sungguhan & uji (+3 langkah J&T NDD tiap blok)
-    print(f"  {total} perintah main.py di .bat event: semuanya diterima argparse & validasi mode event")
-
-
 def uji_menu_mulai_setelah_16_dan_waktu_menu_mulai():
     assert [m.menu_mulai_setelah_16(_jam(h, mnt)) for h, mnt in
             ((7, 0), (15, 59), (16, 0), (16, 1), (16, 59), (17, 0), (23, 59))] == [
@@ -497,46 +467,6 @@ def uji_atur_catatan_non_wajib():
     assert m.pesan_salah_mode_event(_args(non_wajib_sore=True, reguler=True)) is None
     assert m.pesan_salah_mode_event(_args(non_wajib=True, label=True)) is None
     print("  atur_catatan_non_wajib(): --non-wajib selalu, --non-wajib-sore hanya menu mulai >16.00; butuh --label/--reguler")
-
-
-def uji_perintah_di_bat_harian_lolos_argparse():
-    """Setiap baris `main.py ...` di proses-harian(.uji).bat (termasuk --non-wajib/--non-wajib-sore)
-    diterima argparse sungguhan, dan flag non wajib hanya di langkah yang dimaksud."""
-    import re
-    import shlex
-
-    class Berhenti(Exception):
-        pass
-
-    pola = re.compile(r'^"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
-    for nama in ("proses-harian.bat", "proses-harian-uji.bat"):
-        per_tipe, tipe, jumlah = {}, None, 0
-        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
-            if (mt := re.match(r":(tipe\d)", baris)):
-                tipe = mt.group(1)
-            cocok = pola.match(baris)
-            if not cocok:
-                continue
-            args = shlex.split(cocok.group(1), posix=False)
-            with mock.patch.object(sys, "argv", ["main.py", *args]), \
-                    mock.patch.object(m, "muat_env", side_effect=Berhenti):
-                try:
-                    m._main()
-                except Berhenti:
-                    jumlah += 1
-                except SystemExit as e:
-                    raise AssertionError(f"{nama}: argparse menolak `{cocok.group(1)}` (exit {e.code})")
-            nw = [a for a in args if a.startswith("--non-wajib")]
-            if nw:
-                per_tipe.setdefault(tipe, []).append((nw[0], "--kurir" in args and args[args.index("--kurir") + 1]))
-        assert sorted(per_tipe) == ["tipe1", "tipe2", "tipe3", "tipe4"], (nama, per_tipe)
-        assert all(len(v) == 3 for v in per_tipe.values()), (nama, per_tipe)
-        assert {x[0] for x in per_tipe["tipe1"]} == {"--non-wajib-sore"} and all(not x[1] for x in per_tipe["tipe1"])
-        assert {x[0] for x in per_tipe["tipe4"]} == {"--non-wajib"} and all(not x[1] for x in per_tipe["tipe4"])
-        for t in ("tipe2", "tipe3"):
-            assert {x for x in per_tipe[t]} == {("--non-wajib", "spx")}, per_tipe[t]
-        assert jumlah > 30, jumlah
-    print("  proses-harian(.uji).bat: perintah lolos argparse; non wajib hanya di SPX TIPE 2/3 & SPX-J&T TIPE 4 + TIPE 1 (sore)")
 
 
 def uji_mode_event_jnt_ndd_validasi_dan_terjemahan_kurir():

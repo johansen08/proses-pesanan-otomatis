@@ -235,38 +235,6 @@ def uji_keadaan_lines_bertahap():
     print("  keadaan(dari): baris log diambil bertahap berdasarkan indeks")
 
 
-def uji_katalog_diterima_argparse_dan_sama_dengan_bat():
-    """Setiap langkah KATALOG diuji lewat argparse main.py SUNGGUHAN (berhenti sebelum login) dan
-    harus punya padanan persis (himpunan flag) di proses-harian.bat atau proses-malam.bat, supaya
-    UI tidak menyimpang dari .bat kalau salah satunya diubah."""
-    import re
-    import shlex
-    import main as m
-
-    class Berhenti(Exception):
-        pass
-
-    pola = re.compile(r'"\.venv\\Scripts\\python\.exe" src\\main\.py (.*)$')
-    himpunan_bat = set()
-    for nama in ("proses-harian.bat", "proses-malam.bat", "proses-event.bat"):
-        for baris in (ROOT / "bat" / nama).read_text(encoding="utf-8").splitlines():
-            cocok = pola.search(baris)
-            if cocok:
-                token = [t for t in shlex.split(cocok.group(1), posix=False) if t not in ("--jalankan", "--lewati-malam", "--non-wajib", "--non-wajib-sore")]
-                himpunan_bat.add(frozenset(token))
-    for nama, flag in [*jh.KATALOG, *jh.KATALOG_EVENT]:
-        assert frozenset(flag) in himpunan_bat, f"{nama}: {flag} tidak ada di .bat"
-        argumen = [*flag, "--jalankan"] + (["--lewati-malam"] if flag[:1] == ["--urgent"] else [])
-        with mock.patch.object(sys, "argv", ["main.py", *argumen]),                 mock.patch.object(m, "muat_env", side_effect=Berhenti):
-            try:
-                m._main()
-            except Berhenti:
-                pass
-            except SystemExit as e:
-                raise AssertionError(f"{nama}: argparse menolak {argumen} (exit {e.code})")
-    print(f"  {len(jh.KATALOG)}+{len(jh.KATALOG_EVENT)} langkah KATALOG/KATALOG_EVENT: diterima argparse main.py & ada padanannya di .bat")
-
-
 def uji_info_tidak_menggandakan_picklist_terhenti():
     """Peringatan 'gagal' di UI tidak memuat picklist TERHENTI (sudah punya bagian Gagal unduh
     PDF yang bisa di-download ulang); kegagalan lain tetap tampil."""
