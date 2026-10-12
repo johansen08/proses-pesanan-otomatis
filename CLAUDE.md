@@ -202,6 +202,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   `--lanjut`). `ROOT = Path(__file__).resolve().parent.parent` dihitung di sini supaya folder
   data (`data/`, `label-pengiriman/`, dll) selalu dibuat di root project, bukan
   di dalam `src/` — modul lain tidak punya `ROOT` sendiri dan mengandalkan ini.
+  `bersihkan_laporan_lama()` (dipanggil tiap `main.py` jalan, setelah log siap) menghapus unduhan di
+  `data/laporan-siap-proses|faktur|sku-spesial` yang lebih tua dari `MASA_SIMPAN_LAPORAN_HARI` (3 hari);
+  folder sesi label & riwayat tidak disentuh. Tes: `tests/test_main.py`.
 
 **Lima alur CLI berbeda dan independen** (dijabarkan lengkap di README.md): `--label`
 (SKU spesial → otomatis lanjut `--reguler` kecuali dibatasi `--sku`), `--urgent` (Lazada /

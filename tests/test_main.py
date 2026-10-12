@@ -561,6 +561,30 @@ def uji_mode_event_jnt_ndd_validasi_dan_terjemahan_kurir():
     print("  jnt-ndd: wajib --event; --event --kurir jnt diterjemahkan jnt-event (tanpa NDD), harian tidak berubah")
 
 
+def uji_bersihkan_laporan_lama_hanya_file_lebih_tua_dari_masa_simpan():
+    import logging
+    sekarang = datetime(2026, 10, 12, 15, 0)
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        a, b = d / "laporan-a", d / "laporan-b"
+        a.mkdir(); b.mkdir()
+        (a / "sub").mkdir()
+        def buat(folder, nama, waktu):
+            f = folder / nama
+            f.write_text("x")
+            os.utime(f, (waktu.timestamp(), waktu.timestamp()))
+            return f
+        lama1 = buat(a, "lama1.xlsx", datetime(2026, 10, 9, 23, 59))
+        lama2 = buat(b, "lama2.pdf", datetime(2026, 10, 1, 8, 0))
+        batas = buat(a, "batas.xlsx", datetime(2026, 10, 10, 0, 0))
+        baru = buat(b, "baru.pdf", datetime(2026, 10, 12, 9, 0))
+        sub = buat(a / "sub", "dalam_sub.xlsx", datetime(2026, 9, 1))
+        n = m.bersihkan_laporan_lama(logging.getLogger("uji"), sekarang, (a, b, d / "tidak-ada"))
+        assert n == 2 and not lama1.exists() and not lama2.exists(), n
+        assert batas.exists() and baru.exists() and sub.exists()
+    print("  laporan lama: hapus yang < 00:00 dua hari lalu, hari ini & 2 hari sebelumnya & subfolder aman")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

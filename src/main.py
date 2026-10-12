@@ -132,6 +132,7 @@ FOLDER_PDF = FOLDER_DATA / "laporan-sku-spesial"
 FOLDER_LOG = ROOT / "logs"
 FOLDER_LABEL = ROOT / "label-pengiriman"
 FILE_RIWAYAT = FOLDER_DATA / "riwayat_picklist.xlsx"
+MASA_SIMPAN_LAPORAN_HARI = 3   # laporan unduhan lebih tua dari ini dihapus otomatis (hari ini + 2 hari sebelumnya disimpan)
 
 # Folder sesi aktif di dalam FOLDER_LABEL, mis. "label-pengiriman/2026-09-30/4" (folder
 # tanggal berisi subfolder bernomor per sesi). Diisi sekali oleh main() lewat
@@ -293,6 +294,32 @@ def siapkan_log() -> logging.Logger:
         ],
     )
     return logging.getLogger("sku-spesial")
+
+
+def bersihkan_laporan_lama(log: logging.Logger, sekarang: datetime | None = None,
+                           folder: tuple[Path, ...] | None = None) -> int:
+    """Hapus file unduhan laporan (Excel siap proses, faktur, PDF SKU spesial) yang waktu ubahnya
+    sebelum 00:00 (MASA_SIMPAN_LAPORAN_HARI - 1) hari lalu. Hanya file langsung di folder laporan
+    itu (tanpa subfolder); folder sesi label & riwayat tidak disentuh. Kegagalan hapus (file dibuka
+    di Excel, dll) hanya jadi warning. Mengembalikan jumlah file yang terhapus."""
+    sekarang = sekarang or datetime.now()
+    batas = (sekarang.replace(hour=0, minute=0, second=0, microsecond=0)
+             - timedelta(days=MASA_SIMPAN_LAPORAN_HARI - 1)).timestamp()
+    terhapus = 0
+    for f in folder or (FOLDER_EXCEL, FOLDER_FAKTUR, FOLDER_PDF):
+        if not f.is_dir():
+            continue
+        for berkas in f.iterdir():
+            try:
+                if berkas.is_file() and berkas.stat().st_mtime < batas:
+                    berkas.unlink()
+                    terhapus += 1
+            except OSError as e:
+                log.warning("Laporan lama %s tidak bisa dihapus: %s", berkas.name, e)
+    if terhapus:
+        log.info("Membersihkan %d file laporan lama (disimpan %d hari terakhir)", terhapus,
+                 MASA_SIMPAN_LAPORAN_HARI)
+    return terhapus
 
 
 def login(log: logging.Logger) -> str:
@@ -525,6 +552,7 @@ def _main() -> int:
     if args.cek_sinkron:
         return cek_sinkron()
     log = siapkan_log()
+    bersihkan_laporan_lama(log)
     if (args.jalankan or args.lanjut) and not args.upload_iresis and not args.abaikan_transfer_stok \
             and (teks := transfer_stok.pesan()):
         log.error(teks.replace(chr(10), " "))
