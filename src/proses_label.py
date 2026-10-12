@@ -645,44 +645,66 @@ def bagi_batch(ids: list[int], maks: int = MAKS_PESANAN_PICKLIST) -> list[list[i
     return [ids[i:i + maks] for i in range(0, len(ids), maks)] if ids else []
 
 
+def _ambil_item_picklist(k: Klien, ids: list[int],
+                         cek=None) -> tuple[list[dict], list[int]]:
+    """Item yang akan dipicking untuk pesanan `ids` (items-to-pick) minus pesanan stok kosong
+    (ditandai di Jubelio, dikeluarkan dari picklist). `cek`: fungsi validasi opsional yang
+    menerima item mentah (sebelum stok kosong dipisahkan). Return (items, salesorder_id yang
+    tersisa); Lewati kalau semuanya kena stok kosong."""
+    items = k.post("sales/picklists/items-to-pick/", {"ids": ids})
+    if cek:
+        cek(items)
+    items, pesan_kosong = _pisahkan_stok_kosong(k, items)
+    for p in pesan_kosong:
+        log.warning("  Stok kosong (ditandai di Jubelio, dikeluarkan dari picklist): %s", p)
+    ids_pakai = sorted({x["salesorder_id"] for x in items})
+    if not ids_pakai:
+        raise Lewati("semua pesanan kena stok kosong, tidak ada yang bisa diproses")
+    return items, ids_pakai
+
+
+def _kirim_picklist(k: Klien, items: list[dict], ids_pakai: list[int], coba: int,
+                    tindak_lanjut: str) -> tuple[int, str, list[int]] | None:
+    """POST pembuatan 1 picklist dari `items`. Return (picklist_id, picklist_no, salesorder_id
+    yang diterima Jubelio), atau None kalau ditolak karena pesanan sudah dipakai picklist lain
+    (PESAN_SUDAH_DIPAKAI) - pemanggil mengulang dengan `tindak_lanjut` ("ulangi"/"filter
+    ulang", hanya untuk teks log)."""
+    body = {
+        "is_completed": False, "is_warehouse": True,
+        "items": [{"salesorder_detail_id": x["salesorder_detail_id"], "item_id": x["item_id"],
+                   "location_id": x["location_id"], "qty_ordered": _bulat(x["qty_ordered"]),
+                   "salesorder_id": x["salesorder_id"], "bundle_item_id": x["bundle_item_id"],
+                   "package_detail_id": x.get("package_detail_id") or 0,
+                   "package_id": x.get("package_id") or 0} for x in items],
+        "merge_location": False, "picker_id": None, "picklist_id": 0,
+        "picklist_no": "[auto]", "salesorderIds": ids_pakai,
+    }
+    r = k.post_mentah("wms/sales/picklists/", body)
+    if r.status_code >= 400 and PESAN_SUDAH_DIPAKAI in r.text:
+        log.warning("  Picklist ditolak (percobaan %d): %s -> %s",
+                    coba, jubelio._pesan(r)[:250], tindak_lanjut)
+        k.tidur(2)
+        return None
+    data = Klien._json(r, "Buat picklist")["data"]
+    picks = data.get("picks") or []
+    if len(picks) != 1:
+        raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
+    peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
+    invalid = set(data.get("invalidSO") or [])
+    if invalid:
+        log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
+    return picks[0]["picklist_id"], picks[0]["picklist_no"], sorted(set(ids_pakai) - invalid)
+
+
 def buat_picklist_channel(k: Klien, ids: list[int]) -> tuple[int, str, list[int]]:
     """Buat 1 picklist dari daftar salesorder_id apa adanya (lintas SKU/lokasi), dipakai untuk
     picklist urgent per channel. Beda dengan buat_picklist(): tidak ada saring per-SKU/resi
     spesial (idnya sudah difilter lewat ambil_pesanan_channel)."""
     for coba in range(1, MAKS_COBA_PICKLIST + 1):
-        items = k.post("sales/picklists/items-to-pick/", {"ids": ids})
-        items, pesan_kosong = _pisahkan_stok_kosong(k, items)
-        for p in pesan_kosong:
-            log.warning("  Stok kosong (ditandai di Jubelio, dikeluarkan dari picklist): %s", p)
-        ids_pakai = sorted({x["salesorder_id"] for x in items})
-        if not ids_pakai:
-            raise Lewati("semua pesanan kena stok kosong, tidak ada yang bisa diproses")
-
-        body = {
-            "is_completed": False, "is_warehouse": True,
-            "items": [{"salesorder_detail_id": x["salesorder_detail_id"], "item_id": x["item_id"],
-                       "location_id": x["location_id"], "qty_ordered": _bulat(x["qty_ordered"]),
-                       "salesorder_id": x["salesorder_id"], "bundle_item_id": x["bundle_item_id"],
-                       "package_detail_id": x.get("package_detail_id") or 0,
-                       "package_id": x.get("package_id") or 0} for x in items],
-            "merge_location": False, "picker_id": None, "picklist_id": 0,
-            "picklist_no": "[auto]", "salesorderIds": ids_pakai,
-        }
-        r = k.post_mentah("wms/sales/picklists/", body)
-        if r.status_code >= 400 and PESAN_SUDAH_DIPAKAI in r.text:
-            log.warning("  Picklist ditolak (percobaan %d): %s -> ulangi",
-                        coba, jubelio._pesan(r)[:250])
-            k.tidur(2)
-            continue
-        data = Klien._json(r, "Buat picklist")["data"]
-        picks = data.get("picks") or []
-        if len(picks) != 1:
-            raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
-        peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
-        invalid = set(data.get("invalidSO") or [])
-        if invalid:
-            log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
-        return picks[0]["picklist_id"], picks[0]["picklist_no"], sorted(set(ids_pakai) - invalid)
+        items, ids_pakai = _ambil_item_picklist(k, ids)
+        hasil = _kirim_picklist(k, items, ids_pakai, coba, "ulangi")
+        if hasil:
+            return hasil
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
@@ -1588,42 +1610,13 @@ def buat_picklist(k: Klien, sku: str, resi_spesial: set[str], kurir: str | None 
             raise Lewati(f"pesanan tersisa {len(pakai)} (< {MIN_RESI})")
         ids = [o["salesorder_id"] for o in pakai]
 
-        items = k.post("sales/picklists/items-to-pick/", {"ids": ids})
-        _cek_item(sku, ids, items)
-        items, pesan_kosong = _pisahkan_stok_kosong(k, items)
-        for p in pesan_kosong:
-            log.warning("  Stok kosong (ditandai di Jubelio, dikeluarkan dari picklist): %s", p)
-        ids = sorted({x["salesorder_id"] for x in items})
-        if not ids:
-            raise Lewati("semua pesanan kena stok kosong, tidak ada yang bisa diproses")
-
-        body = {
-            "is_completed": False, "is_warehouse": True,
-            "items": [{"salesorder_detail_id": x["salesorder_detail_id"], "item_id": x["item_id"],
-                       "location_id": x["location_id"], "qty_ordered": _bulat(x["qty_ordered"]),
-                       "salesorder_id": x["salesorder_id"], "bundle_item_id": x["bundle_item_id"],
-                       "package_detail_id": x.get("package_detail_id") or 0,
-                       "package_id": x.get("package_id") or 0} for x in items],
-            "merge_location": False, "picker_id": None, "picklist_id": 0,
-            "picklist_no": "[auto]", "salesorderIds": ids,
-        }
-        r = k.post_mentah("wms/sales/picklists/", body)
-        if r.status_code >= 400 and PESAN_SUDAH_DIPAKAI in r.text:
-            log.warning("  Picklist ditolak (percobaan %d): %s -> filter ulang",
-                        coba, jubelio._pesan(r)[:250])
-            k.tidur(2)
-            continue
-        data = Klien._json(r, "Buat picklist")["data"]
-        picks = data.get("picks") or []
-        if len(picks) != 1:
-            raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
-        peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
-        invalid = set(data.get("invalidSO") or [])
-        if invalid:
-            log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
-        ids_terpakai = set(ids)
-        sisa = [o for o in pakai if o["salesorder_id"] in ids_terpakai and o["salesorder_id"] not in invalid]
-        return picks[0]["picklist_id"], picks[0]["picklist_no"], [o["salesorder_id"] for o in sisa], sisa
+        items, ids_pakai = _ambil_item_picklist(k, ids, cek=lambda it: _cek_item(sku, ids, it))
+        hasil = _kirim_picklist(k, items, ids_pakai, coba, "filter ulang")
+        if hasil:
+            picklist_id, picklist_no, ids_diterima = hasil
+            diterima = set(ids_diterima)
+            sisa = [o for o in pakai if o["salesorder_id"] in diterima]
+            return picklist_id, picklist_no, [o["salesorder_id"] for o in sisa], sisa
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
