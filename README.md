@@ -89,7 +89,9 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `src/print_spesial.py` | Cetak bulk label (SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI) dari folder sesi `label-pengiriman/` terbaru lewat SumatraPDF, lihat `--jenis` |
 | `src/peringatan_picklist.py` | Deteksi nomor picklist yang terlompat (picklist batal/gagal dibuat karena Jubelio error) |
 | `src/peringatan_resi.py` | Deteksi pesanan yang sudah Picking > Selesai tapi tidak kunjung dapat nomor resi (kemungkinan request cancel yang masih diproses) |
-| `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE |
+| `src/peringatan_gagal.py` | Simpan picklist/proses yang terhenti/gagal supaya tercetak ulang di rekap akhir tiap TIPE. Juga jurnal "picklist dibuat": picklist yang tidak pernah selesai/gagal (proses mati mendadak) lebih dari 60 menit muncul sebagai peringatan "PICKLIST YATIM" di awal `main.py` dan di daftar Terputus/Download ulang UI |
+| `src/alur.py` | **Satu sumber** definisi alur menu: daftar langkah → flag `main.py` (`KATALOG`/`KATALOG_EVENT`), isi tiap TIPE/MALAM (`PRESET`), aturan `--lewati-malam`/`--non-wajib*`. Dipakai menu konsol dan menu Harian di UI |
+| `src/menu_konsol.py` | Menu konsol Harian/Event/Malam (`menu_konsol.py harian\|event\|malam [--uji]`) yang dipanggil semua `bat\proses-*.bat`: cek jam, konfirmasi Y/N, jalankan langkah berurutan, rekap waktu |
 | `src/rekap_waktu.py` | Cetak rekap waktu & semua peringatan (picklist terlompat, tanpa resi, gagal) di akhir tiap TIPE `bat\proses-harian.bat` |
 | `src/rekap_master_excel.py` | Catat tiap picklist ke `PICKLIST.xlsx` per sesi (di folder sesi label, dari `data/template/picklist-form-kosong.xlsx`) — langsung ditulis, siap di-copy-paste manual ke file master (lihat bagian "Rekap PICKLIST.xlsx") |
 | `bat\jalankan.bat` | Menjalankan `src/main.py` dengan Python di `.venv` |
@@ -98,10 +100,11 @@ Aturan SKU spesial dan data uji: lihat [docs/panduan-sku-spesial.md](docs/pandua
 | `bat\cetak-label-satuan.bat` | Menjalankan `src/print_spesial.py --jenis satuan` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `bat\cetak-label-kombinasi.bat` | Menjalankan `src/print_spesial.py --jenis kombinasi` (klik 2x) — lihat bagian "Cetak bulk label" |
 | `bat\cetak-label.bat` | **Menu cetak bulk** (klik 2x): HARIAN / EVENT / PER KURIR / satu jenis, termasuk **paket** (mis. SEMUA EVENT) yang mencetak beberapa jenis berurutan dengan printer dipilih sekali — semua jenis lain (per kurir, Shopee Pagi, J&T Resi Siang, SPX Hemat, SPX Standard) hanya lewat menu ini, lihat [docs/cetak-bulk-label.md](docs/cetak-bulk-label.md) |
-| `bat\proses-event.bat` | Menu interaktif SUNGGUHAN mode event (klik 2x): 2 pilihan (sesi biasa / tepat jam 13.00 dengan Shopee Pagi) + Keluar — lihat bagian 7 |
-| `bat\proses-event-uji.bat` | Menu interaktif MODE UJI mode event, langkah identik dengan `bat\proses-event.bat` — tidak ada perubahan di Jubelio |
-| `bat\proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N |
+| `bat\proses-event.bat` | Menu interaktif SUNGGUHAN mode event (klik 2x): 5 pilihan (EVENT - TIPE 1-4 + MALAM) + Keluar — lihat bagian 7. Peluncur tipis ke `src\menu_konsol.py event` |
+| `bat\proses-event-uji.bat` | Menu interaktif MODE UJI mode event (`menu_konsol.py event --uji`), langkah identik karena definisinya satu (`src/alur.py`) — tidak ada perubahan di Jubelio |
+| `bat\proses-harian.bat` | Menu interaktif SUNGGUHAN (klik 2x), 4 TIPE + Keluar: TIPE 1-4 — tiap TIPE menjalankan urutan langkahnya sendiri (lihat [docs/jadwal-proses.md](docs/jadwal-proses.md)) dalam satu kali konfirmasi Y/N. Peluncur tipis ke `src\menu_konsol.py harian`; isi TIPE ada di `src/alur.py` |
 | `bat\proses-harian-uji.bat` | Menu interaktif MODE UJI (klik 2x), struktur sama seperti `bat\proses-harian.bat` - tidak ada perubahan di Jubelio |
+| `bat\proses-malam.bat` / `bat\proses-malam-uji.bat` | Proses malam tanpa menu (urgent + SPX-J&T, tanpa IRESIS), sungguhan / mode uji — `src\menu_konsol.py malam [--uji]` |
 | `.env` | Email & password Jubelio (`JUBELIO_EMAIL`, `JUBELIO_PASSWORD`) + akun IRESIS (`IRESIS_USERNAME`, `IRESIS_PASSWORD`) |
 | `sniff/` | Perekam alur Jubelio (`run_sniff_jubel.bat`) untuk analisa jika Jubelio berubah |
 | `docs/` | Dokumentasi tambahan (instalasi, jadwal, panduan SKU spesial, analisa alur label, cetak bulk label) |
@@ -400,7 +403,8 @@ atau `JNT_KOMBINASI`/`SPX_KOMBINASI` (lihat `SUBFOLDER_SATUAN`/`SUBFOLDER_KOMBIN
 
 Tiap TIPE `bat\proses-harian.bat` (TIPE 1-4) menjalankan seluruh langkahnya secara berurut dalam
 satu kali klik + satu konfirmasi Y/N — urutan lengkap tiap TIPE ada di
-[docs/jadwal-proses.md](docs/jadwal-proses.md).
+[docs/jadwal-proses.md](docs/jadwal-proses.md). Daftar langkah/flag tiap TIPE ditulis **hanya** di
+`src/alur.py` (`.bat` cuma peluncur); setelah mengubahnya jalankan `tests\test_alur.py`.
 
 ### Rekap PICKLIST.xlsx (per sesi)
 
@@ -571,8 +575,8 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `bat\cetak-label-gtl-si
   dibuka langsung sebagai file, tampil data contoh.
   Menu **Harian** di UI yang sama menjalankan langkah **SUNGGUHAN** (mengubah data di Jubelio): pilih
   preset TIPE 1-4/Malam atau centang langkah sendiri, konfirmasi, lalu tiap langkah dijalankan sebagai
-  `main.py <flag> --jalankan` berurutan (setara `bat\proses-harian.bat`/`bat\proses-malam.bat`, termasuk sesi
-  label sekali per hari, `--lewati-malam` hanya TIPE 1, rekap waktu di akhir). Ada log langsung, tombol
+  `main.py <flag> --jalankan` berurutan (definisi langkah sama dengan `bat\proses-harian.bat`/`bat\proses-malam.bat` — keduanya
+  memakai `src/alur.py`, termasuk sesi label sekali per hari, `--lewati-malam` hanya TIPE 1, rekap waktu di akhir). Ada log langsung, tombol
   Hentikan, peringatan kalau di luar jam TIPE, dan panel peringatan hari ini (picklist terlompat/tanpa
   resi/gagal). `.bat` tetap bisa dipakai seperti biasa.
   **Tombol buka app**: klik dua kali `proses-pesanan.bat` (menjalankan `server_ui.py --buka --menu harian`,

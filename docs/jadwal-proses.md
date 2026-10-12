@@ -5,6 +5,13 @@ dipetakan ke menu/perintah program yang sebenarnya. Ini dokumentasi
 **kebijakan/SOP tim**, bukan kode — perubahan jadwal cukup edit file ini,
 tidak perlu ubah program.
 
+**Revisi 2026-10-12 (menu konsol)**: isi tiap TIPE/MALAM (daftar langkah, flag, `--lewati-malam`, `--non-wajib*`) kini
+HANYA ditulis di `src/alur.py` (`PRESET`); `bat\proses-harian.bat`, `proses-event.bat`, `proses-malam.bat` dan kembaran
+`-uji`-nya hanya peluncur 1 baris ke `src/menu_konsol.py` (dulu daftar langkah disalin di tiap `.bat` + KATALOG UI).
+Menu Harian di UI memakai definisi yang sama. Perubahan jadwal/urutan langkah = edit `alur.py` (+ preset JS di
+`data/prototype-desktop/index.html`), lalu jalankan `tests/test_alur.py`. Tampilan menu, urutan, dan konfirmasi Y/N
+tidak berubah; beda kecil: nama langkah di rekap waktu kini mengikuti nama di UI (mis. "SPX <= 12.00 (Resi Pagi)").
+
 **Revisi 2026-10-12**: mode event memisahkan **J&T Express NEXT-DAY DELIVERY (NDD)** dari J&T Standard &
 Hemat. `--event --kurir jnt` kini = J&T TANPA NDD; NDD punya alur sendiri `--event --kurir jnt-ndd` (spesial, 1 qty,
 kombinasi; subfolder/label `JNTNDD_*`, jenis cetak `*-jnt-ndd`, paket `jnt-ndd`). Tiga langkah "J&T NDD ..." ditambahkan
@@ -60,6 +67,8 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 | SPX kombinasi reguler (dipisah) | `--reguler --bagian kombinasi --kurir spx --jalankan` |
 
 ## bat\proses-harian.bat — 4 TIPE
+
+> Isi tiap TIPE di bawah = `PRESET` di `src/alur.py`; `.bat` hanya meluncurkan `src\menu_konsol.py harian`.
 
 ```
 1. TIPE 1 - GABUNG J&T+SPX              (07.00-12.00 / 16.00-17.00)
@@ -161,6 +170,8 @@ atas) sampai jam 17.00.
 
 ### bat\proses-malam.bat (tanpa menu)
 
+(Peluncur ke `src\menu_konsol.py malam`; langkahnya = `PRESET["MALAM"]` di `src/alur.py`.)
+
 Satu klik + 1 konfirmasi Y/N, tanpa cek jam & tanpa Recheck Stok/Sampel/IRESIS: 1. Urgent Lazada,
 2. Urgent GTL & SiCepat (tanpa `--lewati-malam`, jadi tidak ditahan), 3. Urgent JNE & LEX, 4. SPX - J&T SPESIAL,
 5. 1 QTY REGULER, 6. KOMBINASI (J&T+SPX digabung), 7. Tulis PICKLIST.xlsx, lalu rekap waktu.
@@ -181,7 +192,7 @@ Faktur" dari Jubelio lalu upload ke menu *Upload Resi* IRESIS supaya database IR
 - Butuh `IRESIS_USERNAME` & `IRESIS_PASSWORD` di `.env` (opsional `IRESIS_URL`,
   `IRESIS_NAMA_PK`, `IRESIS_CA_BUNDLE`); PC harus satu LAN dengan server IRESIS.
 - **Revisi 2026-10-08**: jam **20.00-04.59** semua yang terkait IRESIS (unduh faktur/pesanan +
-  upload) **dilewati otomatis** (`jam_tanpa_iresis()` di `src/main.py`; langkah di `.bat` tetap
+  upload) **dilewati otomatis** (`jam_tanpa_iresis()` di `src/main.py`; langkah di menu tetap
   tampil tapi langsung selesai). Paksa manual: `bat\jalankan.bat --upload-iresis --jalankan --paksa`.
 - Upload ulang aman (IRESIS melewati baris yang tidak berubah).
 - Gagal (server mati/login salah/respons aneh): TIPE tetap selesai, peringatan "UPLOAD IRESIS
@@ -304,19 +315,20 @@ Lewat flag `main.py --non-wajib` / `--non-wajib-sore` pada langkah `--label`/`--
 | TIPE 1 | SPX-J&T Spesial, 1 Qty, Kombinasi — **hanya kalau menu dimulai 16.01 atau lebih** | `--non-wajib-sore` |
 
 TIPE 1 pagi (07.00-12.00) dan 16.00 pas tetap wajib keluar (tanpa tulisan). Jam ditentukan dari waktu
-**menu dimulai** (env `WAKTU_MENU_MULAI`, diisi sekali per menu oleh `proses-harian.bat` /
-`jalankan_harian.py`), bukan per picklist, jadi satu TIPE tidak berisi picklist bertulisan dan tidak
+**menu dimulai** (env `WAKTU_MENU_MULAI`, diisi sekali per menu oleh `menu_konsol.py` (dipanggil
+`proses-harian.bat`) / `jalankan_harian.py`), bukan per picklist, jadi satu TIPE tidak berisi picklist bertulisan dan tidak
 bertulisan sekaligus. Menu 1 yang dimulai setelah 17.00 tetap bertulisan. Tidak berlaku di
 `proses-malam.bat`, mode event (`proses-event.bat`), KUSTOM, Urgent, Sampel, SPX Resi Pagi, J&T Resi Siang
 (`MALAM`/event belum punya aturan wajib-keluar sendiri). Implementasi: `atur_catatan_non_wajib()` di
 `src/main.py`, `atur_catatan_proses()` di `src/rekap_master_excel.py`, `flag_non_wajib()` di
-`src/jalankan_harian.py`.
+`src/alur.py`.
 
 ### Penjaga jam
 
-TIPE 1-4 diberi peringatan Y/N kalau dipilih di luar jamnya (`dalam_jam_menu("1".."4")`, sama dengan
-`bat\proses-harian.bat`). MALAM tidak punya jendela jam. (`dalam_jam_menu("E2")` — jendela 12.00-15.59
-untuk pilihan "TEPAT JAM 13.00" versi lama — tidak dipakai lagi oleh `.bat`, dibiarkan karena tes.)
+TIPE 1-4 diberi peringatan Y/N kalau dipilih di luar jamnya (`dalam_jam_menu("1".."4")`, lewat
+`menu_konsol.py` / `MENU_JAM` di `src/alur.py`). MALAM tidak punya jendela jam. (`dalam_jam_menu("E2")` — jendela
+12.00-15.59 untuk pilihan "TEPAT JAM 13.00" versi lama — tidak dipakai lagi oleh menu konsol; EVENT - TIPE 2 tetap
+memakai kunci "2", dibiarkan karena tes.)
 
 ### Uji coba sebelum hari event pertama (10.10)
 
