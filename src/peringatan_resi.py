@@ -13,11 +13,11 @@ disimpan di memori proses ini.
 """
 from __future__ import annotations
 
-import json
 import logging
 import threading
-from datetime import datetime
 from pathlib import Path
+
+import jurnal_peringatan
 
 log = logging.getLogger("sku-spesial")
 
@@ -37,11 +37,7 @@ def catat(pesan: str) -> None:
     log.warning("  %s", pesan)
     with _lock:
         _sesi.append(pesan)
-        if _file_peringatan:
-            baris = {"epoch": datetime.now().timestamp(),
-                     "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "pesan": pesan}
-            with open(_file_peringatan, "a", encoding="utf-8") as f:
-                f.write(json.dumps(baris, ensure_ascii=False) + "\n")
+        jurnal_peringatan.catat_pesan(_file_peringatan, pesan)
 
 
 def catat_tanpa_resi(picklist_no: str, sku: str, nomor_pesanan: list[str]) -> None:
@@ -56,31 +52,13 @@ def catat_tanpa_resi(picklist_no: str, sku: str, nomor_pesanan: list[str]) -> No
 
 def baca_sejak(epoch: float) -> list[str]:
     """Peringatan yang tercatat sejak `epoch` (dari file, lintas proses python)."""
-    if not _file_peringatan or not _file_peringatan.exists():
-        return []
-    hasil = []
-    for baris in _file_peringatan.read_text(encoding="utf-8").splitlines():
-        try:
-            d = json.loads(baris)
-        except ValueError:
-            continue
-        if d.get("epoch", 0) >= epoch:
-            hasil.append(f"[{d.get('waktu', '')}] {d.get('pesan', '')}")
-    return hasil
+    return jurnal_peringatan.baca_sejak(_file_peringatan, epoch)
 
 
 def cetak(peringatan: list[str],
           judul: str = "PERHATIAN: PESANAN BELUM DAPAT RESI (CEK KEMUNGKINAN REQUEST CANCEL)") -> None:
     """Cetak blok peringatan yang mencolok (dipanggil paling akhir)."""
-    if not peringatan:
-        return
-    print()
-    print("!" * 60)
-    print(f"  {judul}")
-    print("!" * 60)
-    for p in peringatan:
-        print(f"  - {p}")
-    print("!" * 60)
+    jurnal_peringatan.cetak(peringatan, judul)
 
 
 def cetak_sesi() -> None:

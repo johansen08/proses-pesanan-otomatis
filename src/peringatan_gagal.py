@@ -14,9 +14,10 @@ disimpan di mana pun (hanya diteruskan ke pemanggil lewat cetak_bermasalah()).
 """
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from pathlib import Path
+
+import jurnal_peringatan
 
 _file_peringatan: Path | None = None
 
@@ -33,31 +34,26 @@ def atur_folder(folder_log: Path) -> None:
 
 
 def catat(pesan: str) -> None:
-    if not _file_peringatan:
-        return
-    baris = {"epoch": datetime.now().timestamp(),
-             "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "pesan": pesan}
-    with open(_file_peringatan, "a", encoding="utf-8") as f:
-        f.write(json.dumps(baris, ensure_ascii=False) + "\n")
+    jurnal_peringatan.catat_pesan(_file_peringatan, pesan)
 
 
 def baca_sejak(epoch: float) -> list[str]:
     """Peringatan yang tercatat sejak `epoch` (dari file, lintas proses python)."""
-    if not _file_peringatan or not _file_peringatan.exists():
-        return []
-    hasil = []
-    for baris in _file_peringatan.read_text(encoding="utf-8").splitlines():
-        try:
-            d = json.loads(baris)
-        except ValueError:
-            continue
-        if d.get("epoch", 0) >= epoch:
-            hasil.append(f"[{d.get('waktu', '')}] {d.get('pesan', '')}")
-    return hasil
+    return jurnal_peringatan.baca_sejak(_file_peringatan, epoch)
 
 
 def _file_terhenti() -> Path | None:
     return _file_peringatan.with_name("picklist_terhenti.jsonl") if _file_peringatan else None
+
+
+def _tulis_terhenti(op: str, picklist_no: str, nama: str, folder_label: Path, alasan: str,
+                    tag: str | None, subfolder: str | None) -> None:
+    """Satu baris jurnal picklist_terhenti.jsonl untuk op "tambah" (gagal) / "dibuat" (yatim)."""
+    sekarang = datetime.now()
+    jurnal_peringatan.tambah_baris(_file_terhenti(), {
+        "op": op, "epoch": sekarang.timestamp(), "waktu": sekarang.strftime("%d-%m-%Y %H:%M"),
+        "picklist": picklist_no, "nama": nama, "tag": tag, "subfolder": subfolder,
+        "sesi": f"{folder_label.parent.name}/{folder_label.name}", "alasan": alasan})
 
 
 def catat_terhenti(picklist_no: str, nama: str, folder_label: Path, alasan: str,
@@ -66,15 +62,7 @@ def catat_terhenti(picklist_no: str, nama: str, folder_label: Path, alasan: str,
     terstruktur - cukup untuk menjalankan `main.py --lanjut` lagi dari UI (tombol "Download
     ulang") tanpa menyalin perintah dari Catatan. Log append-only (aman lintas thread/proses);
     keadaan akhir dilipat di daftar_terhenti()."""
-    f = _file_terhenti()
-    if not f:
-        return
-    baris = {"op": "tambah", "epoch": datetime.now().timestamp(),
-             "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "picklist": picklist_no,
-             "nama": nama, "tag": tag, "subfolder": subfolder,
-             "sesi": f"{folder_label.parent.name}/{folder_label.name}", "alasan": alasan}
-    with open(f, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(baris, ensure_ascii=False) + "\n")
+    _tulis_terhenti("tambah", picklist_no, nama, folder_label, alasan, tag, subfolder)
 
 
 def catat_dibuat(picklist_no: str, nama: str, folder_label: Path,
@@ -84,26 +72,13 @@ def catat_dibuat(picklist_no: str, nama: str, folder_label: Path,
     sebelum langkah 3-6 selesai, tidak ada kode yang sempat mencatat apa pun - catatan ini yang
     membuat picklist yatim tetap terlihat di daftar_terhenti() setelah UMUR_YATIM_S. Dihapus
     oleh tandai_selesai() (sukses) atau diganti catat_terhenti() (gagal biasa)."""
-    f = _file_terhenti()
-    if not f:
-        return
-    baris = {"op": "dibuat", "epoch": datetime.now().timestamp(),
-             "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "picklist": picklist_no,
-             "nama": nama, "tag": tag, "subfolder": subfolder,
-             "sesi": f"{folder_label.parent.name}/{folder_label.name}",
-             "alasan": ALASAN_YATIM}
-    with open(f, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(baris, ensure_ascii=False) + "\n")
+    _tulis_terhenti("dibuat", picklist_no, nama, folder_label, ALASAN_YATIM, tag, subfolder)
 
 
 def tandai_selesai(picklist_no: str) -> None:
     """Picklist sudah berhasil sampai akhir (atau berhasil dilanjutkan) -> keluar dari daftar."""
-    f = _file_terhenti()
-    if not f:
-        return
-    with open(f, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"op": "selesai", "epoch": datetime.now().timestamp(),
-                             "picklist": picklist_no}) + "\n")
+    jurnal_peringatan.tambah_baris(_file_terhenti(), {
+        "op": "selesai", "epoch": datetime.now().timestamp(), "picklist": picklist_no})
 
 
 def daftar_terhenti(sekarang: float | None = None) -> list[dict]:
@@ -111,17 +86,10 @@ def daftar_terhenti(sekarang: float | None = None) -> list[dict]:
     terbaru di atas. Tiap item: picklist, nama, tag, subfolder, sesi, alasan, waktu. Termasuk
     picklist YATIM: tercatat 'dibuat' tapi tidak pernah selesai/gagal dan sudah lebih tua dari
     UMUR_YATIM_S (prosesnya diduga mati mendadak); yang lebih muda dianggap masih berjalan."""
-    f = _file_terhenti()
-    if not f or not f.exists():
-        return []
     sekarang = datetime.now().timestamp() if sekarang is None else sekarang
     aktif: dict[str, dict] = {}
     dibuat: dict[str, dict] = {}
-    for baris in f.read_text(encoding="utf-8").splitlines():
-        try:
-            d = json.loads(baris)
-        except ValueError:
-            continue
+    for d in jurnal_peringatan.baca_baris(_file_terhenti()):
         no = d.get("picklist")
         if d.get("op") == "tambah" and no:
             aktif[no] = d
@@ -148,12 +116,4 @@ def pesan_yatim(sekarang: float | None = None) -> list[str]:
 def cetak(peringatan: list[str],
           judul: str = "PERHATIAN: PICKLIST TERHENTI/GAGAL (LANGKAH SEBELUMNYA)") -> None:
     """Cetak blok peringatan yang mencolok (dipanggil rekap_waktu.py di akhir tiap TIPE)."""
-    if not peringatan:
-        return
-    print()
-    print("!" * 60)
-    print(f"  {judul}")
-    print("!" * 60)
-    for p in peringatan:
-        print(f"  - {p}")
-    print("!" * 60)
+    jurnal_peringatan.cetak(peringatan, judul)

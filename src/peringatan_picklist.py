@@ -15,11 +15,11 @@ disimpan di memori proses ini.
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
+
+import jurnal_peringatan
 
 MAKS_NOMOR_DITAMPILKAN = 20
 
@@ -54,11 +54,7 @@ def _baca_terakhir() -> int | None:
 def catat(pesan: str) -> None:
     log.warning("  %s", pesan)
     _sesi.append(pesan)
-    if _file_peringatan:
-        baris = {"epoch": datetime.now().timestamp(),
-                 "waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "pesan": pesan}
-        with open(_file_peringatan, "a", encoding="utf-8") as f:
-            f.write(json.dumps(baris, ensure_ascii=False) + "\n")
+    jurnal_peringatan.catat_pesan(_file_peringatan, pesan)
 
 
 def periksa_nomor(picklist_no: str) -> str | None:
@@ -109,30 +105,12 @@ def ambil_nomor_hilang() -> list[int]:
 
 def baca_sejak(epoch: float) -> list[str]:
     """Peringatan yang tercatat sejak `epoch` (dari file, lintas proses python)."""
-    if not _file_peringatan or not _file_peringatan.exists():
-        return []
-    hasil = []
-    for baris in _file_peringatan.read_text(encoding="utf-8").splitlines():
-        try:
-            d = json.loads(baris)
-        except ValueError:
-            continue
-        if d.get("epoch", 0) >= epoch:
-            hasil.append(f"[{d.get('waktu', '')}] {d.get('pesan', '')}")
-    return hasil
+    return jurnal_peringatan.baca_sejak(_file_peringatan, epoch)
 
 
 def cetak(peringatan: list[str], judul: str = "PERHATIAN: PICKLIST TERLOMPAT / BATAL") -> None:
     """Cetak blok peringatan yang mencolok (dipanggil paling akhir)."""
-    if not peringatan:
-        return
-    print()
-    print("!" * 60)
-    print(f"  {judul}")
-    print("!" * 60)
-    for p in peringatan:
-        print(f"  - {p}")
-    print("!" * 60)
+    jurnal_peringatan.cetak(peringatan, judul)
 
 
 def cetak_sesi() -> None:
