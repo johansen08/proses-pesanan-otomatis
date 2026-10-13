@@ -26,6 +26,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import coba_ulang
 import transfer_stok
 # Definisi langkah/TIPE/flag ada di alur.py (satu sumber, juga dipakai menu_konsol.py/.bat);
 # nama-nama di bawah di-ekspor ulang supaya pemakai lama (server_ui, tes) tetap jalan.
@@ -137,6 +138,12 @@ def _kerjakan(job: dict, sesi: str) -> None:
         if job["berhenti"]:
             lg["status"] = "gagal"
     _proses = None
+    if not job["berhenti"] and waktu:
+        mulai_t = time.time()      # coba ulang otomatis picklist gagal/gagal unduh PDF (sekali lagi)
+        if coba_ulang.jalankan(job["mulai"], False, lambda arg: _jalankan_proses(job, arg, env),
+                               lambda teks="": _tambah(job, teks))[0]:
+            waktu.append(f"{coba_ulang.NAMA_LANGKAH}:{mulai_t}:{time.time()}")
+        _proses = None
     if job["berhenti"]:
         _tambah(job, "")
         _tambah(job, "DIHENTIKAN oleh pengguna.")
@@ -191,7 +198,7 @@ def info() -> dict:
         modul.atur_folder(FOLDER_LOG)
         hasil[kunci] = modul.baca_sejak(awal_hari)
     # picklist TERHENTI sudah punya bagian sendiri (bisa di-download ulang) - jangan dobel
-    hasil["gagal"] = [m for m in hasil["gagal"] if ": TERHENTI" not in m]
+    hasil["gagal"] = [m for m in peringatan_gagal.baca_belum_pulih(awal_hari) if ": TERHENTI" not in m]
     return {"jam_ok": {judul: bool(main.dalam_jam_menu(m)) for judul, m in MENU_JAM.items()},
             "peringatan": hasil,
             "berjalan": bool(_job and _job["status"] == "jalan")}

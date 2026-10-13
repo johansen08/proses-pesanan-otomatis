@@ -15,9 +15,14 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import tempfile  # noqa: E402
+
 import alur  # noqa: E402
+import coba_ulang  # noqa: E402
 import main as m  # noqa: E402
 import menu_konsol as mk  # noqa: E402
+
+coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
 JUMLAH_LANGKAH = {"TIPE 1": 9, "TIPE 2": 13, "TIPE 3": 12, "TIPE 4": 10, "MALAM": 6,
                   "EVENT - TIPE 1": 16, "EVENT - TIPE 2": 20, "EVENT - TIPE 3": 16,

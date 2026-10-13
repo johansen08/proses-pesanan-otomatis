@@ -60,7 +60,7 @@ def main():
         peringatan_resi.atur_folder(folder_log)
         peringatan_resi.cetak(peringatan_resi.baca_sejak(awal))
         peringatan_gagal.atur_folder(folder_log)
-        peringatan_gagal.cetak(peringatan_gagal.baca_sejak(awal))
+        peringatan_gagal.cetak(peringatan_gagal.baca_belum_pulih(awal))
         peringatan_sisa.atur_folder(folder_log)
         peringatan_sisa.cetak(peringatan_sisa.baca_sejak(awal))
 

@@ -126,6 +126,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   Tiap langkah = SATU proses `main.py` berurutan, langkah gagal tidak menghentikan berikutnya, rekap waktu di
   akhir TIPE, `LABEL_SESI_DIR` dihitung sekali per peluncuran. Nama langkah memakai `<=` (bukan `≤`) di konsol.
   Cek jam memakai `MENU_JAM` (EVENT - TIPE 2 memakai kunci "2", bukan "E2" — perilaku .bat lama dipertahankan).
+- `src/coba_ulang.py` — percobaan ulang OTOMATIS di akhir tiap TIPE (konsol `menu_konsol.py` & UI
+  `jalankan_harian.py`): setelah semua langkah, SEBELUM `rekap_waktu.py`, tiap picklist TERHENTI/gagal unduh PDF
+  selama TIPE itu (`peringatan_gagal.daftar_terhenti()` op "tambah", bukan yatim) dilanjutkan SEKALI lewat
+  `main.py --lanjut ... --jalankan` (perintah sama dengan tombol "Download ulang" UI). Mode uji tidak mencoba.
+  Yang berhasil hilang dari rekap (`peringatan_gagal.baca_belum_pulih`). Tes: `tests/test_coba_ulang.py`.
 - `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
   Jubelio): tiap langkah di `KATALOG` (dari `alur.py`) = satu proses `main.py <flag> --jalankan` berurutan
   (BUKAN memanggil fungsi langsung), lalu `rekap_waktu.py`. Perilaku sama dengan `menu_konsol.py` (satu

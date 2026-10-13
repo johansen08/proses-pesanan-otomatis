@@ -42,6 +42,26 @@ def baca_sejak(epoch: float) -> list[str]:
     return jurnal_peringatan.baca_sejak(_file_peringatan, epoch)
 
 
+def baca_belum_pulih(epoch: float) -> list[str]:
+    """Seperti baca_sejak(), tapi peringatan picklist ("PICK-xxx: ...") yang kemudian sudah
+    berhasil dilanjutkan (ada catatan 'selesai' lebih baru, mis. dari coba_ulang.py) dibuang -
+    supaya rekap akhir tidak memperingatkan yang sudah beres."""
+    selesai: dict[str, float] = {}
+    for d in jurnal_peringatan.baca_baris(_file_terhenti()):
+        if d.get("op") == "selesai" and d.get("picklist"):
+            selesai[d["picklist"]] = max(selesai.get(d["picklist"], 0), d.get("epoch", 0))
+    hasil = []
+    for d in jurnal_peringatan.baca_baris(_file_peringatan):
+        if d.get("epoch", 0) < epoch:
+            continue
+        pesan = d.get("pesan", "")
+        no = pesan.split(":", 1)[0]
+        if no.startswith("PICK-") and selesai.get(no, 0) > d.get("epoch", 0):
+            continue
+        hasil.append(f"[{d.get('waktu', '')}] {pesan}")
+    return hasil
+
+
 def _file_terhenti() -> Path | None:
     return _file_peringatan.with_name("picklist_terhenti.jsonl") if _file_peringatan else None
 

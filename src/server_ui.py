@@ -261,13 +261,8 @@ def mulai_lanjut(picklist: list[str]) -> None:
 
 
 def _perintah_lanjut(d: dict) -> list[str]:
-    p = [sys.executable, str(Path(__file__).with_name("main.py")), "--lanjut", d["picklist"],
-         "--nama", d["nama"]]
-    if d.get("tag"):
-        p += ["--tag", d["tag"]]
-    if d.get("subfolder"):
-        p += ["--subfolder", d["subfolder"]]
-    return p + ["--sesi", d["sesi"], "--jalankan"]
+    import coba_ulang
+    return coba_ulang.perintah_lanjut(d)
 
 
 def _kerjakan_lanjut(job: dict, pilih: list[dict]) -> None:

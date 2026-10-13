@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 
 import alur
+import coba_ulang
 
 SRC = Path(__file__).resolve().parent
 ROOT = SRC.parent
@@ -58,6 +59,10 @@ def jalankan_tipe(judul: str, uji: bool, sesi: str, jalankan=_jalankan_proses,
         jalankan([sys.executable, str(SRC / "main.py"), *alur.susun_argumen(judul, nama, uji)], env)
         waktu.append(f"{tampil(nama).upper()}:{mulai}:{sekarang()}")
         cetak("")
+    # percobaan ulang otomatis picklist gagal/gagal unduh PDF selama TIPE ini (sekali lagi)
+    mulai = sekarang()
+    if coba_ulang.jalankan(awal, uji, lambda arg: jalankan(arg, env), cetak)[0]:
+        waktu.append(f"{coba_ulang.NAMA_LANGKAH}:{mulai}:{sekarang()}")
     cetak(f"{judul} selesai.")
     jalankan([sys.executable, str(SRC / "rekap_waktu.py"), judul, *waktu], env)
     return waktu

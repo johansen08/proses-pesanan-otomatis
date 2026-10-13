@@ -12,7 +12,12 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+import tempfile  # noqa: E402
+
+import coba_ulang  # noqa: E402
 import jalankan_harian as jh  # noqa: E402
+
+coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
 # tes tidak boleh bergantung pada jam jalan (jendela Transfer Stok); dicek di test_transfer_stok.py
 jh.transfer_stok.pesan = lambda sekarang=None: None
