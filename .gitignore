@@ -8,7 +8,8 @@ data/*
 __pycache__/
 .pytest_cache/
 *.cookies.json
-sniff/
+sniff/sniff_output/
+sniff/profil_browser/
 label-pengiriman/
 .vscode/
 .idea/
