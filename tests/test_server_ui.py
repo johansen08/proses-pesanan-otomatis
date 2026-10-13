@@ -130,6 +130,23 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
     print("  server_ui: sesi 3 hari + status tercetak, penjagaan host/JSON/path, argumen print_spesial benar")
 
 
+def uji_server_ui_urgent_lazada_kelompok_sendiri():
+    hari_ini = date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        urgent = label / hari_ini.isoformat() / "1" / "URGENT"
+        _buat(urgent, "PICK-000000002_LAZADA_x.pdf", "PICK-000000001_GTL-SICEPAT-LANTAI1_x.pdf",
+              "PICK-000000003_JNE-LEX_x.pdf")
+        with mock.patch.object(ps, "FOLDER_LABEL", label), \
+                mock.patch.object(ps, "FILE_SUDAH_DICETAK", Path(tmp) / "sudah_dicetak.txt"):
+            d = su.data_sesi(hari_ini)
+        jenis = {j["nama"]: [f["f"] for f in j["files"]] for j in d["hari"][0]["sesi"][0]["jenis"]}
+        assert jenis == {"GTL-SiCepat": ["PICK-000000001_GTL-SICEPAT-LANTAI1_x.pdf"],
+                         "Urgent Lazada · skala 68%": ["PICK-000000002_LAZADA_x.pdf"],
+                         "URGENT": ["PICK-000000003_JNE-LEX_x.pdf"]}, jenis
+    print("  server_ui: label Lazada tampil di kelompok 'Urgent Lazada - skala 68%', JNE-LEX tetap di URGENT")
+
+
 def uji_server_ui_endpoint_harian():
     import jalankan_harian as jh
 

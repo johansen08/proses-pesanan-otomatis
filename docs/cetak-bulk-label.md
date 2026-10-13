@@ -15,7 +15,7 @@ dan cara pakai fiturnya sehari-hari. Semua `.bat` cetak menjalankan `src/print_s
 Mencetak ulang semua label pengiriman yang sudah ada di subfolder tertentu folder
 sesi `label-pengiriman/<tanggal>/<sesi>/`, secara **bulk dan berurut** (nomor PICK
 terkecil/paling dulu dibuat, duluan dicetak), langsung ke printer pilihan, tanpa
-perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya pintasan
+perlu buka file PDF satu-satu secara manual. Ada 23 jenis; 4 jenis harian punya pintasan
 `.bat` sendiri, semuanya (termasuk sisanya) bisa dipilih lewat menu `bat\cetak-label.bat`
 (kolom `.bat` di tabel di bawah = pintasan, atau "menu" bila hanya lewat menu):
 
@@ -29,6 +29,7 @@ perlu buka file PDF satu-satu secara manual. Ada 19 jenis; 4 jenis harian punya 
 | `kombinasi-jnt` / `kombinasi-spx` | menu: PER KURIR | `JNT_KOMBINASI` / `SPX_KOMBINASI` saja | `--reguler --bagian kombinasi --kurir jnt/spx` |
 | `spx-pagi` | menu: HARIAN | `SPX_PAGI` (Shopee Pagi, `SHOPEE-PAGI-LANTAI*`) — sesi lama (sebelum 2026-10-07) masih di root folder sesi, tidak ikut | `--shopee-pagi` |
 | `jnt-siang` | menu: HARIAN | `JNT_SIANG` (`JNT-SIANG-LANTAI*`) — sesi lama tidak ikut | `--jnt-siang` |
+| `lazada` | menu: SATU JENIS (& UI desktop: "Urgent Lazada · skala 68%") | `URGENT` — hanya file `PICK-..._LAZADA_...`, dicetak **skala 68%** | `--urgent` (Alur 2, Lazada) |
 | `kombinasi` | `bat\cetak-label-kombinasi.bat` | `KOMBINASI`, `JNT_KOMBINASI`, `SPX_KOMBINASI` — semua PDF | `--reguler --bagian kombinasi` (Alur 3) |
 
 **Mode event** (`bat\proses-event.bat`, hari 10.10 / 11.11 / 12.12 dst — lihat
@@ -54,11 +55,22 @@ subfolder-nya sendiri sudah eksklusif per jenis (dibuat `proses_label.py` khusus
 **semua PDF** di subfolder itu ikut dicetak, tanpa filter nama tambahan.
 
 Jenis `gtl-sicepat` (dulu `urgent`) memakai subfolder `URGENT` yang dipakai bersama label
-**Lazada**, jadi ada saringan nama: hanya `PICK-..._GTL-SICEPAT-...` (LANTAI1/2/3/LAINNYA) yang
-dicetak. **Label Lazada TIDAK ikut cetak bulk** — dicetak manual (skala custom 68% di kertas
-100x150 mm, lihat `docs/analisa-alur-cetak-label.md` bagian 6). Pengecekan "nomor PICK
-terlompat" tetap dihitung dari SEMUA PDF di `URGENT` (termasuk Lazada), supaya picklist Lazada
-di antara nomor GTL-SiCepat tidak salah dianggap hilang.
+**Lazada** & JNE-LEX, jadi ada saringan nama: hanya `PICK-..._GTL-SICEPAT-...` (LANTAI1/2/3/LAINNYA)
+yang dicetak. Pengecekan "nomor PICK terlompat" tetap dihitung dari SEMUA PDF di `URGENT`
+(termasuk Lazada), supaya picklist Lazada di antara nomor GTL-SiCepat tidak salah dianggap hilang.
+
+**Label Lazada dicetak skala 68%** (jenis `lazada`, atau pilih file di UI desktop kelompok
+"Urgent Lazada · skala 68%"). PDF Lazada berukuran A5 (148x210 mm, template "Label Pengiriman
+Lazada", lihat `docs/analisa-alur-cetak-label.md` bagian 6), padahal kertas label 100x150 mm.
+SumatraPDF tidak punya opsi skala persen, jadi `cetak()` di `print_spesial.py` membuat SALINAN
+sementara (`buat_salinan_skala()`, pakai `pypdf`): tiap halaman yang lebih besar dari 100x150 mm
+diperkecil 68% (sama dengan cetak manual tim) dan ditaruh di tengah halaman 100x150 mm, lalu
+dikirim dengan `-print-settings noscale` (SumatraPDF tidak mengecilkannya lagi). Berlaku untuk
+SEMUA jalur cetak file `PICK-..._LAZADA_...` (menu, `--file` dari UI, `--ulang`, lanjut cetak
+terputus — jumlah halaman salinan sama, jadi nomor halaman tetap berlaku). File aslinya tidak
+diubah dan yang dicatat di `logs/sudah_dicetak.txt` tetap path asli; salinan dihapus setelah
+cetak. Label Lazada lama yang sudah 100x150 mm (sebelum `isFromLz`, s.d. 2026-10-07) dicetak
+apa adanya.
 
 **Program ini TIDAK membuat picklist/label baru.** Fungsinya cuma mencetak ulang
 PDF label yang sudah ada. Picklist & label itu sendiri dibuat lewat alur
@@ -132,7 +144,7 @@ bat\cetak-label.bat
 1. HARIAN                   -> SPESIAL / SATUAN / KOMBINASI / GTL & SICEPAT / SHOPEE PAGI / J&T RESI SIANG
 2. EVENT                    -> SEMUA EVENT / J&T / SPX Hemat Pagi / SPX Hemat / SPX Standard
 3. PER KURIR (harian)       -> Semua J&T / Semua SPX (hasil TIPE 2 & 3)
-4. SATU JENIS               -> semua 19 jenis, satu per satu
+4. SATU JENIS               -> semua 23 jenis, satu per satu
 0. Keluar
 ```
 

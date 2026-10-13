@@ -1,6 +1,7 @@
 pandas
 openpyxl
 reportlab
+pypdf        # skala 68% label Lazada saat cetak (print_spesial.py)
 requests
 tzdata       # database zona waktu utk zoneinfo (Windows tidak punya bawaan) - dipakai picklist Shopee Pagi
 playwright   # hanya untuk sniff/sniff_jubel_v2.py

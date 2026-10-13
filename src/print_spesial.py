@@ -9,8 +9,10 @@ subfolder terkait jenis yang dipilih lewat --jenis (lihat JENIS_LABEL):
                         (mis. PICK-000155621_SPESIAL_TRC1_2026-10-01_080302.pdf).
   --jenis gtl-sicepat -> subfolder URGENT (Alur 2), HANYA file GTL-SiCepat yang ikut (nama
                         file mengandung `_GTL-SICEPAT`, mis. GTL-SICEPAT-LANTAI1). Label
-                        Lazada di subfolder yang sama TIDAK ikut dicetak bulk (dicetak
-                        manual, lihat docs/analisa-alur-cetak-label.md bagian 6).
+                        Lazada di subfolder yang sama TIDAK ikut (jenis `lazada` sendiri).
+  --jenis lazada     -> subfolder URGENT, HANYA file Lazada (PICK-..._LAZADA_...). Dicetak
+                        dengan SKALA 68% (lihat SKALA_LAZADA) - berlaku untuk SEMUA jalur cetak
+                        file Lazada (jenis ini, --file dari UI desktop, --ulang, lanjut sebagian).
   --jenis satuan     -> subfolder SATUAN/JNT_SATUAN/SPX_SATUAN (Alur 3 bagian "1qty"),
                         SEMUA PDF ikut (mis. 1QTY-REGULER-2A).
   --jenis kombinasi  -> subfolder KOMBINASI/JNT_KOMBINASI/SPX_KOMBINASI (Alur 3
@@ -118,6 +120,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -164,9 +167,18 @@ SUBFOLDER_SPESIAL = [TAG_SPESIAL] + [f"{v}_{TAG_SPESIAL}" for v in KURIR_LABEL_F
 # mengekstrak nomor PICK di awal nama file (selalu ada di semua label, lihat _nama_file()
 # di proses_label.py) untuk urutan cetak & deteksi nomor terlompat.
 POLA_PICK = re.compile(r"^PICK-0*(\d+)_.*\.pdf$", re.IGNORECASE)
-# Subfolder URGENT dipakai bersama Lazada & GTL-SiCepat, tapi cetak bulk hanya GTL-SiCepat
-# (nama file memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
-FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE)}
+# Subfolder URGENT dipakai bersama Lazada, GTL-SiCepat & JNE-LEX, jadi jenis gtl-sicepat/lazada
+# disaring lewat nama file (memuat nama skenarionya, lihat SKENARIO_URGENT di proses_label.py).
+POLA_LAZADA = re.compile(r"^PICK-\d+_LAZADA_", re.IGNORECASE)
+FILTER_NAMA = {"gtl-sicepat": re.compile(r"^PICK-\d+_GTL-SICEPAT", re.IGNORECASE),
+               "lazada": POLA_LAZADA}
+
+# Label Lazada (template "Label Pengiriman Lazada" = A5 148x210 mm, lihat isFromLz di
+# proses_label.py) dicetak di kertas label 100x150 mm dengan skala 68% - sama dengan cetak
+# manual tim (100/148 = 67,6%). SumatraPDF tidak punya opsi skala persen, jadi cetak() mengirim
+# SALINAN sementara yang sudah diperkecil (buat_salinan_skala()) dengan -print-settings noscale.
+SKALA_LAZADA = 0.68
+KERTAS_LABEL_PT = (100 / 25.4 * 72, 150 / 25.4 * 72)   # 100 x 150 mm dalam point PDF
 
 # Jenis label yang didukung cetak bulk -> daftar subfolder yang dicari & digabung
 # di dalam folder sesi (lihat SUBFOLDER_URGENT/SUBFOLDER_SATUAN/SUBFOLDER_KOMBINASI
@@ -196,6 +208,7 @@ JENIS_LABEL: dict[str, list[str]] = {
     "spx-standard": [SUBFOLDER_SPX_STANDARD],   # SPX Standard seharian (--spx-standard)
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
+    "lazada": [SUBFOLDER_URGENT],          # Urgent Lazada, dicetak skala 68% (SKALA_LAZADA)
 }
 
 # ---------------------------------------------------------------------------------------
@@ -637,37 +650,98 @@ def _matikan_sumatra(sumatra: Path, file: Path) -> None:
         log.warning("Gagal mematikan sisa proses %s untuk %s: %s", nama, Path(file).name, e)
 
 
+def buat_salinan_skala(sumber: Path, tujuan: Path, skala: float = SKALA_LAZADA,
+                       kertas: tuple[float, float] = KERTAS_LABEL_PT) -> bool:
+    """Tulis salinan `sumber` ke `tujuan`: tiap halaman yang lebih besar dari `kertas` (lebar,
+    tinggi dalam point) diperkecil `skala` lalu ditaruh di tengah halaman seukuran `kertas`;
+    halaman lain disalin apa adanya. Jumlah & urutan halaman tetap (nomor halaman cetak terputus
+    tetap berlaku). Return False tanpa menulis apa pun kalau tidak ada halaman yang perlu
+    diperkecil - mis. label Lazada lama (sebelum isFromLz) yang sudah 100x150 mm."""
+    try:
+        from pypdf import PdfWriter, Transformation
+        from pypdf.generic import NameObject, RectangleObject
+    except ImportError:
+        raise CetakError("Modul pypdf belum terpasang (perlu untuk skala label Lazada) - jalankan "
+                         ".venv\\Scripts\\python -m pip install -r requirements.txt") from None
+    lebar_k, tinggi_k = kertas
+    try:
+        penulis = PdfWriter(clone_from=sumber)
+        diubah = False
+        for hal in penulis.pages:
+            if hal.rotation % 360:
+                hal.transfer_rotation_to_content()
+            kotak = hal.cropbox
+            lebar, tinggi = float(kotak.width), float(kotak.height)
+            if lebar <= lebar_k + 1 and tinggi <= tinggi_k + 1:   # toleransi 1 pt pembulatan
+                continue
+            tx = (lebar_k - lebar * skala) / 2 - float(kotak.left) * skala
+            ty = (tinggi_k - tinggi * skala) / 2 - float(kotak.bottom) * skala
+            hal.add_transformation(Transformation().scale(skala, skala).translate(tx, ty))
+            for kunci in ("/TrimBox", "/BleedBox", "/ArtBox"):
+                hal.pop(NameObject(kunci), None)
+            hal.mediabox = RectangleObject([0, 0, lebar_k, tinggi_k])
+            hal.cropbox = RectangleObject([0, 0, lebar_k, tinggi_k])
+            diubah = True
+        if diubah:
+            penulis.write(tujuan)
+        return diubah
+    except Exception as e:   # pypdf: PDF rusak/tidak terbaca dsb.
+        raise CetakError(f"Gagal membuat salinan skala {sumber.name}: {e}") from e
+
+
+@contextlib.contextmanager
+def _file_kirim(file: Path):
+    """(path yang dikirim ke SumatraPDF, opsi -print-settings tambahan). Label Lazada
+    (POLA_LAZADA) -> salinan sementara berskala SKALA_LAZADA + "noscale" (supaya SumatraPDF
+    tidak mengecilkannya lagi); salinan dihapus setelah cetak. File lain apa adanya."""
+    if not POLA_LAZADA.match(file.name):
+        yield file, []
+        return
+    with tempfile.TemporaryDirectory(prefix="cetak_skala_", ignore_cleanup_errors=True) as tmp:
+        salinan = Path(tmp) / file.name
+        if buat_salinan_skala(file, salinan):
+            log.info("Skala %d%% (label Lazada -> kertas 100x150 mm): %s",
+                     round(SKALA_LAZADA * 100), file.name)
+            yield salinan, ["noscale"]
+        else:
+            yield file, []
+
+
 def cetak(sumatra: Path, printer: str, file: Path, pantau: bool,
           halaman: str | None = None) -> bool:
     """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
     manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
     Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
-    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih."""
-    sebelum = _job_ids(printer) if pantau else set()
-    try:
-        r = subprocess.run(
-            [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done",
-             *(["-print-settings", halaman] if halaman else []), str(file)],
-            capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
-    except subprocess.TimeoutExpired:
-        _matikan_sumatra(sumatra, file)
-        if pantau and (_job_ids(printer) - sebelum):
-            # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
-            # cukup pantau job-nya seperti biasa.
-            return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)), file.name, file)
-        raise CetakError(
-            f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
-            "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
-            "kalau PC lambat.") from None
-    if r.returncode != 0:
-        raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
-                         f"{r.stderr.strip() or r.stdout.strip()}")
-    if not pantau:
-        return True
-    baru = _job_ids(printer) - sebelum
-    if not baru:
-        return True   # keburu selesai sebelum sempat dicek -> anggap sukses
-    return _tunggu_job_bersih(printer, next(iter(baru)), file.name, file)
+    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih.
+    Label Lazada dikirim sebagai salinan berskala 68% (lihat _file_kirim())."""
+    with _file_kirim(file) as (kirim, opsi):
+        pengaturan = ",".join(([halaman] if halaman else []) + opsi)
+        sebelum = _job_ids(printer) if pantau else set()
+        try:
+            r = subprocess.run(
+                [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done",
+                 *(["-print-settings", pengaturan] if pengaturan else []), str(kirim)],
+                capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
+        except subprocess.TimeoutExpired:
+            _matikan_sumatra(sumatra, kirim)
+            if pantau and (_job_ids(printer) - sebelum):
+                # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
+                # cukup pantau job-nya seperti biasa.
+                return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)),
+                                          file.name, file)
+            raise CetakError(
+                f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
+                "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
+                "kalau PC lambat.") from None
+        if r.returncode != 0:
+            raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
+                             f"{r.stderr.strip() or r.stdout.strip()}")
+        if not pantau:
+            return True
+        baru = _job_ids(printer) - sebelum
+        if not baru:
+            return True   # keburu selesai sebelum sempat dicek -> anggap sukses
+        return _tunggu_job_bersih(printer, next(iter(baru)), file.name, file)
 
 
 def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],

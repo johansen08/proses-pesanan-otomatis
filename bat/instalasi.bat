@@ -48,7 +48,7 @@ if errorlevel 1 (
 )
 echo.
 
-echo Install library dari requirements.txt (pandas, openpyxl, reportlab, requests, tzdata, playwright)...
+echo Install library dari requirements.txt (pandas, openpyxl, reportlab, pypdf, requests, tzdata, playwright)...
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 if errorlevel 1 (
     echo [GAGAL] Gagal install library dari requirements.txt.

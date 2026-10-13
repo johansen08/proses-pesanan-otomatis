@@ -159,9 +159,10 @@ Program menambahkannya otomatis di `lanjutkan_picklist()` bila semua pesanan yan
 berasal dari Lazada.
 
 Template Lazada berukuran **A5 (148x210 mm)**, bukan 100x150 mm seperti template umum. PDF
-disimpan apa adanya (A5), sama dengan unduhan manual. Label Lazada dicetak **manual** oleh tim
-dengan skala custom **68%** (100/148 = 67,6%) di kertas 100x150 mm; tidak ada cetak bulk Lazada
-(`print_spesial.py` hanya untuk SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI).
+disimpan apa adanya (A5), sama dengan unduhan manual. Di kertas 100x150 mm label Lazada dicetak
+dengan skala **68%** (100/148 = 67,6%): dulu manual oleh tim, sejak 2026-10-13 otomatis oleh
+`print_spesial.py` (jenis `lazada` / UI desktop "Urgent Lazada · skala 68%", salinan PDF berskala
++ SumatraPDF `noscale` - lihat `docs/cetak-bulk-label.md`).
 
 **b.** `GET <url>` → HTML berisi
 `jQuery('#reportViewer').telerik_ReportViewer({... "reportSource":{"report":"Label Pengiriman-…","parameters":{...}} ...})`

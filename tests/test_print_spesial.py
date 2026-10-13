@@ -5,6 +5,7 @@ sungguhan).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_print_spesial.py
 """
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -124,6 +125,110 @@ def uji_daftar_label_gtl_sicepat_hanya_file_gtl_sicepat():
         assert len(semua) == 3, [f.name for f in semua]
         print("  daftar_label(gtl-sicepat): hanya PDF GTL-SICEPAT di subfolder URGENT (Lazada "
              "tidak ikut), urut nomor PICK naik, file di folder sesi (bukan subfolder) diabaikan")
+
+
+def uji_daftar_label_lazada_hanya_file_lazada():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        subfolder = folder / "URGENT"
+        subfolder.mkdir()
+        _buat(subfolder,
+             "PICK-000155623_LAZADA_2026-10-01_090000.pdf",
+             "PICK-000155622_GTL-SICEPAT-LANTAI2_2026-10-01_080320.pdf",
+             "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+             "PICK-000155624_JNE-LEX_2026-10-01_091000.pdf")
+        hasil = ps.daftar_label(folder, "lazada")
+        assert [f.name for f in hasil] == [
+            "PICK-000155621_LAZADA_2026-10-01_080302.pdf",
+            "PICK-000155623_LAZADA_2026-10-01_090000.pdf",
+        ], [f.name for f in hasil]
+        assert all(ps.POLA_LAZADA.match(f.name) for f in hasil)
+        assert not any(ps.POLA_LAZADA.match(f.name) for f in ps.daftar_label(folder, "gtl-sicepat"))
+        print("  daftar_label(lazada): hanya PDF LAZADA di subfolder URGENT (GTL-SiCepat/JNE-LEX tidak ikut)")
+
+
+def _pdf_ukuran(path: Path, *ukuran_pt: tuple[float, float]) -> None:
+    from reportlab.pdfgen import canvas
+    c = canvas.Canvas(str(path), pagesize=ukuran_pt[0])
+    for i, (lebar, tinggi) in enumerate(ukuran_pt):
+        c.setPageSize((lebar, tinggi))
+        c.rect(5, 5, lebar - 10, tinggi - 10)
+        c.drawString(20, tinggi - 30, f"halaman {i + 1}")
+        c.showPage()
+    c.save()
+
+
+A5_PT = (419.528, 595.276)
+
+
+def uji_salinan_skala_lazada_a5_jadi_100x150_isi_68_persen():
+    from pypdf import PdfReader
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        a5, hasil = folder / "a5.pdf", folder / "hasil.pdf"
+        _pdf_ukuran(a5, A5_PT, A5_PT, A5_PT)
+        assert ps.buat_salinan_skala(a5, hasil) is True
+        halaman = PdfReader(hasil).pages
+        assert len(halaman) == 3, "jumlah halaman harus tetap (cetak terputus memakai nomor halaman)"
+        lebar_k, tinggi_k = ps.KERTAS_LABEL_PT
+        for h in halaman:
+            assert abs(float(h.mediabox.width) - lebar_k) < 0.01 and abs(float(h.mediabox.height) - tinggi_k) < 0.01
+            assert [round(float(x), 2) for x in h.cropbox] == [round(float(x), 2) for x in h.mediabox]
+            isi = h.get_contents().get_data()
+            cm = re.search(rb"([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) ([\d.-]+) cm", isi)
+            a, b, c, d, tx, ty = (float(x) for x in cm.groups())
+            assert (a, b, c, d) == (0.68, 0, 0, 0.68), isi[:200]
+            # di tengah kertas: sisa ruang kiri = kanan, atas = bawah
+            assert abs(tx - (lebar_k - A5_PT[0] * 0.68) / 2) < 0.01, tx
+            assert abs(ty - (tinggi_k - A5_PT[1] * 0.68) / 2) < 0.01, ty
+        # label yang sudah 100x150 mm (label Lazada lama, sebelum isFromLz) tidak disalin
+        kecil, hasil2 = folder / "kecil.pdf", folder / "hasil2.pdf"
+        _pdf_ukuran(kecil, ps.KERTAS_LABEL_PT)
+        assert ps.buat_salinan_skala(kecil, hasil2) is False and not hasil2.exists()
+        rusak = folder / "rusak.pdf"
+        rusak.write_bytes(b"bukan pdf")
+        try:
+            ps.buat_salinan_skala(rusak, folder / "x.pdf")
+        except ps.CetakError:
+            pass
+        else:
+            raise AssertionError("PDF rusak harus jadi CetakError")
+        print("  buat_salinan_skala: A5 -> halaman 100x150 mm, isi 68%, jumlah halaman tetap; "
+              "100x150 tidak disalin; PDF rusak -> CetakError")
+
+
+def uji_cetak_lazada_kirim_salinan_skala_noscale():
+    import subprocess
+    from unittest import mock
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        lazada = folder / "PICK-000161828_LAZADA_2026-10-13_131252.pdf"
+        lazada_lama = folder / "PICK-000157489_LAZADA_2026-10-07_073503.pdf"
+        gtl = folder / "PICK-000161829_GTL-SICEPAT-LANTAI1_2026-10-13_131300.pdf"
+        _pdf_ukuran(lazada, A5_PT, A5_PT)
+        _pdf_ukuran(lazada_lama, ps.KERTAS_LABEL_PT)
+        _pdf_ukuran(gtl, ps.KERTAS_LABEL_PT)
+        dikirim = []
+
+        def palsu(cmd, **kw):
+            berkas = Path(cmd[-1])
+            dikirim.append((cmd, berkas, berkas.is_file()))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch.object(ps.subprocess, "run", palsu):
+            assert ps.cetak(Path("SumatraPDF.exe"), "P", lazada, False) is True
+            assert ps.cetak(Path("SumatraPDF.exe"), "P", lazada, False, "2-2") is True
+            assert ps.cetak(Path("SumatraPDF.exe"), "P", lazada_lama, False) is True
+            assert ps.cetak(Path("SumatraPDF.exe"), "P", gtl, False) is True
+        (c1, f1, ada1), (c2, f2, ada2), (c3, f3, _), (c4, f4, _) = dikirim
+        assert f1 != lazada and f1.name == lazada.name and ada1, "Lazada harus dikirim sebagai salinan"
+        assert c1[c1.index("-print-settings") + 1] == "noscale", c1
+        assert c2[c2.index("-print-settings") + 1] == "2-2,noscale", c2
+        assert not f1.exists() and not f2.exists(), "salinan sementara harus dihapus setelah cetak"
+        assert f3 == lazada_lama and "-print-settings" not in c3, c3
+        assert f4 == gtl and "-print-settings" not in c4, c4
+        print("  cetak: label Lazada A5 dikirim sebagai salinan skala 68% + noscale (juga dengan "
+              "rentang halaman), salinan dihapus; Lazada 100x150 & GTL dikirim apa adanya")
 
 
 def uji_daftar_label_gtl_sicepat_tidak_ada_varian_kurir():

@@ -75,11 +75,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   Shopee Pagi, J&T Resi Siang), plus pencatatan riwayat ke `data/riwayat_picklist.xlsx`. Label
   Lazada diminta dengan `isFromLz=true` (template "Label Pengiriman Lazada", A5) lalu
   disimpan apa adanya (A5) — tanpa `isFromLz` PDF-nya beda dari unduhan manual (sniff
-  2026-10-07). Label Lazada dicetak MANUAL oleh tim (skala custom 68% di kertas 100x150 mm),
-  tidak ada cetak bulk Lazada.
+  2026-10-07). Di kertas 100x150 mm label Lazada harus dicetak skala 68% - dilakukan otomatis
+  oleh `print_spesial.py` (lihat di bawah).
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
-  membuat picklist/label baru. Punya 19 jenis; `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
+  membuat picklist/label baru. Punya 23 jenis; `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
   Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
   mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,
@@ -99,6 +99,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   (180 dtk) sebelum file dilewati, dan file gagal dicoba ulang otomatis `PERCOBAAN_ULANG_CETAK`x. Akurasi
   halaman bergantung driver melapor ke spooler (printer thermal tertentu tidak) — makanya halaman mulai
   bisa diganti user. Tes: `tests/test_print_spesial.py`.
+  **Label Lazada skala 68%** (2026-10-13): PDF Lazada A5, kertas 100x150 mm. `cetak()` mengirim SALINAN
+  sementara (`buat_salinan_skala()`, `pypdf`: halaman > 100x150 diperkecil `SKALA_LAZADA` di tengah halaman
+  100x150) + `-print-settings noscale` untuk SEMUA file `PICK-..._LAZADA_...` (jenis `lazada`, `--file` dari UI
+  kelompok "Urgent Lazada · skala 68%", `--ulang`, lanjut sebagian). Jumlah halaman sama; `sudah_dicetak` tetap
+  path asli. SumatraPDF tidak punya opsi skala persen - jangan diganti `-print-settings fit/shrink`.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
   `data/prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
   API `/api/sesi` (3 hari, jenis spesial/satuan/kombinasi/gtl-sicepat, file PDF + status tercetak),
