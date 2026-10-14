@@ -424,6 +424,154 @@ def uji_server_ui_lanjut_cetak_terputus():
         print("  server_ui: /api/sebagian daftar file terputus, lanjut dari halaman pilihan, validasi ditolak")
 
 
+def uji_server_ui_pilah_satuan():
+    """Menu Pilah: daftar sesi satuan, validasi, job analisis/buat (proses ditiru), folder hasil
+    ikut tampil di data_sesi (menu Cetak)."""
+    import jalankan_harian as jh
+    import pilah_satuan as pl
+    from reportlab.pdfgen import canvas
+
+    hari_ini = date.today().isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        for sesi, n, jam, folder in (("1", 3, "081500", "SATUAN"), ("2", 2, "104000", "SATUAN"),
+                                      ("4", 1, "140500", "SATUAN"),            # diproses 14.05: di luar 07.00-12.00
+                                      ("5", 1, "090000", "JNT_SATUAN")):       # satuan per kurir, bukan gabungan
+            d = label / hari_ini / sesi / folder
+            d.mkdir(parents=True)
+            c = canvas.Canvas(str(d / f"PICK-00000000{sesi}_1QTY-REGULER-2A_{hari_ini}_{jam}.pdf"))
+            for _ in range(n):
+                c.showPage()
+            c.save()
+        _buat(label / hari_ini / "3" / "SPESIAL", "PICK-000000009_SPESIAL_A_x.pdf")   # tanpa satuan: tidak masuk daftar
+        hasil_json = {"sesi": "1-2", "pdf": 2, "halaman": 5, "tak_cocok": 0, "spesial": [], "sisa": {"2A": 5},
+                      "folder": [], "file": 0}
+        diluncurkan = []
+
+        def luncur_palsu(argumen, env):
+            diluncurkan.append(argumen)
+            kode = ('print("a.pdf: 3 halaman dipetakan"); print("b.pdf: 2 halaman dipetakan"); '
+                    f'print({pl.PENANDA_JSON + json.dumps(hasil_json)!r})')
+            return subprocess.Popen([sys.executable, "-c", kode], stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+        su._pilah = None
+        import kurasi_satuan
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(jh, "_luncurkan", luncur_palsu), \
+                mock.patch.object(ps, "FILE_SUDAH_DICETAK", Path(tmp) / "x.txt"), \
+                mock.patch.object(kurasi_satuan, "FILE_KURASI", Path(tmp) / "kurasi0.json"), \
+                mock.patch.object(pl, "MASA_TENANG_S", 0), \
+                mock.patch.object(jh, "FOLDER_LOG", Path(tmp) / "logs"):
+            server = su.Server(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                kode, d = _panggil(port, "/api/pilah/sesi")
+                sesi = d["hari"][0]["sesi"]
+                assert kode == 200 and [(s["no"], s["picklist"], s["label"], s["layak"], s["jam"]) for s in sesi] == [
+                    (1, 1, 3, True, "08.15"), (2, 1, 2, True, "10.40"), (4, 1, 1, False, "14.05"),
+                    (5, 1, 1, False, "09.00")], d
+                assert "di luar 07.00-12.00" in sesi[2]["alasan"] and "dipisah per kurir" in sesi[3]["alasan"], sesi
+                # validasi: tidak ada proses dijalankan
+                for bad in ({"tanggal": "x", "sesi": ["1"]}, {"tanggal": hari_ini, "sesi": []},
+                            {"tanggal": hari_ini, "sesi": ["3"]}, {"tanggal": hari_ini, "sesi": ["1"], "min_resi": 0},
+                            {"tanggal": hari_ini, "sesi": ["1"], "min_resi": "3"},
+                            {"tanggal": "2020-01-01", "sesi": ["1"]},
+                            {"tanggal": hari_ini, "sesi": ["1", "4"]},      # sesi di luar jam 07.00-12.00
+                            {"tanggal": hari_ini, "sesi": ["5"]}):          # satuan per kurir
+                    kode, isi = _panggil(port, "/api/pilah/analisis", bad)
+                    assert kode == 400, bad
+                kode, isi = _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1", "4"]})
+                assert kode == 400 and "Sesi 4" in isi["error"] and "Sesi 1" not in isi["error"], isi
+                assert _panggil(port, "/api/pilah/analisis", data="x", tipe="text/plain")[0] == 404
+                assert diluncurkan == []
+                # analisis -> job selesai dengan hasil
+                assert _panggil(port, "/api/pilah/analisis", {"tanggal": hari_ini, "sesi": ["2", "1"], "min_resi": 3})[0] == 200
+                for _ in range(100):
+                    kode, j = _panggil(port, "/api/pilah/job")
+                    if j["status"] != "jalan":
+                        break
+                    time.sleep(0.1)
+                assert j["status"] == "selesai" and j["hasil"] == hasil_json and j["maju"] == 2 and j["total"] == 2, j
+                assert PENANDA_TIDAK_BOCOR(j["lines"])
+                p = diluncurkan[0]
+                assert "--analisis-saja" in p and p[p.index("--sesi") + 1] == "1-2" and "--json" in p, p
+                # buat -> tanpa --analisis-saja
+                assert _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1", "2"]})[0] == 200
+                for _ in range(100):
+                    j = _panggil(port, "/api/pilah/job")[1]
+                    if j["status"] != "jalan":
+                        break
+                    time.sleep(0.1)
+                assert "--analisis-saja" not in diluncurkan[1] and j["mode"] == "buat", diluncurkan[1]
+                # mode hanya-Excel diteruskan ke proses; tipe salah ditolak
+                assert _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1"], "tanpa_pdf": "ya"})[0] == 400
+                n_sebelum = len(diluncurkan)
+                assert _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1"], "tanpa_pdf": True})[0] == 200
+                for _ in range(100):
+                    j = _panggil(port, "/api/pilah/job")[1]
+                    if j["status"] != "jalan":
+                        break
+                    time.sleep(0.1)
+                assert "--tanpa-pdf" in diluncurkan[n_sebelum] and j["tanpa_pdf"] is True, diluncurkan[n_sebelum]
+                assert "--tanpa-pdf" not in diluncurkan[1]
+                # proses harian / download ulang berjalan -> label sesi belum lengkap -> 409 (tidak ada proses baru)
+                n_sebelum = len(diluncurkan)
+                with mock.patch.object(jh, "keadaan", return_value={"status": "jalan"}):
+                    kode, isi = _panggil(port, "/api/pilah/analisis", {"tanggal": hari_ini, "sesi": ["1"]})
+                    assert kode == 409 and "proses harian" in isi["error"], isi
+                assert len(diluncurkan) == n_sebelum
+                # PDF sudah dikurasi ke folder hasil LAIN -> 'buat' ditolak 400 (analisis tetap boleh)
+                asal1 = sorted((label / hari_ini).glob("1/SATUAN/*.pdf"))
+                with mock.patch.object(kurasi_satuan, "FILE_KURASI", Path(tmp) / "kurasi.json"):
+                    kurasi_satuan.catat(asal1, "1-2")
+                    (label / hari_ini / "SPESIAL-SATUAN-1-2").mkdir(exist_ok=True)   # folder hasil lama masih ada
+                    kode, isi = _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1"]})
+                    assert kode == 400 and "SPESIAL-SATUAN-1-2" in isi["error"], isi
+                    assert _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1"], "tanpa_pdf": True})[0] == 200
+                    for _ in range(100):
+                        if _panggil(port, "/api/pilah/job")[1]["status"] != "jalan":
+                            break
+                        time.sleep(0.1)
+                    assert _panggil(port, "/api/pilah/analisis", {"tanggal": hari_ini, "sesi": ["1"]})[0] == 200
+                    for _ in range(100):
+                        if _panggil(port, "/api/pilah/job")[1]["status"] != "jalan":
+                            break
+                        time.sleep(0.1)
+                    (label / hari_ini / "SPESIAL-SATUAN-1-2").rmdir()
+                # sesi yang PDF-nya baru diubah (proses harian masih menulis) tampil tidak layak
+                with mock.patch.object(pl, "MASA_TENANG_S", 120):
+                    sesi_aktif = _panggil(port, "/api/pilah/sesi")[1]["hari"][0]["sesi"]
+                    assert not sesi_aktif[0]["layak"] and "masih menulis label" in sesi_aktif[0]["alasan"], sesi_aktif
+                    assert _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1"]})[0] == 400
+                # folder hasil tampil di menu Cetak sebagai pseudo-sesi
+                _buat(label / hari_ini / "SPESIAL-SATUAN-1-2", "SPESIAL-SATUAN_X_3resi.pdf")
+                _buat(label / hari_ini / "SISA-SATUAN-1-2", "SISA-SATUAN_1QTY-REGULER-2A_2resi.pdf")
+                hari = su.data_sesi()["hari"][0]["sesi"]
+                # satuan asal yang dikurasi diberi penanda di data_sesi (UI menampilkan & tidak mencetaknya)
+                import kurasi_satuan
+                asal = sorted((label / hari_ini).glob("*/SATUAN/*.pdf"))
+                with mock.patch.object(kurasi_satuan, "FILE_KURASI", Path(tmp) / "kurasi.json"):
+                    kurasi_satuan.catat(asal[:1], "1-2")
+                    hari2 = su.data_sesi()["hari"][0]["sesi"]
+                    kur = [f for s in hari2 for j in s["jenis"] for f in j["files"] if f.get("kurasi")]
+                    assert [(f["f"], f["kurasi"]) for f in kur] == [(asal[0].name, "1-2")], kur
+                    assert all("kurasi" not in f for s in hari for j in s["jenis"] for f in j["files"])   # tanpa penanda: tak ada kunci
+                judul = {s.get("judul"): s for s in hari if s.get("judul")}
+                assert set(judul) == {"SPESIAL-SATUAN-1-2", "SISA-SATUAN-1-2"}, [s["id"] for s in hari]
+                assert judul["SISA-SATUAN-1-2"]["jenis"][0]["files"][0]["rel"].endswith("SISA-SATUAN_1QTY-REGULER-2A_2resi.pdf")
+            finally:
+                server.shutdown()
+                server.server_close()
+                su._pilah = None
+    print("  server_ui pilah: daftar sesi satuan, validasi 400/404, analisis & buat jadi job, folder hasil masuk menu Cetak")
+
+
+def PENANDA_TIDAK_BOCOR(lines):
+    """Baris ringkasan JSON tidak ikut ke log yang tampil di UI."""
+    return not any(l.startswith("##HASIL##") for l in lines)
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

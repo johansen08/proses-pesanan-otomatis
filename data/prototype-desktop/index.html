@@ -198,7 +198,38 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
 .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}.acts .btn{width:auto}
 #toast{position:fixed;bottom:24px;left:50%;transform:translate(-50%,80px);background:#151a24;color:#fff;padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:60}
 #toast.on{transform:translate(-50%,0);opacity:1}
-@media(max-width:1100px){.view.two.on{display:block;overflow:auto}.col,.side{overflow:visible}.side{margin-top:16px}.top{flex-wrap:wrap}.view.cetak.on{overflow:auto}}
+@media(max-width:1100px){.view.two.on,.view.pilah.on{display:block;overflow:auto}.col,.side{overflow:visible}.side{margin-top:16px}.top{flex-wrap:wrap}.view.cetak.on{overflow:auto}}
+
+
+/* pilah satuan */
+.pilah{grid-template-columns:minmax(0,1fr) 350px;gap:24px}
+.stp-h{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.stp-h .no{width:22px;height:22px;border-radius:50%;background:var(--accbg);color:var(--acc);font-size:12px;font-weight:700;display:grid;place-items:center}
+.stp-h b{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.psesi{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--surf);border:1.5px solid var(--line);border-radius:var(--r);margin-bottom:8px;cursor:pointer;user-select:none;box-shadow:var(--sh)}
+.psesi:hover{border-color:var(--faint)}.psesi.sel{border-color:var(--acc);background:var(--accbg)}
+.psesi .tx{flex:1}.psesi small{display:block;color:var(--mut)}
+.psesi.off{opacity:.6;cursor:not-allowed;background:var(--bg);box-shadow:none}.psesi.off:hover{border-color:var(--line)}
+.psesi .why{color:var(--warn)}
+.fold{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:var(--bg);border:1px dashed var(--line);margin-bottom:6px}
+.fold svg{color:var(--faint)}.fold b{font:600 13px Consolas,monospace;word-break:break-all}.fold small{color:var(--mut);display:block;font-size:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surf)}
+.seg button{padding:6px 14px;font-weight:600;color:var(--mut)}
+.seg button.on{background:var(--accbg);color:var(--acc)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--line)}
+.tbl tr.dt{cursor:pointer}.tbl tr.dt:hover td{background:var(--bg)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.tbl td.sku{font:600 13px Consolas,monospace}
+.rk{font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--bg);color:var(--mut)}
+.rk.l1{background:#e3efff;color:#1d5fbf}.rk.l2{background:#e3f5e8;color:#17803d}.rk.l3{background:#fff0dc;color:#b45309}
+:root[data-theme=dark] .rk.l1{background:#1b2a47;color:#8fb6f5}:root[data-theme=dark] .rk.l2{background:#10291a;color:#4cc77a}:root[data-theme=dark] .rk.l3{background:#33260e;color:#f0a34a}
+.dtl td{background:var(--bg);color:var(--mut);font-size:12.5px}
+.bar2{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:120px}.bar2 i{display:block;height:100%;background:var(--acc)}
+.kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.kpi .card{padding:10px 14px}.kpi .bignum{font-size:24px}.kpi small{color:var(--mut)}
+.step-ok{color:var(--ok);font-weight:600;display:flex;align-items:center;gap:6px}
 
 .log .e{color:#ff7a7a}.log .w{color:#ffc15e}
 .stp.err{color:var(--bad)}.stp.err .dot{background:var(--bad);border-color:var(--bad)}.stp.err .dot svg{opacity:1}
@@ -217,12 +248,15 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
  <symbol id="back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
  <symbol id="x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+ <symbol id="layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5"/></symbol>
+ <symbol id="folder" viewBox="0 0 24 24"><path d="M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></symbol>
 </svg>
 
 <nav class="rail">
   <div class="brand"><svg><use href="#box"/></svg></div>
   <button class="tab on" data-v="harian"><svg><use href="#play"/></svg>Harian<i class="bd" id="bd">4</i></button>
   <button class="tab" data-v="event"><svg><use href="#bolt"/></svg>Event</button>
+  <button class="tab" data-v="pilah"><svg><use href="#layers"/></svg>Pilah</button>
   <button class="tab" data-v="cetak"><svg><use href="#print"/></svg>Cetak</button>
   <div class="sp"></div>
   <button class="tab" id="tema" title="Ganti tema"><svg><use href="#moon"/></svg>Tema</button>
@@ -244,7 +278,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
   <section class="view cetak" id="v-cetak">
     <div class="bar"><div class="bar" id="hari"></div><div class="sp"></div>
       <input type="search" id="cari" placeholder="Cari file, SKU, atau PICK…">
-      <label class="sw on" id="swBelum" title="Sembunyikan yang sudah dicetak" aria-label="Sembunyikan yang sudah dicetak"><i></i></label></div>
+      <label class="sw on" id="swBelum" title="Sembunyikan yang sudah dicetak / dikurasi" aria-label="Sembunyikan yang sudah dicetak atau dikurasi"><i></i></label></div>
     <div class="bar"><label class="allrow" id="allRow" title="Pilih semua" aria-label="Pilih semua"><span class="cb" id="allCb"><svg><use href="#check"/></svg></span></label></div>
     <div class="slist" id="slist"></div>
     <div class="dock">
@@ -253,6 +287,8 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
       <button class="btn auto" id="cetakBtn" disabled><svg><use href="#print"/></svg>Cetak</button>
     </div>
   </section>
+
+  <section class="view pilah" id="v-pilah"></section>
 
   <section class="view" id="v-runner">
     <div class="card" style="display:flex;flex-direction:column;min-height:0">
@@ -483,9 +519,10 @@ async function initOperator(){
 }
 
 /* ---------- navigasi ---------- */
-const JUD={harian:'Harian',event:'Event',cetak:'Cetak label',runner:'Proses berjalan'};
+const JUD={harian:'Harian',event:'Event',pilah:'Pilah satuan',cetak:'Cetak label',runner:'Proses berjalan'};
 let asal='harian';
 function go(v){
+  if(v==='pilah'){gambarPilah();muatPilah()}
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('.rail .tab[data-v]').forEach(t=>t.classList.toggle('on',t.dataset.v===(v==='runner'?asal:v)));
   $('#judul').textContent=JUD[v];
@@ -572,14 +609,15 @@ function dataHari(t){
   if(API)return CACHE[t]=[];
   const r=rnd(+t.split('-').join('')%997),n=2+Math.floor(r()*2),hariIni=t===iso(HARI0),out=[];let pick=104700+Math.floor(r()*100);
   for(let i=1;i<=n;i++){const jam=['07.05','10.18','13.02','16.04'][i-1],hh=jam.replace('.','');
-    out.push({id:t+'/'+i,no:i,jam,jenis:Object.keys(JENIS).map(j=>({nama:j,files:JENIS[j].map(lb=>({f:'PICK-000'+(pick++)+'_'+lb+'_'+t+'_'+hh+String(10+Math.floor(r()*49))+'.pdf',rel:'',n:Math.floor(r()*60)+4,done:!(hariIni&&i===n)&&r()<.6}))}))})}
+    out.push({id:t+'/'+i,no:i,jam,jenis:Object.keys(JENIS).map(j=>({nama:j,files:JENIS[j].map(lb=>({f:'PICK-000'+(pick++)+'_'+lb+'_'+t+'_'+hh+String(10+Math.floor(r()*49))+'.pdf',rel:'',n:Math.floor(r()*60)+4,done:!(hariIni&&i===n)&&r()<.6,kurasi:j==='Satuan'&&i===1&&r()<.5?'1-2':undefined}))}))})}
   return CACHE[t]=out;
 }
 let tgl=iso(HARI0),bukaS=new Set(),bukaJ=new Set(),pil=new Set(),sembunyi=true,kata='',ss=[];
 const lb=x=>API?'':` · ${x} label`;
 const kf=(sid,j,f)=>sid+'|'+j+'|'+f;
 const cocok=f=>!kata||f.f.toLowerCase().includes(kata);
-const fVis=j=>j.files.filter(f=>!(sembunyi&&f.done)&&cocok(f));
+const fSelesai=f=>f.done||!!f.kurasi;   // tercetak, atau satuan yang sudah dikurasi (isinya di SPESIAL-SATUAN/SISA-SATUAN)
+const fVis=j=>j.files.filter(f=>!(sembunyi&&fSelesai(f))&&cocok(f));
 const jVis=s=>s.jenis.filter(j=>fVis(j).length);
 const kJ=(s,j)=>fVis(j).map(f=>kf(s.id,j.nama,f.f));
 const kS=s=>jVis(s).flatMap(j=>kJ(s,j));
@@ -589,7 +627,7 @@ const chk=ic('check');
 const sumN=(arr)=>arr.reduce((a,f)=>a+(f.n||0),0);
 function gambarCetak(){
   $('#hari').innerHTML=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d);
-    const blm=dataHari(t).reduce((a,s)=>a+s.jenis.reduce((b,j)=>b+j.files.filter(f=>!f.done).reduce((c,f)=>c+(API?1:f.n),0),0),0);
+    const blm=dataHari(t).reduce((a,s)=>a+s.jenis.reduce((b,j)=>b+j.files.filter(f=>!fSelesai(f)).reduce((c,f)=>c+(API?1:f.n),0),0),0);
     return `<button class="dchip ${t===tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}${blm?`<small style="color:var(--warn)">${blm}${API?' file':' label'} belum dicetak</small>`:''}</button>`}).join('');
   ss=dataHari(tgl);let total=0,nFile=0,jset=new Set(),sset=0,all=0;
   $('#slist').innerHTML=[...ss].reverse().map(s=>{
@@ -598,12 +636,12 @@ function gambarCetak(){
     jv.forEach(j=>fVis(j).forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){total+=f.n||0;nFile++;jset.add(j.nama)}}));
     const sS=stt(ks),open=bukaS.has(s.id)||(kata&&ks.length);
     return `<div class="ses ${sS?'sel':''} ${open?'open':''}" data-s="${esc(s.id)}">
-     <div class="sh"><span class="cb ${sS}" data-act="cs">${chk}</span><span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">· ${s.jam}</span>
+     <div class="sh"><span class="cb ${sS}" data-act="cs">${chk}</span><span class="tx"><b>${esc(s.judul||'Sesi '+s.no)}</b> <span style="color:var(--mut)">· ${s.jam}</span>
        <small>${ks.length?jv.length+' jenis · '+ks.length+' file'+lb(tot)+(p?' · '+p+' dipilih':''):'tidak ada file'}</small></span>
        <span class="chev">${ic('chev')}</span></div>
      <div class="sb">${jv.map(j=>{const kj=kJ(s,j),sj=stt(kj),bj=bukaJ.has(s.id+'|'+j.nama)||(kata&&kj.length);
        return `<div class="jg ${bj?'open':''}" data-j="${esc(s.id)}|${esc(j.nama)}"><div class="jr"><span class="cb ${sj}" data-act="cj">${chk}</span><span class="nm">${esc(j.nama)}</span><span class="n">${kj.length} file${lb(sumN(fVis(j)))}</span><span class="chev">${ic('chev')}</span></div>
-        <div class="fl">${fVis(j).map(f=>`<div class="fr ${f.done?'done':''}" data-k="${esc(kf(s.id,j.nama,f.f))}"><span class="cb ${pil.has(kf(s.id,j.nama,f.f))?'on':''}">${chk}</span><span class="fn">${esc(f.f)}</span>${f.done?'<span class="pill ok">tercetak</span>':''}<span class="n">${API?f.kb+' KB':f.n+' label'}</span></div>`).join('')}</div></div>`}).join('')}</div></div>`}).join('')||'<div class="empty">Belum ada sesi</div>';
+        <div class="fl">${fVis(j).map(f=>`<div class="fr ${fSelesai(f)?'done':''}" data-k="${esc(kf(s.id,j.nama,f.f))}"><span class="cb ${pil.has(kf(s.id,j.nama,f.f))?'on':''}">${chk}</span><span class="fn">${esc(f.f)}</span>${f.done?'<span class="pill ok">tercetak</span>':''}${f.kurasi?'<span class="pill acc" title="Label file ini sudah dipindah ke folder hasil pilah (SPESIAL-SATUAN / SISA-SATUAN-'+esc(f.kurasi)+'). Jangan dicetak lagi.">dikurasi &middot; '+esc(f.kurasi)+'</span>':''}<span class="n">${API?f.kb+' KB':f.n+' label'}</span></div>`).join('')}</div></div>`}).join('')}</div></div>`}).join('')||'<div class="empty">Belum ada sesi</div>';
   $('#allCb').className='cb '+(all&&pil.size===all?'on':pil.size?'mix':'');
   $('#cInfo').textContent=pil.size?`${sset} sesi · ${jset.size} jenis · ${nFile} file${lb(total)}`:'Belum ada yang dipilih';
   updBtn();
@@ -662,9 +700,10 @@ async function tickCetak(p){
   gambarJobs();renderJob();
 }
 $('#cetakBtn').onclick=()=>{
-  const g={};let tot=0,nf=0;
-  ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){const n='Sesi '+s.no+' · '+j.nama;g[n]=(g[n]||0)+1;tot+=f.n||0;nf++}})));
+  const g={};let tot=0,nf=0,nk=0;
+  ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){const n=(s.judul||'Sesi '+s.no)+' · '+j.nama;g[n]=(g[n]||0)+1;tot+=f.n||0;nf++;if(f.kurasi)nk++}})));
   modal(`<h2>Cetak ${nf} file${API?'':' ('+tot+' label)'}?</h2><p>Printer: <b>${esc($('#printer').value)}</b></p><div class="chips">${Object.keys(g).map(n=>`<span class="chip" style="pointer-events:none">${esc(n)} · ${g[n]} file</span>`).join('')}</div>
+   ${nk?`<div class="note">${nk} file satuan sudah dikurasi &mdash; isinya sudah ada di SPESIAL-SATUAN / SISA-SATUAN, jadi akan dilewati saat dicetak.</div>`:''}
    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yaC">Cetak</button></div>`);
   $('#yaC').onclick=async()=>{tutup();const printer=$('#printer').value;
     if(API){const files=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
@@ -696,7 +735,7 @@ $('#sbgBtn').onclick=()=>{
 async function muatData(){
   const d=await api('/api/sesi');Object.keys(CACHE).forEach(k=>delete CACHE[k]);
   HARI0=new Date(d.hari_ini+'T00:00:00');
-  d.hari.forEach(h=>{CACHE[h.tanggal]=h.sesi.map(s=>({id:s.id,no:s.no,jam:s.jam,jenis:s.jenis.map(j=>({nama:j.nama,files:j.files.map(f=>({f:f.f,rel:f.rel,kb:f.kb,n:null,done:f.done}))}))}))});
+  d.hari.forEach(h=>{CACHE[h.tanggal]=h.sesi.map(s=>({id:s.id,no:s.no,judul:s.judul,jam:s.jam,jenis:s.jenis.map(j=>({nama:j.nama,files:j.files.map(f=>({f:f.f,rel:f.rel,kb:f.kb,n:null,done:f.done,kurasi:f.kurasi}))}))}))});
   API=true;return d;
 }
 async function initCetak(){
@@ -713,6 +752,171 @@ async function initCetak(){
     return;
   }
   gambarCetak();
+}
+
+/* =========================================================
+   PILAH SATUAN - cari SKU yang bisa dikelompokkan jadi spesial dari label SATUAN yang sudah dibuat
+   (prototype: data contoh; backend = src/pilah_satuan.py, READ-ONLY ke Jubelio)
+   ========================================================= */
+const PSKU=[['TL001','1B'],['MX-5054-4','2A'],['T01-PTAA-5','2B'],['GL-FND-1','3A'],['GL-FNE-6','3B'],['ZU12','2A'],['MX-5040-2','1B'],['M1-BWAD-1','2A'],['T01-BSCR-1','2B'],['TRO1','3A'],['ZB6','3B'],['C226-GTJ-3','2A'],
+  ['BM-AKS28-11','1B'],['T01-PTAD-4','2B'],['ZQ-8','3A'],['MX1010-2','LAINNYA'],['ZL-5','2A'],['C225-UB11-2','1B'],['T01-PTAH-3','3B'],['GL-FNA-1','2B'],['M2-KCM19-4','3A'],['ZC7','1B'],['TPJ2','2A'],['MX-5015-34','3B']];
+const PLANTAI={'1B':'l1','2A':'l2','2B':'l2','3A':'l3','3B':'l3','LAINNYA':''};
+const PKEL=['2A','3A','1B','2B','3B','LAINNYA'];
+const PDATA={},PAPI={};
+function pilahHari(t){   // mode server: dari /api/pilah/sesi; tanpa server: sesi contoh deterministik
+  if(TERSAMBUNG)return PAPI[t]||[];
+  if(PDATA[t])return PDATA[t];
+  const r=rnd(+t.split('-').join('')%991+7),out=[];
+  for(let i=1;i<=3;i++){
+    const cnt={};
+    PSKU.forEach(([k])=>{const x=r();cnt[k]=x<.35?0:x<.6?1:x<.8?2:3+Math.floor(r()*4)});
+    for(let j=0;j<40;j++)cnt['X'+(i*100+j)]=1;   // SKU yang cuma laku sekali (selalu sisa)
+    out.push({no:i,jam:['07.05','13.02','16.04'][i-1],cnt,batal:Math.floor(r()*3),picklist:6,label:Object.values(cnt).reduce((a,b)=>a+b,0),layak:i===1,alasan:i===1?null:'Diproses '+['07.05','13.02','16.04'][i-1]+' - di luar 07.00-12.00 atau 20.00-07.00'});
+  }
+  return PDATA[t]=out;
+}
+const rakSku=k=>(PSKU.find(x=>x[0]===k)||[k,PKEL[(k.length*7+k.charCodeAt(k.length-1))%5]])[1];
+const P={tgl:iso(HARI0),sesi:null,min:3,hasil:null,tab:'spesial',cari:'',buka:new Set(),dibuat:false,sibuk:false,mode:'',prog:null,err:'',nBuat:null,tanpaPdf:false};
+const pNama=()=>[...P.sesi].sort((a,b)=>a-b).join('-');
+function pilahReset(){P.hasil=null;P.dibuat=false;P.err='';P.nBuat=null;P.buka.clear()}
+function hitungPilah(){
+  const ses=pilahHari(P.tgl).filter(s=>P.sesi.has(s.no)),tot={},sesiSku={};let batal=0;
+  ses.forEach(s=>{batal+=s.batal;Object.entries(s.cnt).forEach(([k,n])=>{tot[k]=(tot[k]||0)+n;(sesiSku[k]=sesiSku[k]||{})[s.no]=n})});
+  const spesial=[],sisa={};PKEL.forEach(k=>sisa[k]=0);
+  Object.entries(tot).forEach(([k,n])=>{if(n>=P.min)spesial.push({sku:k,n,rak:rakSku(k),sesi:sesiSku[k]});else sisa[rakSku(k)]+=n});
+  spesial.sort((a,b)=>a.rak.localeCompare(b.rak)||a.sku.localeCompare(b.sku));   // urutan cetak: rak -> SKU
+  return {spesial,sisa,batal,resiSpesial:spesial.reduce((a,x)=>a+x.n,0),resiSisa:Object.values(sisa).reduce((a,b)=>a+b,0)};
+}
+
+/* ---- sambungan ke server_ui.py (pilah_satuan.py) ---- */
+async function muatPilah(){
+  if(!TERSAMBUNG)return;
+  try{
+    const d=await api('/api/pilah/sesi');Object.keys(PAPI).forEach(k=>delete PAPI[k]);d.hari.forEach(h=>PAPI[h.tanggal]=h.sesi);
+    const j=await api('/api/pilah/job');
+    if(j.status==='jalan'&&!P.sibuk){P.tgl=j.tanggal;P.sesi=new Set(j.sesi.map(Number));P.sibuk=true;P.mode=j.mode;pilahPoll()}
+    else if(!P.sibuk&&!P.hasil&&!P.dibuat){if(!layakSesi(P.tgl).length){const t=Object.keys(PAPI).filter(k=>layakSesi(k).length).sort().pop()||Object.keys(PAPI).filter(k=>PAPI[k].length).sort().pop();if(t)P.tgl=t}
+      const ada=layakSesi(P.tgl);if(!P.sesi||![...P.sesi].every(n=>ada.includes(n))||!P.sesi.size)P.sesi=new Set(ada)}
+  }catch(e){toast('Pilah: '+e.message)}
+  gambarPilah();
+}
+async function pilahJalankan(mode){
+  P.err='';P.sibuk=true;P.mode=mode;P.prog={maju:0,total:0};gambarPilah();
+  try{await postJ('/api/pilah/'+mode,{tanggal:P.tgl,sesi:[...P.sesi].sort((a,b)=>a-b).map(String),min_resi:P.min,tanpa_pdf:P.tanpaPdf})}
+  catch(e){P.sibuk=false;P.err=e.message;gambarPilah();return}
+  pilahPoll();
+}
+let pilahT=null;
+const pilahPoll=()=>{clearInterval(pilahT);pilahT=setInterval(tickPilah,1000);tickPilah()};
+function petaHasil(h){
+  const sisa={};PKEL.forEach(k=>sisa[k]=0);Object.entries(h.sisa).forEach(([k,n])=>sisa[k]=(sisa[k]||0)+n);
+  return {spesial:h.spesial,sisa,batal:h.tak_cocok,bentrok:h.bentrok||{},terlompat:h.terlompat||[],resiSpesial:h.spesial.reduce((a,x)=>a+x.n,0),resiSisa:Object.values(sisa).reduce((a,b)=>a+b,0)};
+}
+async function tickPilah(){
+  try{
+    const j=await api('/api/pilah/job'),prog={maju:j.maju||0,total:j.total||0};
+    if(j.status==='jalan'){const ubah=!P.prog||P.prog.maju!==prog.maju||P.prog.total!==prog.total;P.prog=prog;if(ubah&&$('#v-pilah').classList.contains('on'))gambarPilah();return}
+    clearInterval(pilahT);P.sibuk=false;P.prog=null;
+    if(j.status==='selesai'&&j.hasil){
+      if(j.mode==='analisis'){P.hasil=petaHasil(j.hasil);P.tab='spesial';toast('Analisis selesai ✓')}
+      else{P.dibuat=true;P.nBuat=j.hasil.tanpa_pdf?0:Math.max(0,j.hasil.file-1);toast((j.hasil.tanpa_pdf?'Excel di ':'Folder ')+j.hasil.folder.join(' dan ')+' dibuat ✓');muatData().catch(()=>{})}
+    }else{P.err=(j.lines||[]).slice(-3).join(' | ')||'Proses gagal';toast('Pilah gagal - lihat catatan di panel')}
+    gambarPilah();
+  }catch(e){clearInterval(pilahT);P.sibuk=false;P.err='Koneksi ke server terputus: '+e.message;gambarPilah()}
+}
+async function bukaDiCetak(){
+  if(TERSAMBUNG){
+    try{await muatData()}catch(e){toast('Cetak: '+e.message)}
+    tgl=P.tgl;pil.clear();bukaS.clear();bukaJ.clear();
+    const nm=pNama();[`${P.tgl}/SPESIAL-SATUAN-${nm}`,`${P.tgl}/SISA-SATUAN-${nm}`].forEach(id=>bukaS.add(id));
+  }else toast('Prototype: folder hasil nanti muncul sebagai sesi/jenis baru di Cetak');
+  asal='cetak';go('cetak');gambarCetak();
+}
+const layakSesi=t=>pilahHari(t).filter(s=>s.layak!==false).map(s=>s.no);   // aturan sama dengan pilah_satuan.periksa_sesi
+const bentrokAda=h=>!P.tanpaPdf&&h.bentrok&&Object.keys(h.bentrok).length>0;
+const kelH=h=>[...new Set([...PKEL,...Object.keys(h.sisa)])];
+function gambarPilah(){
+  if(!P.sesi)P.sesi=new Set(layakSesi(P.tgl));
+  const el=$('#v-pilah'),ses=pilahHari(P.tgl),h=P.hasil,nm=pNama(),boleh=ses.filter(s=>s.layak!==false);
+  const hariHtml=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d);
+    return `<button class="dchip ${t===P.tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}<small style="color:var(--mut)">${pilahHari(t).length} sesi</small></button>`}).join('');
+  const sesHtml=ses.map(s=>{const n=s.label;
+    const off=s.layak===false;
+    return `<div class="psesi ${off?'off':''} ${P.sesi.has(s.no)?'sel':''}" data-s="${s.no}" ${off?'aria-disabled="true" title="'+esc(s.alasan||'')+'"':''}><span class="cb ${P.sesi.has(s.no)?'on':''}" ${off?'style="visibility:hidden"':''}>${ic('check')}</span>
+      <span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.picklist} picklist satuan &middot; ${n} label</small>${off?`<small class="why">Tidak bisa dipilah &mdash; ${esc(s.alasan||'')}</small>`:''}</span></div>`}).join('')||'<div class="empty">Belum ada label satuan di hari ini</div>';
+  let hasilHtml='';
+  if(h){
+    const q=P.cari.toLowerCase(),sp=h.spesial.filter(x=>!q||x.sku.toLowerCase().includes(q));
+    const maks=Math.max(1,...Object.values(h.sisa));
+    hasilHtml=`<div class="kpi">
+      <div class="card"><span class="bignum">${h.spesial.length}</span><small> SKU jadi spesial</small></div>
+      <div class="card"><span class="bignum">${h.resiSpesial}</span><small> resi dikelompokkan</small></div>
+      <div class="card"><span class="bignum">${h.resiSisa}</span><small> resi tetap satuan</small></div></div>
+     <div class="bar" style="margin-bottom:10px"><div class="seg"><button data-tab="spesial" class="${P.tab==='spesial'?'on':''}">Spesial baru &middot; ${h.spesial.length}</button><button data-tab="sisa" class="${P.tab==='sisa'?'on':''}">Sisa satuan &middot; ${h.resiSisa}</button></div><div class="sp"></div>
+      ${P.tab==='spesial'?'<input type="search" id="pCari" placeholder="Cari SKU…" value="'+esc(P.cari)+'" style="min-width:180px">':''}</div>
+     <div class="card" style="padding:6px 8px">${P.tab==='spesial'?
+      `<div class="nol" style="padding:6px 10px 2px">Urut cetak: rak (1B, 2A, 2B, 3A, 3B, lainnya) lalu SKU.</div><table class="tbl"><thead><tr><th>SKU</th><th>Rak</th><th class="num">Resi</th><th>Asal sesi</th></tr></thead><tbody>${sp.map(x=>`
+        <tr class="dt" data-sku="${esc(x.sku)}"><td class="sku">${esc(x.sku)}</td><td><span class="rk ${PLANTAI[x.rak]||''}">${x.rak}</span></td><td class="num">${x.n}</td><td>${Object.entries(x.sesi).filter(e=>e[1]).map(([s,n])=>'S'+s+'&times;'+n).join(' &middot; ')}</td></tr>
+        ${P.buka.has(x.sku)?`<tr class="dtl"><td colspan="4">Label dikumpulkan dalam satu PDF: <b>SPESIAL-SATUAN_${esc(x.rak)}_${esc(x.sku)}_${x.n}resi.pdf</b>. Nomor pesanan &amp; resi ada di Excel detail.</td></tr>`:''}`).join('')||'<tr><td colspan="4" class="kosong">Tidak ada SKU yang cocok</td></tr>'}</tbody></table>`:
+      `<table class="tbl"><thead><tr><th>Kelompok rak</th><th>Jumlah resi</th><th></th></tr></thead><tbody>${kelH(h).map(k=>`<tr><td><b>${k}</b> <span style="color:var(--faint)">&middot; 1QTY-REGULER-${k}</span></td><td class="num" style="text-align:left">${h.sisa[k]}</td><td><div class="bar2"><i style="width:${Math.round(h.sisa[k]/maks*100)}%"></i></div></td></tr>`).join('')}</tbody></table>
+       <div class="nol" style="padding:8px 10px 6px">Urutan halaman tetap mengikuti nomor PICK. Label pesanan yang sudah spesial tidak ikut di sini.</div>`}</div>`;
+  }
+  const nPdf=P.nBuat!=null?P.nBuat:h?h.spesial.length+kelH(h).filter(k=>h.sisa[k]).length:0;
+  el.innerHTML=`<div class="col">
+    <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
+    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===boleh.length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
+    <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Hanya satuan gabungan J&amp;T + SPX dari sesi yang diproses 07.00&ndash;12.00 atau 20.00&ndash;07.00.</div>${sesHtml}
+    <div class="stp-h" style="margin-top:14px"><span class="no">3</span><b>Minimal resi per SKU</b></div>
+    <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMin">${[2,3,4,5].map(n=>`<button data-n="${n}" class="${P.min===n?'on':''}">${n}</button>`).join('')}</div><span style="color:var(--mut)">3 = sama dengan aturan SKU spesial</span></div>
+    <div class="stp-h" style="margin-top:14px"><span class="no">&bull;</span><b>Isi folder hasil</b></div>
+    <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMode"><button data-m="0" class="${P.tanpaPdf?'':'on'}">PDF label + Excel</button><button data-m="1" class="${P.tanpaPdf?'on':''}">Hanya Excel</button></div>
+      <span style="color:var(--mut)">${P.tanpaPdf?'Label satuan sudah dicetak: cukup daftar resi per SKU untuk memilah fisik.':'Buat PDF label baru per SKU & per rak untuk dicetak.'}</span></div>
+    ${h?`<div class="stp-h" style="margin-top:18px"><span class="no">4</span><b>Hasil analisis</b></div>${hasilHtml}`:''}
+   </div>
+   <aside class="side">
+    <div class="card">
+      <div style="display:flex;align-items:baseline;gap:8px"><span class="bignum">${P.sesi.size}</span><span style="color:var(--mut)">sesi dipilih</span></div>
+      <div style="color:var(--mut)">${P.sesi.size?'Hasil ke folder label-pengiriman/'+P.tgl:'Pilih minimal satu sesi'}</div>
+      <div style="margin-top:12px">
+        <div class="fold">${ic('folder')}<span><b>SPESIAL-SATUAN-${nm||'…'}</b><small>${P.tanpaPdf?'':'PDF per SKU (urut rak) + '}detail-resi-spesial-satuan-${nm||'…'}.xlsx</small></span></div>
+        ${P.tanpaPdf?'':`<div class="fold">${ic('folder')}<span><b>SISA-SATUAN-${nm||'…'}</b><small>PDF per kelompok rak (2A, 3A, 1B, 2B, 3B)</small></span></div>`}
+      </div>
+      ${h&&h.batal?`<div class="note" style="margin-top:6px">${h.batal} label dilewati &mdash; pesanannya sudah dibatalkan di Jubelio.</div>`:''}
+      ${h&&bentrokAda(h)?`<div class="note" style="margin-top:6px;background:var(--badbg);color:var(--bad)">${Object.entries(h.bentrok).map(([k,n])=>n+' PDF sudah dikurasi ke SPESIAL-SATUAN-'+esc(k)+' / SISA-SATUAN-'+esc(k)).join('; ')}. Hapus folder hasil itu dulu atau pilih sesi yang persis sama &mdash; atau pakai &ldquo;Hanya Excel&rdquo;.</div>`:''}
+      ${h&&h.terlompat&&h.terlompat.length?`<div class="note" style="margin-top:6px">Nomor PICK terlompat di antara picklist satuan (${h.terlompat.map(esc).join(', ')}): ada picklist gagal/terhenti, pesanannya tidak ikut terhitung.</div>`:''}
+      ${P.dibuat?`<div class="step-ok" style="margin:12px 0 4px">${ic('check')}${P.tanpaPdf?'Excel dibuat &mdash; tanpa PDF':'Folder dibuat &mdash; '+nPdf+' PDF + 1 Excel'}</div>
+        <div style="color:var(--mut);font-size:12.5px">${P.tanpaPdf?'Label fisik yang sudah dicetak dipilah dengan daftar resi di Excel. PDF satuan asal tidak ditandai dikurasi.':'PDF satuan asal kini bertanda <span class="pill acc">dikurasi</span> di menu Cetak &mdash; cetak folder hasilnya, bukan file asalnya.'}</div>
+        ${P.tanpaPdf?'':`<button class="btn" id="pCetak" style="margin-top:6px">${ic('print')}Buka di Cetak</button>`}
+        <button class="btn line" id="pUlang" style="margin-top:8px">Pilah lagi</button>`:
+       h?`<button class="btn" id="pBuat" style="margin-top:12px" ${P.sibuk||bentrokAda(h)?'disabled':''}>${ic('folder')}${P.sibuk?'Membuat folder…':P.tanpaPdf?'Buat Excel':'Buat folder hasil'}</button>
+        <div style="color:var(--mut);font-size:12px;margin-top:6px">Hasil analisis berlaku 15 menit; setelah itu dibaca ulang dari Jubelio saat membuat.</div>
+        <button class="btn ghost" id="pUlang" ${P.sibuk?'disabled':''}>Ubah pilihan</button>`:
+       `<button class="btn" id="pAnalisis" style="margin-top:12px" ${P.sesi.size&&!P.sibuk?'':'disabled'}>${P.sibuk?'Membaca Jubelio…'+(P.prog&&P.prog.total?' '+P.prog.maju+'/'+P.prog.total:''):'Analisis'}</button>`}
+      ${P.sibuk&&P.prog&&P.prog.total?`<div class="prog" style="margin:10px 0 0"><i style="width:${Math.round(P.prog.maju/P.prog.total*100)}%"></i></div>`:''}
+      ${P.err?`<div class="note" style="margin-top:10px">${esc(P.err)}</div>`:''}
+      <div class="terakhir">Hanya membaca Jubelio &mdash; tidak membuat picklist atau resi baru.</div>
+    </div>
+    <div class="card"><b>Cara kerja</b><ul class="facts" style="margin-bottom:0">
+      <li>Label satuan<b>gabungan J&amp;T + SPX</b></li><li>Sesi diproses<b>07.00&ndash;12.00 / 20.00&ndash;07.00</b></li><li>Label dari<b>PDF yang ada</b></li><li>SKU &amp; resi<b>dari Jubelio</b></li><li>Gabung lintas sesi<b>ya</b></li><li>Pesanan batal<b>dilewati</b></li></ul></div>
+   </aside>`;
+  el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tgl=b.dataset.t;P.sesi=new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
+  el.querySelectorAll('.psesi:not(.off)').forEach(b=>b.onclick=()=>{if(P.sibuk)return;const n=+b.dataset.s;P.sesi.has(n)?P.sesi.delete(n):P.sesi.add(n);pilahReset();gambarPilah()});
+  el.querySelector('#pAll').onclick=()=>{P.sesi=P.sesi.size===boleh.length?new Set():new Set(boleh.map(s=>s.no));pilahReset();gambarPilah()};
+  el.querySelectorAll('#pMin button').forEach(b=>b.onclick=()=>{P.min=+b.dataset.n;pilahReset();gambarPilah()});
+  el.querySelectorAll('#pMode button').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tanpaPdf=b.dataset.m==='1';pilahReset();gambarPilah()});
+  el.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{P.tab=b.dataset.tab;gambarPilah()});
+  el.querySelectorAll('tr.dt').forEach(tr=>tr.onclick=()=>{const k=tr.dataset.sku;P.buka.has(k)?P.buka.delete(k):P.buka.add(k);gambarPilah()});
+  const c=el.querySelector('#pCari');if(c)c.oninput=e=>{P.cari=e.target.value;const pos=e.target.selectionStart;gambarPilah();const n=$('#pCari');n.focus();n.setSelectionRange(pos,pos)};
+  const a=el.querySelector('#pAnalisis');if(a)a.onclick=()=>{if(TERSAMBUNG)return pilahJalankan('analisis');P.sibuk=true;gambarPilah();setTimeout(()=>{P.sibuk=false;P.hasil=hitungPilah();P.tab='spesial';gambarPilah();toast('Analisis selesai ✓')},1200)};
+  const b=el.querySelector('#pBuat');if(b)b.onclick=()=>{
+    const hh=P.hasil;
+    modal(`<h2>${P.tanpaPdf?'Buat daftar Excel?':'Buat folder hasil?'}</h2><p>${P.tanpaPdf?'Satu folder berisi Excel dibuat':'Dua folder baru dibuat'} di <b>label-pengiriman/${P.tgl}</b>. Label yang sudah dicetak tidak berubah.</p>
+     <div class="fold">${ic('folder')}<span><b>SPESIAL-SATUAN-${nm}</b><small>${P.tanpaPdf?'':hh.spesial.length+' PDF SKU &middot; '}${hh.resiSpesial} resi &middot; 1 Excel</small></span></div>
+     ${P.tanpaPdf?'':`<div class="fold">${ic('folder')}<span><b>SISA-SATUAN-${nm}</b><small>${kelH(hh).filter(k=>hh.sisa[k]).length} PDF kelompok rak &middot; ${hh.resiSisa} resi</small></span></div>`}
+     <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yaBuat">Buat</button></div>`);
+    $('#yaBuat').onclick=()=>{tutup();if(TERSAMBUNG)return pilahJalankan('buat');P.dibuat=true;gambarPilah();toast(P.tanpaPdf?'Excel SPESIAL-SATUAN-'+nm+' dibuat ✓':'Folder SPESIAL-SATUAN-'+nm+' dan SISA-SATUAN-'+nm+' dibuat ✓')}};
+  const u=el.querySelector('#pUlang');if(u)u.onclick=()=>{pilahReset();gambarPilah()};
+  const ce=el.querySelector('#pCetak');if(ce)ce.onclick=bukaDiCetak;
 }
 
 /* ---------- init ---------- */

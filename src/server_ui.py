@@ -28,6 +28,16 @@ API (JSON):
   GET  /api/terhenti             picklist terhenti (mis. gagal unduh PDF) + status job download ulang
   POST /api/terhenti/jalankan    {"picklist": ["PICK-...", ...]} -> `main.py --lanjut` berurutan
                                  (SUNGGUHAN; 409 kalau download ulang/proses harian masih berjalan)
+  GET  /api/pilah/sesi           sesi 3 hari terakhir yang punya PDF SATUAN (jumlah picklist & label, `layak`:
+                                 hanya satuan gabungan J&T + SPX dari sesi yang diproses 07.00-12.00 / 20.00-07.00 boleh dipilah)
+  POST /api/pilah/analisis       {"tanggal": "YYYY-MM-DD", "sesi": ["1","2"], "min_resi": 3} -> {"job": id}
+                                 (`pilah_satuan.py --analisis-saja`: READ-ONLY ke Jubelio, tidak menulis file;
+                                 "tanpa_pdf": true = hanya Excel, label fisik sudah dicetak)
+  POST /api/pilah/buat           sama, tapi membuat folder SPESIAL-SATUAN-<sesi> & SISA-SATUAN-<sesi>
+                                 (memakai cache hasil analisis maks 15 menit -> Jubelio tidak dipanggil lagi; 409 kalau
+                                 pilah/proses harian/download ulang masih berjalan; 400 kalau sebagian PDF sudah
+                                 dikurasi ke folder hasil lain)
+  GET  /api/pilah/job            status, baris log, kemajuan, dan "hasil" (ringkasan JSON) job pilah terakhir
   GET  /api/operator             {"aktif", "daftar", "terkunci"} (terkunci = proses harian/download ulang jalan)
   POST /api/operator             {"aksi": "tambah"|"aktif", "nama": "..."} (ganti operator aktif -> 409
                                  kalau proses harian/download ulang berjalan; lihat operator_aktif.py)
@@ -40,6 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -52,6 +63,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import jalankan_harian as jh
+import kurasi_satuan
 import operator_aktif as oa
 import print_spesial as ps
 
@@ -69,6 +81,7 @@ JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombin
              ("GTL-SiCepat", "gtl-sicepat"), ("Urgent Lazada · skala 68%", "lazada"),
              ("Shopee Pagi", "spx-pagi"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
 BARIS_LOG_MAKS = 400
+HASIL_PILAH = ("SPESIAL-SATUAN", "SISA-SATUAN")   # awalan folder hasil pilah_satuan.py
 
 _jobs: dict[str, dict] = {}      # kunci = nama printer: printer BERBEDA boleh mencetak bersamaan
 _terakhir: str | None = None
@@ -79,12 +92,18 @@ def _rel(f: Path) -> str:
     return f.resolve().relative_to(ps.FOLDER_LABEL.resolve()).as_posix()
 
 
-def _info_file(f: Path, sudah: set, waktu: list[float]) -> dict:
-    """Entri file PDF untuk UI; mtime-nya ditambahkan ke `waktu` (penentu jam sesi)."""
+def _info_file(f: Path, sudah: set, waktu: list[float], kurasi: dict | None = None) -> dict:
+    """Entri file PDF untuk UI; mtime-nya ditambahkan ke `waktu` (penentu jam sesi). `kurasi`
+    (kurasi_satuan.baca()): kunci "kurasi" (label sesi hasil pilah) hanya ada kalau PDF satuan
+    ini sudah dikurasi - halamannya sudah ada di SPESIAL-SATUAN/SISA-SATUAN, jangan dicetak lagi."""
     st = f.stat()
     waktu.append(st.st_mtime)
-    return {"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
+    info = {"f": f.name, "rel": _rel(f), "kb": max(1, round(st.st_size / 1024)),
             "done": str(f.resolve()) in sudah}
+    sesi = (kurasi or {}).get(str(f.resolve()))
+    if sesi:
+        info["kurasi"] = sesi
+    return info
 
 
 def data_sesi(hari_ini: date | None = None) -> dict:
@@ -92,6 +111,7 @@ def data_sesi(hari_ini: date | None = None) -> dict:
     berisi file PDF urut nomor PICK; PDF di luar jenis itu ikut per nama subfolder. Kosong tidak dimasukkan."""
     hari_ini = hari_ini or date.today()
     sudah = ps.baca_sudah_dicetak()
+    kurasi = kurasi_satuan.baca()
     per_tanggal: dict[str, list[dict]] = {}
     for folder in ps.daftar_folder_sesi(ps.FOLDER_LABEL, HARI_UI, hari_ini):
         jenis_out, terpakai, waktu = [], set(), []
@@ -101,7 +121,7 @@ def data_sesi(hari_ini: date | None = None) -> dict:
                 if f in terpakai:
                     continue
                 terpakai.add(f)
-                files.append(_info_file(f, sudah, waktu))
+                files.append(_info_file(f, sudah, waktu, kurasi))
             if files:
                 jenis_out.append({"nama": nama, "files": files})
         # Semua PDF lain di sesi (subfolder JNT_SIANG/SPX_PAGI/URGENT/event/dst atau langsung di
@@ -115,7 +135,7 @@ def data_sesi(hari_ini: date | None = None) -> dict:
         for nama, daftar in sisa.items():
             files = []
             for f in daftar:
-                files.append(_info_file(f, sudah, waktu))
+                files.append(_info_file(f, sudah, waktu, kurasi))
             jenis_out.append({"nama": nama, "files": files})
         if not jenis_out:
             continue   # sesi tanpa label jenis yang ditampilkan (mis. baru dibuat/kosong)
@@ -123,6 +143,18 @@ def data_sesi(hari_ini: date | None = None) -> dict:
             "no": int(folder.name), "id": f"{folder.parent.name}/{folder.name}",
             "jam": datetime.fromtimestamp(min(waktu)).strftime("%H.%M") if waktu else "--.--",
             "jenis": jenis_out})
+    for tanggal in sorted(per_tanggal):   # folder hasil pilah (pilah_satuan.py) ikut bisa dicetak
+        for d in [x for awalan in HASIL_PILAH for x in sorted((ps.FOLDER_LABEL / tanggal).glob(f"{awalan}-*"))]:
+            if not d.is_dir():
+                continue
+            waktu: list[float] = []
+            files = [_info_file(f, sudah, waktu, kurasi) for f in sorted(d.glob("*.pdf"))]
+            if files:
+                per_tanggal[tanggal].append({
+                    "no": 0, "id": f"{tanggal}/{d.name}", "judul": d.name,
+                    "jam": datetime.fromtimestamp(min(waktu)).strftime("%H.%M"),
+                    "jenis": [{"nama": "Spesial hasil pilah" if d.name.startswith(HASIL_PILAH[0]) else
+                               "Sisa satuan hasil pilah", "files": files}]})
     return {"hari_ini": hari_ini.isoformat(),
             "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
 
@@ -306,6 +338,131 @@ def ubah_operator(aksi, nama) -> dict:
     return info_operator()
 
 
+# ---------------------------------------------------------------- pilah satuan (pilah_satuan.py)
+_pilah: dict | None = None       # job pilah terakhir (satu sekaligus)
+_hal_cache: dict[tuple, int] = {}
+POLA_TANGGAL = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _jumlah_halaman(f: Path) -> int:
+    st = f.stat()
+    kunci = (str(f), st.st_mtime_ns, st.st_size)
+    if kunci not in _hal_cache:
+        from pypdf import PdfReader
+        try:
+            _hal_cache[kunci] = len(PdfReader(str(f)).pages)
+        except Exception:   # PDF rusak: tampil 0 halaman, jangan menjatuhkan daftar
+            _hal_cache[kunci] = 0
+    return _hal_cache[kunci]
+
+
+def _pdf_satuan_sesi(folder: Path) -> list[Path]:
+    """PDF satuan gabungan (subfolder SATUAN); kalau sesi hanya punya satuan per kurir, PDF itu
+    (cuma untuk ditampilkan - sesinya ditandai tidak boleh dipilah)."""
+    import pilah_satuan as pl
+    gabungan = sorted(pl.pdf_satuan_gabungan(folder))
+    return gabungan or [f for f in sorted(folder.glob("*SATUAN/*.pdf")) if pl.POLA_PICK.match(f.name)]
+
+
+def data_pilah(hari_ini: date | None = None) -> dict:
+    """Sesi HARI_UI hari terakhir yang punya PDF SATUAN: nomor, jam, jumlah picklist & label, dan
+    `layak` (+ `alasan` kalau tidak): hanya satuan gabungan J&T + SPX dari sesi yang diproses
+    07.00-12.00 / 20.00-07.00 yang boleh dipilah (pilah_satuan.periksa_sesi)."""
+    import pilah_satuan as pl
+    hari_ini = hari_ini or date.today()
+    per_tanggal: dict[str, list[dict]] = {}
+    for folder in ps.daftar_folder_sesi(ps.FOLDER_LABEL, HARI_UI, hari_ini):
+        pdfs = _pdf_satuan_sesi(folder)
+        if not pdfs:
+            continue
+        layak, alasan = pl.periksa_sesi(folder)
+        mulai = pl.waktu_mulai_sesi(folder) or datetime.fromtimestamp(min(f.stat().st_mtime for f in pdfs))
+        per_tanggal.setdefault(folder.parent.name, []).append({
+            "no": int(folder.name), "picklist": len(pdfs), "label": sum(_jumlah_halaman(f) for f in pdfs),
+            "jam": mulai.strftime("%H.%M"), "layak": layak, "alasan": alasan})
+    return {"hari_ini": hari_ini.isoformat(),
+            "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
+
+
+def info_pilah() -> dict:
+    j = _pilah
+    if not j:
+        return {"status": "kosong", "lines": []}
+    return {k: v for k, v in j.items() if k != "perintah"}
+
+
+def mulai_pilah(data: dict, mode: str) -> None:
+    """Jalankan `pilah_satuan.py` (proses terpisah) untuk tanggal/sesi pilihan. mode "analisis" =
+    hitung saja; "buat" = tulis folder hasil. ValueError kalau pilihan tidak valid, RuntimeError
+    kalau job pilah sebelumnya masih berjalan."""
+    global _pilah
+    tanggal, sesi, min_resi = data.get("tanggal"), data.get("sesi"), data.get("min_resi", 3)
+    tanpa_pdf = data.get("tanpa_pdf", False)
+    if not isinstance(tanpa_pdf, bool):
+        raise ValueError("tanpa_pdf harus true/false")
+    if not isinstance(tanggal, str) or not POLA_TANGGAL.match(tanggal):
+        raise ValueError("tanggal harus YYYY-MM-DD")
+    if not isinstance(sesi, list) or not sesi or not all(isinstance(x, str) and x.isdigit() for x in sesi):
+        raise ValueError("sesi harus daftar nomor (mis. [\"1\", \"2\"])")
+    if isinstance(min_resi, bool) or not isinstance(min_resi, int) or not 1 <= min_resi <= 50:
+        raise ValueError("min_resi harus angka 1-50")
+    sesi = sorted({str(int(x)) for x in sesi}, key=int)
+    folder = ps.FOLDER_LABEL / tanggal
+    if not folder.is_dir():
+        raise ValueError(f"Tidak ada folder label untuk {tanggal}")
+    import pilah_satuan as pl
+    ditolak = [f"Sesi {x}: {alasan}" for x in sesi for ok, alasan in [pl.periksa_sesi(folder / x)] if not ok]
+    if ditolak:   # satuan gabungan J&T + SPX dari sesi 07.00-12.00 / 20.00-07.00 saja (lihat pilah_satuan.periksa_sesi)
+        raise ValueError("; ".join(ditolak))
+    if mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
+        bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi), "-".join(sesi))
+        if bentrok:
+            raise ValueError(pl.pesan_bentrok(bentrok))
+    perintah = [sys.executable, str(ROOT / "src" / "pilah_satuan.py"), "--folder", str(folder),
+                "--sesi", "-".join(sesi), "--min-resi", str(min_resi), "--json",
+                "--cache", str(jh.FOLDER_LOG / "pilah_analisis.json")]
+    if mode == "analisis":
+        perintah.append("--analisis-saja")
+    if tanpa_pdf:
+        perintah.append("--tanpa-pdf")
+    with _kunci:
+        if _pilah and _pilah["status"] == "jalan":
+            raise RuntimeError("Proses pilah sebelumnya masih berjalan")
+        # label sesi sedang dibuat proses harian / download ulang = PDF belum lengkap -> hasil pilah salah
+        if jh.keadaan()["status"] == "jalan" or (_lanjut and _lanjut["status"] == "jalan"):
+            raise RuntimeError("Masih ada proses harian / download ulang yang berjalan - tunggu selesai, "
+                               "label sesi belum lengkap")
+        _pilah = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal,
+                  "tanpa_pdf": tanpa_pdf,
+                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / x)) for x in sesi),
+                  "maju": 0, "hasil": None, "kode": None}
+        threading.Thread(target=_kerjakan_pilah, args=(_pilah, perintah), daemon=True).start()
+
+
+def _kerjakan_pilah(job: dict, perintah: list[str]) -> None:
+    import pilah_satuan as pl
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+    try:
+        p = jh._luncurkan(perintah, env)
+        for baris in p.stdout:
+            baris = baris.rstrip()
+            if baris.startswith(pl.PENANDA_JSON):
+                try:
+                    job["hasil"] = json.loads(baris[len(pl.PENANDA_JSON):])
+                except ValueError:
+                    job["lines"].append("Ringkasan hasil tidak terbaca")
+                continue
+            if "halaman dipetakan" in baris:
+                job["maju"] += 1
+            job["lines"].append(baris)
+            del job["lines"][:-BARIS_LOG_MAKS]
+        job["kode"] = p.wait()
+    except OSError as e:
+        job["lines"].append(f"GAGAL menjalankan: {e}")
+        job["kode"] = -1
+    job["status"] = "selesai" if job["kode"] == 0 and job["hasil"] else "gagal"
+
+
 def _publik(job: dict | None) -> dict:
     """Job tanpa daftar path internal (untuk JSON)."""
     if not job:
@@ -371,6 +528,10 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/jobs":     # ringkasan semua printer (UI memulihkan status setelah refresh)
                 return self._kirim(200, {"jobs": {n: {"status": j["status"], "total": j["total"],
                                                       "id": j["id"]} for n, j in _jobs.items()}})
+            if url.path == "/api/pilah/sesi":
+                return self._kirim(200, data_pilah())
+            if url.path == "/api/pilah/job":
+                return self._kirim(200, info_pilah())
             if url.path == "/api/operator":
                 return self._kirim(200, info_operator())
             if url.path == "/api/sebagian":
@@ -392,7 +553,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._kirim(403, {"error": "host ditolak"})
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
         if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan",
-                             "/api/terhenti/jalankan", "/api/operator", "/api/sebagian/lanjut") \
+                             "/api/terhenti/jalankan", "/api/operator", "/api/sebagian/lanjut",
+                             "/api/pilah/analisis", "/api/pilah/buat") \
                 or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
@@ -402,6 +564,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._kirim(200, ubah_operator(data.get("aksi"), data.get("nama")))
                 except oa.OperatorError as e:
                     return self._kirim(400, {"error": str(e)})
+            if self.path in ("/api/pilah/analisis", "/api/pilah/buat"):
+                try:
+                    mulai_pilah(data, self.path.rsplit("/", 1)[1])
+                except ValueError as e:
+                    return self._kirim(400, {"error": str(e)})
+                return self._kirim(200, {"mulai": True})
             if self.path == "/api/terhenti/jalankan":
                 try:
                     mulai_lanjut(data.get("picklist"))

@@ -37,6 +37,7 @@ bat\jalankan.bat --label --sku <SKU> --jalankan
 .venv\Scripts\python tests\test_rekap_master_excel.py
 .venv\Scripts\python tests\test_server_ui.py
 .venv\Scripts\python tests\test_operator_aktif.py
+.venv\Scripts\python tests\test_pilah_satuan.py
 .venv\Scripts\python tests\test_peringatan_sisa.py
 .venv\Scripts\python tests\test_jalankan_harian.py
 .venv\Scripts\python tests\test_alur.py     # definisi langkah/TIPE + menu konsol (WAJIB setelah mengubah langkah/flag)
@@ -79,7 +80,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   oleh `print_spesial.py` (lihat di bawah).
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
-  membuat picklist/label baru. Punya 23 jenis; `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
+  membuat picklist/label baru. Punya 25 jenis (termasuk `spesial-satuan`/`sisa-satuan` = hasil `pilah_satuan.py`, folder tingkat tanggal dilampirkan ke sesi TERAKHIR tanggal itu; paket `pilah-satuan`); `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
   Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
   mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,
@@ -104,6 +105,22 @@ project secara umum, root tidak boleh berisi file `.py`):
   100x150) + `-print-settings noscale` untuk SEMUA file `PICK-..._LAZADA_...` (jenis `lazada`, `--file` dari UI
   kelompok "Urgent Lazada · skala 68%", `--ulang`, lanjut sebagian). Jumlah halaman sama; `sudah_dicetak` tetap
   path asli. SumatraPDF tidak punya opsi skala persen - jangan diganti `-print-settings fit/shrink`.
+- `src/pilah_satuan.py` — pilah ulang label SATUAN yang sudah dicetak (`python src/pilah_satuan.py --tanggal YYYY-MM-DD`):
+  READ-ONLY ke Jubelio (GET `sales/picklists/{id}`), HANYA satuan gabungan J&T + SPX (subfolder `SATUAN` persis) dari sesi yang mulai diproses 07.00-12.00 atau 20.00-07.00 (cap waktu terawal di nama file PDF sesi; `periksa_sesi()`), resi kurir selain J&T/SPX tidak dihitung; `--abaikan-jendela` (CLI, uji) hanya melewati syarat jam, memetakan tiap halaman PDF SATUAN semua sesi ke SKU lewat "No Resi"
+  di teks label, lalu SKU dengan >= `MIN_RESI` resi (gabungan lintas sesi) dibuatkan PDF per SKU + `ringkasan-pilah-satuan.xlsx`
+  di `label-pengiriman/<tanggal>/pilah-satuan/`. Tidak membuat picklist/resi baru. Halaman tak cocok = umumnya pesanan batal
+  setelah dicetak. Hasil: `SPESIAL-SATUAN-<sesi>/` (PDF per SKU + `detail-resi-spesial-satuan-<sesi>.xlsx`) dan
+  `SISA-SATUAN-<sesi>/` (sisa per kelompok rak 2A/3A/1B/2B/3B/LAINNYA); `--sesi 1-2-3`, `--analisis-saja`, `--cache`, `--json`.
+  Pengaman: sesi yang PDF-nya diubah <2 menit lalu ditolak (proses harian masih menulis), server 409 selama job harian/download ulang berjalan;
+  pilah ulang di atas PDF yang sudah dikurasi ke folder hasil LAIN ditolak (`KurasiBentrok`, resi dobel); cache analisis maks 15 menit;
+  nomor PICK terlompat di antara picklist satuan = peringatan. `--tanpa-pdf` / UI "Hanya Excel" = daftar resi saja (label fisik sudah dicetak,
+  tidak menandai dikurasi). PDF SPESIAL-SATUAN bernama `SPESIAL-SATUAN_<rak>_<SKU>_<n>resi.pdf` -> urut cetak rak (1B,2A,2B,3A,3B,LAINNYA) lalu SKU.
+  Penanda "dikurasi" (`src/kurasi_satuan.py`, `logs/satuan_dikurasi.json`): PDF satuan asal yang halamannya sudah dipindah ke folder hasil
+  dianggap sudah tercetak oleh cetak bulk (`print_spesial.sudah_atau_dikurasi()`) & ditandai pill "dikurasi" di UI Cetak (disembunyikan bersama
+  yang tercetak); berlaku selama folder hasilnya ada. Status "tercetak" file hasil dijaga bila dibuat ulang dengan isi identik (sidik SHA-256),
+  dilupakan bila isinya berubah/hilang (`lupakan_sudah_dicetak()`).
+  UI: tab "Pilah" (`/api/pilah/sesi|analisis|buat|job` di `server_ui.py`, proses terpisah + cache `logs/pilah_analisis.json`
+  supaya "Buat folder" tidak memanggil Jubelio lagi); folder hasil ikut tampil di menu Cetak. Tes: `tests/test_pilah_satuan.py`, `tests/test_server_ui.py`.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di
   `data/prototype-desktop/index.html` (`python src/server_ui.py --buka`). Baru menu Cetak yang sungguhan:
   API `/api/sesi` (3 hari, jenis spesial/satuan/kombinasi/gtl-sicepat, file PDF + status tercetak),

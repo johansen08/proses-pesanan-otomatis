@@ -1020,6 +1020,59 @@ def uji_cetak_terputus_dicatat_dan_dilanjutkan_dari_halaman_sisa():
         print("  cetak terputus: halaman tercetak dicatat, dilanjutkan dari halaman sisa (5-10), catatan dibersihkan")
 
 
+def uji_cetak_bulk_hasil_pilah_satuan_dan_satuan_dikurasi():
+    import kurasi_satuan
+    from unittest import mock
+
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        tgl = label / "2026-10-13"
+        for sesi in ("1", "2", "3"):
+            folder_satuan = tgl / sesi / "SATUAN"
+            folder_satuan.mkdir(parents=True)
+            _buat(folder_satuan, f"PICK-00000000{sesi}_1QTY-REGULER-2A_2026-10-13_081500.pdf")
+        for awalan, nama in (("SPESIAL-SATUAN-1-2-3", "SPESIAL-SATUAN_B_3resi.pdf"),
+                             ("SPESIAL-SATUAN-1-2-3", "SPESIAL-SATUAN_A_4resi.pdf"),
+                             ("SISA-SATUAN-1-2-3", "SISA-SATUAN_1QTY-REGULER-2A_9resi.pdf")):
+            (tgl / awalan).mkdir(exist_ok=True)
+            _buat(tgl / awalan, nama)
+        (tgl / "SPESIAL-SATUAN-1-2-3" / "detail-resi-spesial-satuan-1-2-3.xlsx").write_bytes(b"x")   # bukan PDF
+        # jenis terdaftar & terjangkau menu; hasil dilampirkan ke sesi TERAKHIR tanggal itu saja
+        assert "spesial-satuan" in ps.JENIS_LABEL and "sisa-satuan" in ps.JENIS_LABEL
+        assert [f.name for f in ps.daftar_label(tgl / "3", "spesial-satuan")] == [
+            "SPESIAL-SATUAN_A_4resi.pdf", "SPESIAL-SATUAN_B_3resi.pdf"]       # urut nama, xlsx tidak ikut
+        assert [f.name for f in ps.daftar_label(tgl / "3", "sisa-satuan")] == ["SISA-SATUAN_1QTY-REGULER-2A_9resi.pdf"]
+        assert ps.daftar_label(tgl / "1", "spesial-satuan") == [] == ps.daftar_label(tgl / "2", "sisa-satuan")
+        assert ps.nomor_terlompat_semua(tgl / "3", ["spesial-satuan", "sisa-satuan"]) == []
+        assert any(j == ["spesial-satuan", "sisa-satuan"] for _, g in ps.MENU for _, j in g)   # ada di menu
+        # satuan asal yang sudah dikurasi dilewati cetak bulk (seperti sudah tercetak); hasil pilah ikut dicetak
+        asal = sorted(tgl.glob("*/SATUAN/*.pdf"))
+        catatan = Path(tmp) / "logs"
+        with mock.patch.object(ps, "FILE_SUDAH_DICETAK", catatan / "sudah.txt"), \
+                mock.patch.object(kurasi_satuan, "FILE_KURASI", catatan / "kurasi.json"):
+            belum, lap = ps.kumpulkan_label(tgl / "3", ["satuan"])
+            assert len(belum) == 1 and lap[0]["akan_dicetak"] == 1          # sesi 3: 1 file satuan, belum dikurasi
+            kurasi_satuan.catat(asal, "1-2-3")
+            belum, lap = ps.kumpulkan_label(tgl / "3", ["satuan"])
+            assert belum == [] and lap[0]["sudah_tercetak"] == 1, lap       # dikurasi -> dilewati
+            belum, _ = ps.kumpulkan_label(tgl / "3", ["satuan"], cetak_ulang_semua=True)
+            assert len(belum) == 1                                          # --cetak-ulang-semua tetap bisa
+            belum, lap = ps.kumpulkan_label(tgl / "3", ["spesial-satuan", "sisa-satuan"])
+            assert [f.name for f in belum] == ["SPESIAL-SATUAN_A_4resi.pdf", "SPESIAL-SATUAN_B_3resi.pdf",
+                                               "SISA-SATUAN_1QTY-REGULER-2A_9resi.pdf"], belum
+            ps.catat_sudah_dicetak(belum[0])
+            assert len(ps.kumpulkan_label(tgl / "3", ["spesial-satuan", "sisa-satuan"])[0]) == 2   # tercetak dilewati
+            # lupakan_sudah_dicetak: hanya yang diminta dihapus dari catatan
+            assert ps.lupakan_sudah_dicetak([belum[0], belum[1]]) == 1
+            assert ps.baca_sudah_dicetak() == set()
+            # folder hasil dihapus -> penanda kurasi tidak berlaku lagi
+            import shutil
+            shutil.rmtree(tgl / "SPESIAL-SATUAN-1-2-3")
+            shutil.rmtree(tgl / "SISA-SATUAN-1-2-3")
+            assert len(ps.kumpulkan_label(tgl / "3", ["satuan"])[0]) == 1
+    print("  cetak bulk: spesial-satuan/sisa-satuan (folder tingkat tanggal, sesi terakhir), satuan dikurasi dilewati")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

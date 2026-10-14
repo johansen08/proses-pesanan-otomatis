@@ -125,6 +125,7 @@ import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+import kurasi_satuan
 import serah_terima
 import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
@@ -209,7 +210,13 @@ JENIS_LABEL: dict[str, list[str]] = {
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
     "lazada": [SUBFOLDER_URGENT],          # Urgent Lazada, dicetak skala 68% (SKALA_LAZADA)
+    # Hasil pilah satuan (pilah_satuan.py): folder SPESIAL-SATUAN-<sesi> / SISA-SATUAN-<sesi> ada di
+    # tingkat TANGGAL, bukan di dalam folder sesi - lihat JENIS_HASIL_PILAH & daftar_label().
+    "spesial-satuan": [],
+    "sisa-satuan": [],
 }
+# Jenis yang foldernya di tingkat tanggal (kurasi_satuan.daftar_hasil), bukan subfolder sesi.
+JENIS_HASIL_PILAH = {"spesial-satuan": kurasi_satuan.AWALAN_SPESIAL, "sisa-satuan": kurasi_satuan.AWALAN_SISA}
 
 # ---------------------------------------------------------------------------------------
 # PAKET = beberapa jenis dicetak berurutan dalam satu sesi cetak (printer dipilih SEKALI,
@@ -222,7 +229,9 @@ _JNT_NDD = ["spesial-jnt-ndd", "satuan-jnt-ndd", "kombinasi-jnt-ndd"]
 _HEMAT = ["spesial-spx-hemat", "satuan-spx-hemat", "kombinasi-spx-hemat"]
 _HEMAT_PAGI = ["spesial-spx-hemat-pagi", "satuan-spx-hemat-pagi", "kombinasi-spx-hemat-pagi"]
 _STANDARD = ["spx-pagi", "spx-standard"]
+_PILAH = ["spesial-satuan", "sisa-satuan"]
 PAKET: dict[str, tuple[str, list[str]]] = {
+    "pilah-satuan": ("Hasil pilah satuan (SPESIAL-SATUAN + SISA-SATUAN)", _PILAH),
     "jnt": ("Semua J&T (spesial + satuan + kombinasi)", _JNT),
     "spx": ("Semua SPX (spesial + satuan + kombinasi, hasil TIPE 2 & 3)", _SPX),
     "jnt-ndd": ("Semua J&T NEXT-DAY DELIVERY (spesial + satuan + kombinasi)", _JNT_NDD),
@@ -249,6 +258,7 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
         ("GTL & SICEPAT", ["gtl-sicepat"]),
         ("SHOPEE PAGI (SPX s.d. 12.00)", ["spx-pagi"]),
         ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
+        _paket("pilah-satuan"),
     ]),
     ("EVENT (J&T / J&T NDD / SPX Hemat / SPX Standard dipisah)", [
         _paket("event-semua"), _paket("jnt"), _paket("jnt-ndd"), _paket("spx-hemat-pagi"),
@@ -359,6 +369,8 @@ def daftar_label(folder_sesi: Path, jenis: str, saring_nama: bool = True) -> lis
     dipakai cek nomor terlompat, karena nomor PICK jenis lain di subfolder yang sama (mis.
     Lazada) bukan nomor yang hilang. Kosong (bukan error) kalau belum ada subfolder
     sama sekali."""
+    if jenis in JENIS_HASIL_PILAH:
+        return kurasi_satuan.daftar_hasil(folder_sesi, JENIS_HASIL_PILAH[jenis])
     pola = POLA_SPESIAL if jenis.startswith("spesial") else POLA_PICK
     filter_nama = FILTER_NAMA.get(jenis) if saring_nama else None
     berlabel = []
@@ -385,7 +397,7 @@ def kumpulkan_label(folder_sesi: Path, daftar_jenis: list[str], cetak_ulang_semu
     if cetak_ulang_semua:
         sudah = set()
     elif sudah is None:
-        sudah = baca_sudah_dicetak()
+        sudah = sudah_atau_dikurasi()
     hasil, terpakai, laporan = [], set(), []
     for jenis in daftar_jenis:
         ada = [f for f in daftar_label(folder_sesi, jenis) if f not in terpakai]
@@ -405,6 +417,27 @@ def nomor_terlompat_semua(folder_sesi: Path, daftar_jenis: list[str]) -> list[in
         hilang.update(cari_nomor_terlompat(
             daftar_label(folder_sesi, jenis, saring_nama=False), jenis, nomor_ada))
     return sorted(hilang)
+
+
+def sudah_atau_dikurasi() -> set[str]:
+    """Path yang tidak perlu dicetak lagi: sudah tercetak ATAU satuan asal yang sudah dikurasi
+    (halamannya sudah ada di folder hasil pilah - mencetaknya lagi = dobel; lihat kurasi_satuan.py)."""
+    return baca_sudah_dicetak() | set(kurasi_satuan.baca())
+
+
+def lupakan_sudah_dicetak(files: list[Path], file_catatan: Path | None = None) -> int:
+    """Hapus `files` dari catatan sudah-dicetak (mis. folder hasil pilah dibuat ulang dengan isi
+    berbeda, jadi status "tercetak" file lama tidak berlaku lagi). Mengembalikan jumlah yang dihapus."""
+    file_catatan = file_catatan or FILE_SUDAH_DICETAK
+    if not file_catatan.is_file() or not files:
+        return 0
+    buang = {str(f.resolve()) for f in files}
+    with _kunci_catatan(file_catatan):
+        baris = [b for b in file_catatan.read_text(encoding="utf-8").splitlines() if b.strip()]
+        sisa = [b for b in baris if b.strip() not in buang]
+        if len(sisa) != len(baris):
+            file_catatan.write_text("".join(b + "\n" for b in sisa), encoding="utf-8")
+    return len(baris) - len(sisa)
 
 
 def baca_sudah_dicetak(file_catatan: Path | None = None) -> set[str]:
@@ -1146,10 +1179,10 @@ def _cetak(args, per_file: bool) -> int:
             if args.file_dari:
                 pilihan += baca_file_dari(args.file_dari)
             dipilih = pilih_file_spesifik(pilihan)
-            sudah = set() if args.cetak_ulang_semua else baca_sudah_dicetak()
+            sudah = set() if args.cetak_ulang_semua else sudah_atau_dikurasi()
             file_pdf, lewat = saring_belum_dicetak(dipilih, sudah)
             for f in lewat:
-                log.info("Dilewati (sudah tercetak, pakai --cetak-ulang-semua untuk mencetak "
+                log.info("Dilewati (sudah tercetak/dikurasi, pakai --cetak-ulang-semua untuk mencetak "
                          "ulang): %s", f.name)
             if not file_pdf:
                 log.info("Semua %d file pilihan sudah tercetak.", len(dipilih))
@@ -1179,7 +1212,10 @@ def _cetak(args, per_file: bool) -> int:
                 folders = [args.folder or folder_sesi_terbaru()]
                 log.info("Folder sesi: %s", folders[0])
             log.info("Jenis dicetak (berurutan): %s", nama_jenis)
-            sudah = set() if args.cetak_ulang_semua else baca_sudah_dicetak()
+            sudah = set() if args.cetak_ulang_semua else sudah_atau_dikurasi()
+            if not args.cetak_ulang_semua and kurasi_satuan.baca():
+                log.info("%d file satuan asal sudah dikurasi (isinya di SPESIAL-SATUAN/SISA-SATUAN) - "
+                         "dianggap sudah tercetak", len(kurasi_satuan.baca()))
             file_pdf, laporan, per_folder = [], [], []
             for folder in folders:
                 file_folder, lap_folder = kumpulkan_label(folder, jenis_list,
