@@ -164,6 +164,10 @@ project secara umum, root tidak boleh berisi file `.py`):
   dibuat karena Jubelio error). Nomor terakhir disimpan di `logs/picklist_terakhir.txt`,
   peringatan di `logs/picklist_terlompat.jsonl`; dicetak paling akhir oleh `main.py` dan juga
   di bawah rekap waktu `src/rekap_waktu.py` (akhir tiap TIPE `bat\proses-harian.bat`).
+  Nomor di gap DIVERIFIKASI ke Jubelio (`periksa_nomor(no, k.ada_picklist)`, GET `sales/picklists/{id}`,
+  404 = tidak ada; 10 pekerja paralel, batas 30 dtk, sisa = "belum pasti" tetap dilaporkan): nomor yang
+  ADA (dibuat PC lain semalam) tidak lagi jadi peringatan/baris "PICKLIST CANCEL". Tidak ada endpoint
+  daftar picklist di Jubelio (sudah dicoba 2026-10-14), jadi cek per-ID.
 - `src/peringatan_resi.py` — pola yang sama dengan `peringatan_picklist.py`, tapi untuk
   pesanan yang sudah Picking > Selesai namun tidak kunjung dapat nomor resi sampai batas
   tunggu `minta_resi()` di `proses_label.py` habis (dan bukan berstatus batal) — biasanya

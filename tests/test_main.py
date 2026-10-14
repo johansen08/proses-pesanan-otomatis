@@ -173,6 +173,42 @@ def uji_peringatan_picklist_terlompat():
     print("  peringatan_picklist: nomor terlompat terdeteksi & tersimpan, berurutan tidak dianggap")
 
 
+def uji_nomor_terlompat_diverifikasi_ke_jubelio():
+    """Gap besar semalam (PC lain): nomor yang ADA di Jubelio bukan peringatan; hanya yang tidak
+    ada yang dilaporkan, dan gap setelah picklist pertama hanya yang tidak ada masuk Excel."""
+    import peringatan_picklist as pp
+    ada = set(range(1001, 1990)) - {1500, 1700}      # 1500 & 1700 benar-benar batal
+    panggilan = []
+
+    def ada_picklist(i):
+        panggilan.append(i)
+        if i == 1800:
+            raise RuntimeError("API error")          # tidak bisa dipastikan -> tetap dilaporkan
+        return i in ada
+
+    with tempfile.TemporaryDirectory() as tmp:
+        pp.atur_folder(Path(tmp))
+        pp._sesi.clear()
+        (Path(tmp) / "picklist_terakhir.txt").write_text("1000")
+        pesan = pp.periksa_nomor("PICK-000001990", ada_picklist)
+        assert pesan and "PICK-000001500" in pesan and "PICK-000001700" in pesan, pesan
+        assert "PICK-000001001" not in pesan and "PICK-000001800" in pesan, pesan
+        assert len(panggilan) == 989
+        assert pp.ambil_nomor_hilang() == []                    # gap pertama: tidak ke Excel
+        # semua ada -> tidak ada peringatan sama sekali
+        (Path(tmp) / "picklist_terakhir.txt").write_text("1990")
+        assert pp.periksa_nomor("PICK-000001994", lambda i: True) is None
+        assert pp.ambil_nomor_hilang() == []
+        # gap setelah picklist pertama: hanya yang tidak ada ke Excel
+        assert pp.periksa_nomor("PICK-000001997", lambda i: i != 1995)
+        assert pp.ambil_nomor_hilang() == [1995]
+        # batas waktu habis -> None -> tetap dilaporkan (konservatif)
+        st = pp.cek_ada_di_jubelio(lambda i: True, [1, 2, 3], batas_detik=-1)
+        assert st == {1: None, 2: None, 3: None}
+    pp._file_terakhir = pp._file_peringatan = None
+    print("  peringatan_picklist: gap diverifikasi ke Jubelio, nomor yang ada tidak diperingatkan")
+
+
 def uji_nomor_terlompat_sebelum_picklist_pertama_tidak_jadi_picklist_cancel():
     """Gap sebelum picklist PERTAMA proses ini (mis. terakhir 21, sekarang 100) hanya
     diperingatkan; baru gap SESUDAH itu yang dipakai utk baris PICKLIST CANCEL di Excel."""

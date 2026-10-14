@@ -413,6 +413,15 @@ class Klien:
                         headers=jubelio._header(self.token), timeout=60)
         return self._json(r, f"GET {path}")
 
+    def ada_picklist(self, picklist_id: int) -> bool:
+        """True kalau picklist ada di Jubelio, False kalau 404 (tidak ada); error lain dilempar."""
+        r = self._kirim(self.sesi.get, f"{jubelio.API}/sales/picklists/{picklist_id}",
+                        headers=jubelio._header(self.token), timeout=60)
+        if r.status_code == 404:
+            return False
+        self._json(r, f"GET sales/picklists/{picklist_id}")
+        return True
+
     def post_mentah(self, path: str, body):
         return self._kirim(self.sesi.post, f"{jubelio.API}/{path}", json=body,
                            headers=jubelio._header(self.token), timeout=120)
@@ -689,7 +698,7 @@ def _kirim_picklist(k: Klien, items: list[dict], ids_pakai: list[int], coba: int
     picks = data.get("picks") or []
     if len(picks) != 1:
         raise ProsesError(f"Terbentuk {len(picks)} picklist, diharapkan 1: {data}")
-    peringatan_picklist.periksa_nomor(picks[0]["picklist_no"])
+    peringatan_picklist.periksa_nomor(picks[0]["picklist_no"], k.ada_picklist)
     invalid = set(data.get("invalidSO") or [])
     if invalid:
         log.warning("  %d pesanan ditolak Jubelio (invalidSO): %s", len(invalid), sorted(invalid))
