@@ -95,7 +95,7 @@ def uji_server_ui_sesi_cetak_dan_penjagaan():
 
                 # --- /api/printer
                 su._cache_printer = None
-                assert _panggil(port, "/api/printer") == (200, {"printer": ["PRINTER-X"]})
+                assert _panggil(port, "/api/printer") == (200, {"printer": ["PRINTER-X"], "virtual": []})
 
                 # --- penjagaan: host asing, bukan JSON, path di luar folder, printer kosong
                 assert _panggil(port, "/api/sesi", host="evil.example.com")[0] == 403
@@ -263,6 +263,63 @@ def uji_server_ui_dua_printer_berbeda_bersamaan():
     print("  server_ui: printer berbeda mencetak bersamaan, printer sama/file sama ditolak 409, status per printer")
 
 
+def uji_server_ui_cetak_banyak_printer_membagi_berurutan_seimbang():
+    """`printers` di /api/cetak: file dibagi blok berurutan, satu job per printer; semua printer
+    harus bebas sebelum satu pun jalan; printer virtual ditandai di /api/printer."""
+    hari_ini = date.today().isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        log_dir = Path(tmp) / "logs"
+        log_dir.mkdir()
+        nama = [f"PICK-00000000{i}_SPESIAL_A{i}_x.pdf" for i in range(1, 7)]
+        _buat(label / hari_ini / "1" / "SPESIAL", *nama)
+        rel = [f"{hari_ini}/1/SPESIAL/{n}" for n in nama]
+        popen_asli = subprocess.Popen
+        diluncurkan = []
+
+        def popen_palsu(perintah, **kw):
+            diluncurkan.append(perintah)
+            return popen_asli([sys.executable, "-c", "import time; print('[1/1] Mencetak x', flush=True); time.sleep(1)"],
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+
+        su._jobs.clear()
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(ps, "FOLDER_LOG", log_dir), \
+                mock.patch.object(su.subprocess, "Popen", popen_palsu), \
+                mock.patch.object(su, "_jumlah_halaman", lambda f: 10), \
+                mock.patch.object(su, "daftar_printer_cache", lambda: ["P1", "P2", "P3", "OneNote (Desktop)", "Microsoft Print to PDF"]):
+            server = su.Server(("127.0.0.1", 0), su.Handler)
+            port = server.server_address[1]
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            try:
+                kode, p = _panggil(port, "/api/printer")
+                assert p["virtual"] == ["OneNote (Desktop)", "Microsoft Print to PDF"], p
+                assert _panggil(port, "/api/cetak", {"files": rel, "printers": []})[0] == 400
+                assert _panggil(port, "/api/cetak", {"files": rel, "printers": ["P1", "P1"]})[0] == 400
+                assert _panggil(port, "/api/cetak", {"files": rel, "printers": "P1"})[0] == 400
+                # P2 sibuk -> tidak ada printer yang dimulai
+                assert _panggil(port, "/api/cetak", {"files": [rel[0]], "printer": "P2"})[0] == 200
+                kode, e = _panggil(port, "/api/cetak", {"files": rel[1:], "printers": ["P1", "P2", "P3"]})
+                assert kode == 409 and "P2" in e["error"] and len(diluncurkan) == 1, (kode, e)
+                time.sleep(1.2)
+                kode, r = _panggil(port, "/api/cetak", {"files": rel, "printers": ["P1", "P2", "P3"]})
+                assert kode == 200 and [(n, v["file"]) for n, v in r["jobs"].items()] == [("P1", 2), ("P2", 2), ("P3", 2)], r
+                # tiap printer menerima blok berurutan; gabungan = semua file tanpa tumpang tindih
+                bagian = []
+                for c in diluncurkan[1:]:
+                    isi = Path(c[c.index("--file-dari") + 1]).read_text(encoding="utf-8").split()
+                    bagian.append(isi)
+                assert bagian == [rel[0:2], rel[2:4], rel[4:6]], bagian
+                # file lebih sedikit dari printer -> printer berlebih tidak dipakai
+                time.sleep(1.2)
+                kode, r = _panggil(port, "/api/cetak", {"files": rel[:2], "printers": ["P1", "P2", "P3"]})
+                assert kode == 200 and list(r["jobs"]) == ["P1", "P2"], r
+            finally:
+                time.sleep(1.3)
+                server.shutdown()
+                su._jobs.clear()
+    print("  server_ui: cetak banyak printer membagi file berurutan & seimbang, cek printer bebas dulu, printer virtual ditandai")
+
+
 def uji_server_ui_download_ulang_picklist_terhenti():
     """Picklist terhenti dikumpulkan terstruktur (peringatan_gagal), UI memilih sebagian/semua,
     server menjalankan `main.py --lanjut` berurutan dengan argumen asalnya."""
@@ -332,7 +389,7 @@ def uji_server_ui_daftar_printer_di_cache():
             threading.Thread(target=server.serve_forever, daemon=True).start()
             try:
                 for _ in range(3):
-                    assert _panggil(port, "/api/printer") == (200, {"printer": ["P1", "P2"]})
+                    assert _panggil(port, "/api/printer") == (200, {"printer": ["P1", "P2"], "virtual": []})
                 assert m.call_count == 1, m.call_count
 
                 # hasil cache yang dikembalikan salinan: perubahan pemanggil tidak merusak cache
@@ -343,7 +400,7 @@ def uji_server_ui_daftar_printer_di_cache():
                 waktu, daftar = su._cache_printer
                 su._cache_printer = (waktu - su.TTL_PRINTER_S - 1, daftar)
                 m.return_value = ["P3"]
-                assert _panggil(port, "/api/printer") == (200, {"printer": ["P3"]})
+                assert _panggil(port, "/api/printer") == (200, {"printer": ["P3"], "virtual": []})
                 assert m.call_count == 2
 
                 # kegagalan tidak di-cache: panggilan berikutnya mencoba lagi
@@ -352,7 +409,7 @@ def uji_server_ui_daftar_printer_di_cache():
                 assert _panggil(port, "/api/printer")[0] == 500
                 m.side_effect = None
                 m.return_value = ["P4"]
-                assert _panggil(port, "/api/printer") == (200, {"printer": ["P4"]})
+                assert _panggil(port, "/api/printer") == (200, {"printer": ["P4"], "virtual": []})
 
                 # panggilan bersamaan (tab dibuka serentak) hanya memicu satu Get-Printer
                 su._cache_printer = None

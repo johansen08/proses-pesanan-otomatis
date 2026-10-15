@@ -105,6 +105,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   (`-print-settings "1-50"`, `"51-100"`, ...), tiap potongan dipantau & diulang sendiri (`PERCOBAAN_ULANG_CETAK`) sehingga potongan
   yang sudah tercetak tidak dobel; potongan gagal/dilewati dicatat ke `cetak_sebagian.json` relatif seluruh dokumen (lanjut sebagian
   ikut dipotong). Tes: `uji_cetak_dokumen_panjang_dipotong_per_50_halaman`.
+  **Cetak banyak printer** (2026-10-15): UI Cetak tombol "Banyak printer" -> `POST /api/cetak {"files", "printers": [...]}`
+  (`server_ui.mulai_cetak_banyak()`): file terpilih dibagi jadi blok BERURUTAN dengan bobot halaman terberat sekecil mungkin
+  (`print_spesial.bagi_ke_printer()`, DP), tiap printer = satu job `mulai_cetak` biasa (proses terpisah); semua printer harus
+  bebas sebelum satu pun dimulai; printer berlebih (file < printer) tidak dipakai; printer virtual (OneNote/PDF/XPS/Fax) ditandai
+  di `/api/printer` ("virtual"). Catatan `cetak_sebagian.json` dikunci (`_kunci_catatan`) karena 5 proses bisa menulis bersamaan.
   **Label Lazada skala 68%** (2026-10-13): PDF Lazada A5, kertas 100x150 mm. `cetak()` mengirim SALINAN
   sementara (`buat_salinan_skala()`, `pypdf`: halaman > 100x150 diperkecil `SKALA_LAZADA` di tengah halaman
   100x150) + `-print-settings noscale` untuk SEMUA file `PICK-..._LAZADA_...` (jenis `lazada`, `--file` dari UI

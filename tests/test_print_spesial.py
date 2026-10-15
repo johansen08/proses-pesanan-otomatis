@@ -1126,6 +1126,50 @@ def uji_cetak_dokumen_panjang_dipotong_per_50_halaman():
     print("  cetak dokumen panjang: dipotong 50 halaman, retry per potongan, catatan terputus relatif seluruh dokumen")
 
 
+def uji_bagi_ke_printer_blok_berurutan_dan_seimbang():
+    def bagi(bobot, n):
+        fs = [Path(f"f{i}.pdf") for i in range(len(bobot))]
+        blok = ps.bagi_ke_printer(fs, n, dict(zip(fs, bobot)))
+        assert [f for b in blok for f in b] == fs, "urutan & kelengkapan harus terjaga"
+        return [[int(f.name[1:-4]) for f in b] for b in blok], [sum(bobot[int(f.name[1:-4])] for f in b) for b in blok]
+    assert bagi([10] * 10, 5) == ([[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]], [20] * 5)
+    idx, berat = bagi([50, 3, 3, 3, 3, 3, 3, 40, 40, 2], 5)
+    assert max(berat) == 50 and len(idx) == 5, (idx, berat)   # terberat tidak lebih dari file terbesar
+    assert bagi([5, 5], 5)[0] == [[0], [1]]                   # printer berlebih tidak dipakai
+    assert bagi([7], 3)[0] == [[0]]
+    assert ps.bagi_ke_printer([], 3) == []
+    try:
+        ps.bagi_ke_printer([Path("a.pdf")], 0)
+        raise AssertionError("harus CetakError")
+    except ps.CetakError:
+        pass
+    print("  bagi_ke_printer: blok berurutan, bobot terberat diminimalkan, printer berlebih tidak dipakai")
+
+
+def uji_catatan_sebagian_aman_ditulis_bersamaan():
+    from unittest import mock
+    import threading
+    with tempfile.TemporaryDirectory() as tmp:
+        catatan = Path(tmp) / "sebagian.json"
+        pdfs = []
+        for i in range(24):
+            f = Path(tmp) / f"f{i}.pdf"
+            f.write_bytes(b"%PDF-1.4")
+            pdfs.append(f)
+        with mock.patch.object(ps, "FILE_SEBAGIAN", catatan):
+            ts = [threading.Thread(target=lambda sub=pdfs[k::4]: [ps.catat_sebagian(f, f"P{k}", "1", 1, 5, catatan) for f in sub])
+                  for k in range(4)]
+            [t.start() for t in ts]
+            [t.join() for t in ts]
+            assert len(ps.baca_sebagian(catatan)) == 24, len(ps.baca_sebagian(catatan))
+            ts = [threading.Thread(target=lambda sub=pdfs[k::4]: [ps.hapus_sebagian(f, catatan) for f in sub])
+                  for k in range(4)]
+            [t.start() for t in ts]
+            [t.join() for t in ts]
+            assert ps.baca_sebagian(catatan) == {}
+    print("  catatan cetak terputus: 4 penulis bersamaan tidak saling menimpa (dikunci)")
+
+
 def uji_peringatan_cetak_terhenti_menyala_dan_padam():
     from unittest import mock
     muncul = []

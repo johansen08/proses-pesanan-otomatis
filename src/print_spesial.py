@@ -500,6 +500,51 @@ def saring_belum_dicetak(file_pdf: list[Path],
     return belum, lewat
 
 
+def bagi_ke_printer(file_pdf: list[Path], jumlah_printer: int,
+                    bobot: dict[Path, float] | None = None) -> list[list[Path]]:
+    """Bagi `file_pdf` (urutan dipertahankan) menjadi paling banyak `jumlah_printer` blok BERURUTAN
+    dengan total bobot (halaman; bawaan ukuran file) seimbang - tiap printer mengeluarkan tumpukan
+    label yang urut nomor PICK/rak, dan waktu selesai tiap printer berdekatan. File tidak
+    dipecah. Blok kosong tidak dikembalikan (file lebih sedikit dari printer = printer berlebih
+    tidak dipakai)."""
+    if jumlah_printer < 1:
+        raise CetakError("Jumlah printer harus >= 1")
+    bobot = bobot or {}
+
+    def berat(f: Path) -> float:
+        b = bobot.get(f)
+        if b is None:
+            try:
+                b = f.stat().st_size
+            except OSError:
+                b = 1
+        return max(float(b), 1.0)
+
+    jumlah_printer = min(jumlah_printer, len(file_pdf))
+    if jumlah_printer <= 1:
+        return [list(file_pdf)] if file_pdf else []
+    # partisi linear (DP): k blok berurutan, minimalkan bobot blok TERBERAT (= printer terlambat)
+    n, k = len(file_pdf), jumlah_printer
+    awalan = [0.0]
+    for f in file_pdf:
+        awalan.append(awalan[-1] + berat(f))
+    biaya = [[float("inf")] * (n + 1) for _ in range(k + 1)]   # biaya[j][i]: i file pertama dalam j blok
+    potong = [[0] * (n + 1) for _ in range(k + 1)]
+    biaya[0][0] = 0.0
+    for j in range(1, k + 1):
+        for i in range(j, n + 1):
+            for m in range(j - 1, i):
+                c = max(biaya[j - 1][m], awalan[i] - awalan[m])
+                if c < biaya[j][i]:
+                    biaya[j][i], potong[j][i] = c, m
+    blok, i = [], n
+    for j in range(k, 0, -1):
+        m = potong[j][i]
+        blok.append(list(file_pdf[m:i]))
+        i = m
+    return blok[::-1]
+
+
 def nomor_pick_sesi(folder_sesi: Path) -> set[int]:
     """SEMUA nomor PICK yang ada di folder sesi (root & semua subfolder, jenis apa pun).
     Dipakai cari_nomor_terlompat(): nomor yang tidak ada di daftar satu jenis tapi ada di
@@ -918,12 +963,13 @@ def _kirim_satu_job(sumatra: Path, printer: str, kirim: Path, nama: str, file: P
 def _geser_catatan_sebagian(file: Path, geser: int, total: int) -> None:
     """Catatan terputus dari _pantau_job relatif terhadap 1 potongan -> jadikan relatif terhadap
     seluruh rentang cetak (geser = halaman rentang yang sudah tercetak sebelum potongan itu)."""
-    data = baca_sebagian()
-    d = data.get(str(file.resolve()))
-    if d:
-        d["halaman_tercetak"] = min(total, geser + int(d["halaman_tercetak"]))
-        d["total"] = total
-        _simpan_sebagian(data)
+    with _kunci_catatan(FILE_SEBAGIAN):
+        data = baca_sebagian()
+        d = data.get(str(file.resolve()))
+        if d:
+            d["halaman_tercetak"] = min(total, geser + int(d["halaman_tercetak"]))
+            d["total"] = total
+            _simpan_sebagian(data)
 
 
 def cetak(sumatra: Path, printer: str, file: Path, pantau: bool,
@@ -1001,7 +1047,7 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
             continue
         durasi = time.monotonic() - mulai
         if ok:
-            log.info("OK cetak %s (%.1f detik)", f.name, durasi)
+            log.info("OK cetak %s (%.1f detik) di %s", f.name, durasi, printer)
             catat_sudah_dicetak(f)
             hapus_sebagian(f)
             berhasil.append(f)
@@ -1028,18 +1074,22 @@ def _simpan_sebagian(data: dict, file_catatan: Path | None = None) -> None:
 
 def catat_sebagian(file: Path, printer: str, job_id: str, dicetak: int, total: int,
                    file_catatan: Path | None = None) -> None:
-    data = baca_sebagian(file_catatan)
-    data[str(file.resolve())] = {"halaman_tercetak": dicetak, "total": total, "printer": printer,
-                                 "job_id": str(job_id), "waktu": f"{datetime.now():%Y-%m-%d %H:%M:%S}"}
-    _simpan_sebagian(data, file_catatan)
+    # baca-ubah-tulis dikunci: beberapa printer mencetak bersamaan (proses terpisah) dan bisa
+    # sama-sama terputus; tanpa kunci catatan salah satunya tertimpa.
+    with _kunci_catatan(file_catatan or FILE_SEBAGIAN):
+        data = baca_sebagian(file_catatan)
+        data[str(file.resolve())] = {"halaman_tercetak": dicetak, "total": total, "printer": printer,
+                                     "job_id": str(job_id), "waktu": f"{datetime.now():%Y-%m-%d %H:%M:%S}"}
+        _simpan_sebagian(data, file_catatan)
     log.warning("TERPUTUS %s: %d dari %d halaman tercetak - bisa dilanjutkan dari menu "
                 '"Lanjutkan cetak yang terputus"', file.name, dicetak, total)
 
 
 def hapus_sebagian(file: Path, file_catatan: Path | None = None) -> None:
-    data = baca_sebagian(file_catatan)
-    if data.pop(str(file.resolve()), None) is not None:
-        _simpan_sebagian(data, file_catatan)
+    with _kunci_catatan(file_catatan or FILE_SEBAGIAN):
+        data = baca_sebagian(file_catatan)
+        if data.pop(str(file.resolve()), None) is not None:
+            _simpan_sebagian(data, file_catatan)
 
 
 def _buang_job_sisa(printer: str, job_id: str) -> None:
@@ -1111,12 +1161,13 @@ def lanjutkan_sebagian(sumatra: Path, printer: str, pantau: bool, interaktif: bo
             sisa += 1
             # catat_sebagian() menyimpan jumlah halaman relatif terhadap rentang job lanjutan
             # (job hanya berisi halaman mulai..total) -> geser ke nomor halaman asli dokumen.
-            data2 = baca_sebagian()
-            baru = data2.get(str(f.resolve()))
-            if baru:
-                baru["halaman_tercetak"] = min(total, mulai - 1 + int(baru["halaman_tercetak"]))
-                baru["total"] = total
-                _simpan_sebagian(data2)
+            with _kunci_catatan(FILE_SEBAGIAN):
+                data2 = baca_sebagian()
+                baru = data2.get(str(f.resolve()))
+                if baru:
+                    baru["halaman_tercetak"] = min(total, mulai - 1 + int(baru["halaman_tercetak"]))
+                    baru["total"] = total
+                    _simpan_sebagian(data2)
         time.sleep(JEDA_ANTAR_CETAK_S)
     return sisa
 

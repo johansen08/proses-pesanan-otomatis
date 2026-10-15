@@ -159,6 +159,14 @@ def data_sesi(hari_ini: date | None = None) -> dict:
             "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
 
 
+PRINTER_VIRTUAL = ("onenote", "print to pdf", "xps", "fax", "save as pdf", "simpan sebagai pdf")
+
+
+def printer_virtual(nama: str) -> bool:
+    """Printer bawaan Windows yang bukan printer label (tidak ditawarkan di cetak banyak printer)."""
+    return any(k in nama.lower() for k in PRINTER_VIRTUAL)
+
+
 TTL_PRINTER_S = 60
 _cache_printer: tuple[float, list[str]] | None = None   # (waktu monotonic, daftar nama)
 _kunci_printer = threading.Lock()
@@ -257,6 +265,37 @@ def mulai_cetak(files: list[str], printer: str, ulang: bool = False,
         _terakhir = printer
         threading.Thread(target=_baca_keluaran, args=(proses, job), daemon=True).start()
         return job["id"]
+
+
+def mulai_cetak_banyak(files: list[str], printers: list[str], ulang: bool = False) -> dict[str, dict]:
+    """Cetak pilihan di BEBERAPA printer sekaligus: file dibagi jadi blok berurutan yang seimbang
+    menurut jumlah halaman (ps.bagi_ke_printer), tiap printer = satu job biasa (mulai_cetak) di
+    proses terpisah. Semua printer harus bebas SEBELUM satu pun dimulai (tidak ada pembagian
+    setengah jalan). Return {printer: {"job": id, "file": jumlah file}} (urut printer pilihan,
+    printer berlebih - file lebih sedikit dari printer - tidak dipakai)."""
+    if not printers or not all(isinstance(p, str) and p.strip() for p in printers):
+        raise ps.CetakError("Printer belum dipilih")
+    if len(set(printers)) != len(printers):
+        raise ps.CetakError("Printer dipilih dobel")
+    daftar = ps.pilih_file_spesifik(files)
+    with _kunci:
+        sibuk = [p for p in printers if (_jobs.get(p) or {}).get("status") == "jalan"]
+    if sibuk:
+        raise RuntimeError("Printer masih mencetak: " + ", ".join(sibuk))
+    bobot = {f: (_jumlah_halaman(f) or max(1, f.stat().st_size // 5000)) for f in daftar}
+    blok = ps.bagi_ke_printer(daftar, len(printers), bobot)
+    hasil: dict[str, dict] = {}
+    try:
+        for printer, bagian in zip(printers, blok):
+            job = mulai_cetak([_rel(f) for f in bagian], printer, ulang)
+            hasil[printer] = {"job": job, "file": len(bagian)}
+    except (ps.CetakError, RuntimeError):
+        if not hasil:
+            raise
+        # sebagian printer sudah jalan; sisanya gagal mulai -> beritahu, jangan sembunyikan
+        raise RuntimeError("Sebagian printer sudah mencetak (" + ", ".join(hasil) + "), tapi "
+                           + printer + " gagal dimulai - cetak file bagiannya lewat Cetak biasa") from None
+    return hasil
 
 
 _lanjut: dict | None = None      # job "Download ulang" picklist terhenti (satu sekaligus)
@@ -521,7 +560,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/sesi":
                 return self._kirim(200, data_sesi())
             if url.path == "/api/printer":
-                return self._kirim(200, {"printer": daftar_printer_cache()})
+                daftar = daftar_printer_cache()
+                return self._kirim(200, {"printer": daftar, "virtual": [p for p in daftar if printer_virtual(p)]})
             if url.path == "/api/job":
                 nama = parse_qs(url.query).get("printer", [_terakhir])[0]
                 return self._kirim(200, _publik(_jobs.get(nama)))
@@ -589,6 +629,11 @@ class Handler(BaseHTTPRequestHandler):
             files, printer = data.get("files"), data.get("printer")
             if not isinstance(files, list) or not all(isinstance(x, str) for x in files):
                 return self._kirim(400, {"error": "files harus daftar path"})
+            if "printers" in data:   # cetak bagi-rata ke beberapa printer
+                printers = data["printers"]
+                if not isinstance(printers, list) or not all(isinstance(x, str) for x in printers):
+                    return self._kirim(400, {"error": "printers harus daftar nama printer"})
+                return self._kirim(200, {"jobs": mulai_cetak_banyak(files, printers, bool(data.get("ulang")))})
             if not isinstance(printer, str):
                 return self._kirim(400, {"error": "printer wajib diisi"})
             job = mulai_cetak(files, printer, bool(data.get("ulang")))

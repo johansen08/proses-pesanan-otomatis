@@ -284,6 +284,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
     <div class="dock">
       <b id="cInfo">Belum ada yang dipilih</b><button class="pill" id="sbgBtn" hidden style="cursor:pointer;background:var(--badbg);color:var(--bad)"></button><div class="jobs" id="jobs"></div><div class="sp"></div>
       <select id="printer"><option>Printer Thermal 100×150 — Ruang Resi</option><option>Printer Thermal 2 — Lantai 2</option><option>Simpan sebagai PDF</option></select>
+      <button class="btn line auto" id="cetakBanyakBtn" disabled title="Bagi file terpilih ke beberapa printer sekaligus"><svg><use href="#print"/></svg>Banyak printer</button>
       <button class="btn auto" id="cetakBtn" disabled><svg><use href="#print"/></svg>Cetak</button>
     </div>
   </section>
@@ -662,8 +663,31 @@ $('#swBelum').onclick=()=>{sembunyi=!sembunyi;$('#swBelum').classList.toggle('on
 
 /* ---------- job cetak per printer ---------- */
 const cjobs={};let modalPrinter=null;
-function updBtn(){const p=$('#printer').value,j=cjobs[p],sibuk=!!(j&&j.status==='jalan');$('#cetakBtn').disabled=!pil.size||sibuk||(API&&!p);$('#cetakBtn').title=sibuk?'Printer ini sedang mencetak — pilih printer lain':''}
+function updBtn(){const p=$('#printer').value,j=cjobs[p],sibuk=!!(j&&j.status==='jalan');$('#cetakBtn').disabled=!pil.size||sibuk||(API&&!p);$('#cetakBtn').title=sibuk?'Printer ini sedang mencetak — pilih printer lain':'';$('#cetakBanyakBtn').disabled=!pil.size||!API||PRINTERS.length<2}
 $('#printer').onchange=updBtn;
+/* ---------- cetak ke banyak printer: file terpilih dibagi berurutan & seimbang (server) ---------- */
+let PRINTERS=[],PRN_VIRTUAL=[];
+function printerTerpilih(){try{return JSON.parse(localStorage.getItem('printerBanyak')||'[]')}catch(e){return[]}}
+$('#cetakBanyakBtn').onclick=()=>{
+  const fisik=PRINTERS.filter(p=>!PRN_VIRTUAL.includes(p));
+  if(!fisik.length)return toast('Tidak ada printer terdeteksi');
+  const awal=printerTerpilih(),files=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
+  modal(`<h2>Cetak ${files.length} file di banyak printer</h2>
+   <p style="margin:4px 0 8px">File dibagi berurutan &amp; seimbang menurut jumlah halaman. Tiap printer mengeluarkan tumpukan yang urut.</p>
+   <div id="bpList">${fisik.map((p,i)=>{const sibuk=cjobs[p]&&cjobs[p].status==='jalan';
+     return `<label style="display:flex;gap:8px;align-items:center;margin:6px 0;${sibuk?'opacity:.5':''}"><input type="checkbox" class="bpC" data-p="${esc(p)}" ${sibuk?'disabled':(awal.length?awal.includes(p):true)?'checked':''}> <span>${esc(p)}${sibuk?' — sedang mencetak':''}</span></label>`}).join('')}</div>
+   <div class="note" id="bpInfo"></div>
+   <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="bpYa">Cetak</button></div>`);
+  const pilihan=()=>$$('.bpC').filter(c=>c.checked).map(c=>c.dataset.p);
+  const info=()=>{const n=pilihan().length;$('#bpInfo').textContent=n?`${files.length} file → ${Math.min(n,files.length)} printer (±${Math.ceil(files.length/Math.min(n,files.length))} file per printer)`:'Pilih minimal 1 printer';$('#bpYa').disabled=!n};
+  $$('.bpC').forEach(c=>c.onchange=info);info();
+  $('#bpYa').onclick=async()=>{const printers=pilihan();if(!printers.length)return;
+    try{localStorage.setItem('printerBanyak',JSON.stringify(printers))}catch(e){}
+    let r;try{r=await postJ('/api/cetak',{files,printers})}catch(e){return toast('Gagal mulai: '+e.message)}
+    tutup();pil.clear();gambarCetak();
+    Object.keys(r.jobs).forEach(p=>lacak(p,r.jobs[p].file));
+    toast('Mencetak di '+Object.keys(r.jobs).length+' printer')};
+};
 function gambarJobs(){
   $('#jobs').innerHTML=Object.keys(cjobs).map(p=>{const j=cjobs[p],run=j.status==='jalan';
     return `<button class="pill ${run?'acc':j.status==='selesai'?'ok':''}" data-p="${esc(p)}" style="cursor:pointer;${!run&&j.status!=='selesai'?'background:var(--badbg);color:var(--bad)':''}" title="Lihat catatan cetak">${run?j.maju+'/'+j.total:j.status==='selesai'?'✓':'!'} · ${esc(p.split(' — ')[0])}</button>`}).join('');
@@ -745,7 +769,7 @@ async function initCetak(){
     catch(e){toast('Server UI error: '+e.message)}
     gambarCetak();
     try{
-      const p=await api('/api/printer');$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');updBtn();
+      const p=await api('/api/printer');PRINTERS=p.printer;PRN_VIRTUAL=p.virtual||[];$('#printer').innerHTML=p.printer.map(x=>`<option>${esc(x)}</option>`).join('');updBtn();
       await muatSebagian();
       try{const jj=(await api('/api/jobs')).jobs;Object.keys(jj).forEach(n=>{if(jj[n].status==='jalan')lacak(n,jj[n].total)})}catch(e){}
     }catch(e){toast('Printer: '+e.message)}
