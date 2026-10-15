@@ -104,6 +104,13 @@ Lalu:
    `per_sku` dihitung. Resinya tidak masuk `resi_per_sku`/`resi_spesial_semua`, sehingga otomatis
    mengalir ke jalur "sisa reguler" (`proses_label.pisah_reguler()`) dan — karena masing-masing
    tetap 1 SKU qty 1 — berakhir sebagai picklist **SATUAN** (subfolder `SATUAN`), bukan SPESIAL.
+6. **Spesial dari penggabungan satuan beberapa sesi** (`src/pilah_satuan.py`, tab "Pilah") memakai
+   syarat yang SAMA dengan spesial biasa (15-10-2026; sebelumnya SKU `C225-UB` dan bundle ikut
+   terhitung): kurir J&T/SPX, awalan `C225-UB` dikecualikan (`AWALAN_SKU_DIKECUALIKAN_SPESIAL`),
+   bundle ditolak (item komponen ber-`bundle_item_id` — BD dst; bundle PTAA yang di spesial biasa
+   boleh juga ditolak karena kode komponen tidak bisa dikenali sebagai PTAA), pesanan >1 item
+   ditolak, qty bukan 1 ditolak. Resi yang ditolak tetap masuk `SISA-SATUAN`. Kalau menambah
+   syarat spesial biasa, tambahkan juga di `kelompokkan()`/`item_picklist()` pilah_satuan.py.
 
 ---
 

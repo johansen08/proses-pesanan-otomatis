@@ -41,7 +41,7 @@ from pypdf import PdfReader, PdfWriter
 
 import kurasi_satuan
 import proses_label
-from sku_spesial import KURIR_DIIZINKAN, MIN_RESI
+from sku_spesial import AWALAN_SKU_DIKECUALIKAN_SPESIAL, KURIR_DIIZINKAN, MIN_RESI
 
 ROOT = Path(__file__).resolve().parent.parent
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -185,12 +185,35 @@ def kunci_halaman(teks: str) -> tuple[str | None, str | None]:
     return (resi.group(1) if resi else None, pesanan.group(1) if pesanan else None)
 
 
+def _angka(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 1.0   # field tak ada/kosong: anggap qty 1 (picklist satuan memang 1 qty)
+
+
+def sku_dikecualikan(sku: str) -> bool:
+    """Awalan SKU yang tidak pernah jadi spesial (sama dengan spesial biasa, mis. C225-UB)."""
+    return str(sku or "").upper().startswith(tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL))
+
+
 def item_picklist(k, nomor: int) -> list[dict]:
-    """Item picklist (tanpa yang CANCELED) -> {sku, pesanan, resi, kurir}."""
+    """Item picklist (tanpa yang CANCELED) -> {sku, pesanan, resi, kurir, boleh_spesial}.
+    `boleh_spesial` False (resi tetap jadi sisa) untuk pesanan yang di spesial biasa juga tidak lolos:
+    bundle (item komponen ber-`bundle_item_id`; bundle PTAA pun tidak bisa dikenali dari kode komponen,
+    jadi semua bundle ditolak - BD dst), lebih dari 1 item per pesanan, atau qty bukan 1."""
     p = k.get(f"sales/picklists/{nomor}")
-    return [{"sku": str(i.get("item_code") or ""), "pesanan": str(i.get("salesorder_no") or ""),
-             "resi": str(i.get("tracking_no") or ""), "kurir": str(i.get("shipper") or "")}
-            for i in p.get("items") or [] if i.get("wms_status") != "CANCELED"]
+    items = [i for i in p.get("items") or [] if i.get("wms_status") != "CANCELED"]
+    jumlah = Counter(str(i.get("salesorder_no") or "") for i in items)
+    hasil = []
+    for i in items:
+        pesanan = str(i.get("salesorder_no") or "")
+        boleh = (jumlah[pesanan] == 1 and not i.get("bundle_item_id")
+                 and _angka(i.get("qty_ordered")) == 1)
+        hasil.append({"sku": str(i.get("item_code") or ""), "pesanan": pesanan,
+                      "resi": str(i.get("tracking_no") or ""), "kurir": str(i.get("shipper") or ""),
+                      "boleh_spesial": boleh})
+    return hasil
 
 
 def petakan_halaman(pdf: Path, items: list[dict]) -> tuple[list[dict], int]:
@@ -220,7 +243,8 @@ def kelompokkan(baris: list[dict], min_resi: int = MIN_RESI) -> tuple[dict[str, 
     pernah dihitung (tetap jadi sisa satuan)."""
     per_sku: dict[str, dict[str, dict]] = defaultdict(dict)
     for b in baris:
-        if not kurir_diizinkan(b.get("kurir")):
+        if (not kurir_diizinkan(b.get("kurir")) or sku_dikecualikan(b["sku"])
+                or not b.get("boleh_spesial", True)):
             continue
         per_sku[b["sku"]].setdefault(b["resi"] or b["pesanan"], b)
     layak = {s: list(d.values()) for s, d in per_sku.items() if len(d) >= min_resi}
@@ -325,6 +349,8 @@ def baca_cache(cache: Path | None, folder_tanggal: Path, pdfs: list[Path]) -> tu
             return None
         if not 0 <= time.time() - float(d.get("dibuat", 0)) <= UMUR_CACHE_MAKS_S:
             return None   # kedaluwarsa (atau tanpa cap waktu): pesanan bisa sudah batal
+        if any("boleh_spesial" not in b for b in d["baris"]):
+            return None   # cache dari versi lama (belum menyimpan syarat bundle/multi-item/qty)
         return [{**b, "pdf": folder_tanggal / b["pdf"]} for b in d["baris"]], int(d["tak_cocok"])
     except (OSError, ValueError, KeyError, TypeError):
         return None

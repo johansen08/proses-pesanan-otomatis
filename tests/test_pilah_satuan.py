@@ -415,6 +415,46 @@ def uji_resi_dobel_dihitung_sekali():
     print("  halaman dobel (resi sama) tidak menggelembungkan hitungan")
 
 
+class KlienItem:
+    def __init__(self, items):
+        self.items = items
+
+    def get(self, path):
+        return {"items": self.items}
+
+
+def _it(sku, so, resi, **extra):
+    return {"item_code": sku, "salesorder_no": so, "tracking_no": resi, "shipper": "SPX Hemat",
+            "wms_status": "FINISH_PICK", **extra}
+
+
+def uji_awalan_ub_tidak_pernah_spesial():
+    baris = [{"sku": "C225-UB11-2", "resi": f"R{i}", "pesanan": f"O{i}", "kurir": "SPX Hemat"} for i in range(5)]
+    baris += [{"sku": "c225-ub10-1", "resi": f"S{i}", "pesanan": f"P{i}", "kurir": "SPX Hemat"} for i in range(3)]
+    baris += [{"sku": "OK", "resi": f"T{i}", "pesanan": f"Q{i}", "kurir": "SPX Hemat"} for i in range(3)]
+    layak, sisa = ps.kelompokkan(baris, 3)
+    assert list(layak) == ["OK"] and not sisa, (list(layak), sisa)
+    print("  SKU berawalan C225-UB (semua varian, tak peka huruf) tidak jadi spesial, tetap sisa")
+
+
+def uji_bundle_multi_item_dan_qty_bukan_1_tidak_spesial():
+    k = KlienItem([
+        _it("A", "O1", "R1"),                                             # biasa -> boleh
+        _it("B", "O2", "R2", bundle_item_id=77),                          # bundle (BD dst)
+        _it("C", "O3", "R3", qty_ordered="2.0000"),                       # qty 2
+        _it("D", "O4", "R4"), _it("E", "O4", "R4"),                       # 2 item satu pesanan
+        _it("F", "O5", "R5", bundle_item_id=0, qty_ordered="1.0000"),     # biasa -> boleh
+    ])
+    boleh = {i["sku"]: i["boleh_spesial"] for i in ps.item_picklist(k, 1)}
+    assert boleh == {"A": True, "B": False, "C": False, "D": False, "E": False, "F": True}, boleh
+    baris = [{**i, "kurir": "SPX Hemat"} for i in ps.item_picklist(k, 1) for _ in range(3)
+             if i["sku"] in ("B", "C", "D")]
+    baris = [{**b, "resi": f"{b['resi']}-{n}"} for n, b in enumerate(baris)]
+    layak, _ = ps.kelompokkan(baris, 1)
+    assert not layak, layak
+    print("  bundle, multi-item per pesanan, qty bukan 1 -> tidak spesial (tetap sisa)")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

@@ -111,6 +111,8 @@ project secara umum, root tidak boleh berisi file `.py`):
   di `label-pengiriman/<tanggal>/pilah-satuan/`. Tidak membuat picklist/resi baru. Halaman tak cocok = umumnya pesanan batal
   setelah dicetak. Hasil: `SPESIAL-SATUAN-<sesi>/` (PDF per SKU + `detail-resi-spesial-satuan-<sesi>.xlsx`) dan
   `SISA-SATUAN-<sesi>/` (sisa per kelompok rak 2A/3A/1B/2B/3B/LAINNYA); `--sesi 1-2-3`, `--analisis-saja`, `--cache`, `--json`.
+  Syarat spesial SAMA dengan spesial biasa (15-10-2026): awalan `C225-UB` dikecualikan, bundle (`bundle_item_id`; BD dst,
+  PTAA ikut ditolak), pesanan multi-item & qty bukan 1 ditolak (`item_picklist()` -> `boleh_spesial`, `kelompokkan()`); cache lama tanpa kunci itu diabaikan.
   Pengaman: sesi yang PDF-nya diubah <2 menit lalu ditolak (proses harian masih menulis), server 409 selama job harian/download ulang berjalan;
   pilah ulang di atas PDF yang sudah dikurasi ke folder hasil LAIN ditolak (`KurasiBentrok`, resi dobel); cache analisis maks 15 menit;
   nomor PICK terlompat di antara picklist satuan = peringatan. `--tanpa-pdf` / UI "Hanya Excel" = daftar resi saja (label fisik sudah dicetak,
