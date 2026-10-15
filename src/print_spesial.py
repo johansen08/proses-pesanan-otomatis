@@ -464,7 +464,9 @@ def _kunci_catatan(file_catatan: Path, tunggu_s: float = 10.0):
         try:
             os.close(os.open(kunci, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
             dipegang = True
-        except FileExistsError:
+        except (FileExistsError, PermissionError):
+            # Windows: kunci yang baru di-unlink pemegang lain berstatus delete-pending sesaat,
+            # os.open(O_EXCL) saat itu melempar PermissionError (bukan FileExistsError) -> coba lagi.
             try:
                 if time.time() - kunci.stat().st_mtime > 30:
                     kunci.unlink(missing_ok=True)
@@ -478,7 +480,8 @@ def _kunci_catatan(file_catatan: Path, tunggu_s: float = 10.0):
         yield
     finally:
         if dipegang:
-            kunci.unlink(missing_ok=True)
+            with contextlib.suppress(OSError):
+                kunci.unlink(missing_ok=True)
 
 
 def catat_sudah_dicetak(file: Path, file_catatan: Path | None = None) -> None:
