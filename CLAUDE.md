@@ -100,6 +100,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   (180 dtk) sebelum file dilewati, dan file gagal dicoba ulang otomatis `PERCOBAAN_ULANG_CETAK`x. Akurasi
   halaman bergantung driver melapor ke spooler (printer thermal tertentu tidak) — makanya halaman mulai
   bisa diganti user. Tes: `tests/test_print_spesial.py`.
+  **Dokumen panjang dipotong** (2026-10-15; cetak berhenti ~halaman 103 pada file 100+ halaman, timeout SumatraPDF 120 dtk
+  memotong job di spooler): `cetak()` mengirim dokumen > `POTONG_HALAMAN` (50) halaman sebagai beberapa job berurutan
+  (`-print-settings "1-50"`, `"51-100"`, ...), tiap potongan dipantau & diulang sendiri (`PERCOBAAN_ULANG_CETAK`) sehingga potongan
+  yang sudah tercetak tidak dobel; potongan gagal/dilewati dicatat ke `cetak_sebagian.json` relatif seluruh dokumen (lanjut sebagian
+  ikut dipotong). Tes: `uji_cetak_dokumen_panjang_dipotong_per_50_halaman`.
   **Label Lazada skala 68%** (2026-10-13): PDF Lazada A5, kertas 100x150 mm. `cetak()` mengirim SALINAN
   sementara (`buat_salinan_skala()`, `pypdf`: halaman > 100x150 diperkecil `SKALA_LAZADA` di tengah halaman
   100x150) + `-print-settings noscale` untuk SEMUA file `PICK-..._LAZADA_...` (jenis `lazada`, `--file` dari UI

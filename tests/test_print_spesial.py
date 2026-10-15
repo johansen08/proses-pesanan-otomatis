@@ -1075,6 +1075,57 @@ def uji_cetak_bulk_hasil_pilah_satuan_dan_satuan_dikurasi():
     print("  cetak bulk: spesial-satuan/sisa-satuan (folder tingkat tanggal, sesi terakhir), satuan dikurasi dilewati")
 
 
+def uji_cetak_dokumen_panjang_dipotong_per_50_halaman():
+    from unittest import mock
+    assert ps._potongan(1, 106) == [(1, 50), (51, 100), (101, 106)]
+    assert ps._potongan(30, 106) == [(30, 79), (80, 106)]
+    assert ps._rentang_job(None, 106) == (1, 106) and ps._rentang_job("30-106", 106) == (30, 106)
+    assert ps._rentang_job("5", 10) == (5, 5)
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        pdf = folder / "PICK-1_X.pdf"
+        pdf.write_bytes(b"%PDF-1.4")
+        catatan = folder / "sebagian.json"
+        kirim = []
+        hasil = {}   # nomor potongan (urutan kirim) -> hasil palsu
+
+        def satu_job(sumatra, printer, k, nama, file, pengaturan, pantau):
+            kirim.append(pengaturan)
+            r = hasil.get(len(kirim), True)
+            if isinstance(r, Exception):
+                raise r
+            if r is False:   # dilewati user: _pantau_job mencatat relatif potongan (3 dari 50)
+                ps.catat_sebagian(file, printer, "9", 3, 50, catatan)
+            return r
+
+        def jalankan(halaman=None, total=106):
+            kirim.clear()
+            with mock.patch.object(ps, "FILE_SEBAGIAN", catatan),                     mock.patch.object(ps, "_jumlah_halaman", lambda f: total),                     mock.patch.object(ps, "_kirim_satu_job", satu_job),                     mock.patch.object(ps.time, "sleep", lambda s: None):
+                return ps.cetak(Path("s.exe"), "P", pdf, True, halaman)
+
+        assert jalankan() is True and kirim == ["1-50", "51-100", "101-106"], kirim
+        assert jalankan(total=50) is True and kirim == [""], kirim   # <= 50 halaman: 1 job utuh
+        assert jalankan("30-106") is True and kirim == ["30-79", "80-106"], kirim   # lanjutan ikut dipotong
+        # potongan ke-2 dilewati -> catatan terputus relatif seluruh dokumen: 50 + 3 dari 106
+        hasil.clear()
+        hasil[2] = False
+        assert jalankan() is False and kirim == ["1-50", "51-100"], kirim
+        d = ps.baca_sebagian(catatan)[str(pdf.resolve())]
+        assert (d["halaman_tercetak"], d["total"]) == (53, 106), d
+        # potongan ke-2 gagal terus (CetakError) -> potongan 1 TIDAK dicetak ulang, lanjut dari 51
+        hasil.clear()
+        hasil.update({2: ps.CetakError("x"), 3: ps.CetakError("x"), 4: ps.CetakError("x")})
+        with mock.patch.object(ps, "Peringatan"):
+            assert jalankan() is False and kirim == ["1-50"] + ["51-100"] * 3, kirim
+        d = ps.baca_sebagian(catatan)[str(pdf.resolve())]
+        assert (d["halaman_tercetak"], d["total"]) == (50, 106), d
+        # potongan ke-2 gagal sekali lalu berhasil
+        hasil.clear()
+        hasil[2] = ps.CetakError("x")
+        assert jalankan() is True and kirim == ["1-50", "51-100", "51-100", "101-106"], kirim
+    print("  cetak dokumen panjang: dipotong 50 halaman, retry per potongan, catatan terputus relatif seluruh dokumen")
+
+
 def uji_peringatan_cetak_terhenti_menyala_dan_padam():
     from unittest import mock
     muncul = []

@@ -294,6 +294,7 @@ TIMEOUT_POWERSHELL_S = 20
 TIMEOUT_MACET_JOB_S = 300      # job di antrean tanpa kemajuan halaman selama ini -> peringatan (pop up + suara)
 BUNYI_SEKALI_MAKS_S = 30       # lama suara peringatan sekali-bunyi (timeout SumatraPDF) kalau pop up tak ditutup
 TUNGGU_PRINTER_PULIH_S = 180   # tanpa konsol: tunggu printer pulih sebelum melewati 1 file
+POTONG_HALAMAN = 50            # dokumen lebih panjang dari ini dicetak sebagai beberapa job (potongan)
 PERCOBAAN_ULANG_CETAK = 2      # percobaan tambahan per file yang gagal (timeout/SumatraPDF error)
 JEDA_ULANG_CETAK_S = 5
 FILE_SEBAGIAN = FOLDER_LOG / "cetak_sebagian.json"   # file yang terputus di tengah jalan
@@ -852,45 +853,121 @@ def _file_kirim(file: Path):
             yield file, []
 
 
+def _jumlah_halaman(pdf: Path) -> int | None:
+    """Jumlah halaman PDF; None kalau tidak terbaca (cetak tetap jalan sebagai 1 job utuh)."""
+    try:
+        from pypdf import PdfReader
+        return len(PdfReader(pdf).pages)
+    except Exception:
+        return None
+
+
+def _rentang_job(halaman: str | None, total: int) -> tuple[int, int]:
+    """(awal, akhir) halaman yang dicetak dari `halaman` ("N", "N-M" atau None = semua)."""
+    m = re.fullmatch(r"(\d+)(?:-(\d+))?", halaman or "")
+    if not m:
+        return 1, total
+    awal = min(max(1, int(m.group(1))), total)
+    akhir = min(max(awal, int(m.group(2) or awal)), total)
+    return awal, akhir
+
+
+def _potongan(awal: int, akhir: int, ukuran: int = POTONG_HALAMAN) -> list[tuple[int, int]]:
+    """Bagi halaman awal..akhir menjadi potongan <= `ukuran` halaman."""
+    return [(a, min(a + ukuran - 1, akhir)) for a in range(awal, akhir + 1, ukuran)]
+
+
+def _kirim_satu_job(sumatra: Path, printer: str, kirim: Path, nama: str, file: Path,
+                    pengaturan: str, pantau: bool) -> bool:
+    """Kirim 1 print job ke SumatraPDF lalu pantau sampai selesai (lihat cetak())."""
+    sebelum = _job_ids(printer) if pantau else set()
+    try:
+        r = subprocess.run(
+            [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done",
+             *(["-print-settings", pengaturan] if pengaturan else []), str(kirim)],
+            capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
+    except subprocess.TimeoutExpired:
+        _matikan_sumatra(sumatra, kirim)
+        Peringatan(bunyi_maks_s=BUNYI_SEKALI_MAKS_S).nyalakan(
+            f'CETAK TERHENTI: SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik\n'
+            f'File: {nama}\nPrinter: {printer}\n\n'
+            'Cek printer (offline / antrean macet). Program mencoba ulang otomatis.')
+        if pantau and (_job_ids(printer) - sebelum):
+            # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
+            # cukup pantau job-nya seperti biasa.
+            return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)),
+                                      nama, file)
+        raise CetakError(
+            f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
+            "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
+            "kalau PC lambat.") from None
+    if r.returncode != 0:
+        raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
+                         f"{r.stderr.strip() or r.stdout.strip()}")
+    if not pantau:
+        return True
+    baru = _job_ids(printer) - sebelum
+    if not baru:
+        return True   # keburu selesai sebelum sempat dicek -> anggap sukses
+    return _tunggu_job_bersih(printer, next(iter(baru)), nama, file)
+
+
+def _geser_catatan_sebagian(file: Path, geser: int, total: int) -> None:
+    """Catatan terputus dari _pantau_job relatif terhadap 1 potongan -> jadikan relatif terhadap
+    seluruh rentang cetak (geser = halaman rentang yang sudah tercetak sebelum potongan itu)."""
+    data = baca_sebagian()
+    d = data.get(str(file.resolve()))
+    if d:
+        d["halaman_tercetak"] = min(total, geser + int(d["halaman_tercetak"]))
+        d["total"] = total
+        _simpan_sebagian(data)
+
+
 def cetak(sumatra: Path, printer: str, file: Path, pantau: bool,
           halaman: str | None = None) -> bool:
-    """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = dilewati
-    manual oleh user karena printer bermasalah berkelanjutan (lihat _tunggu_job_bersih).
-    Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file rusak/printer tidak
-    valid) - beda dengan "bermasalah di tengah jalan" yang ditangani _tunggu_job_bersih.
-    Label Lazada dikirim sebagai salinan berskala 68% (lihat _file_kirim())."""
+    """Kirim 1 file ke printer lewat SumatraPDF. True = berhasil, False = tidak selesai
+    (dilewati manual user karena printer bermasalah berkelanjutan, lihat _tunggu_job_bersih,
+    atau potongan gagal terus). Melempar CetakError kalau SumatraPDF sendiri gagal (mis. file
+    rusak/printer tidak valid) - beda dengan "bermasalah di tengah jalan" yang ditangani
+    _tunggu_job_bersih. Label Lazada dikirim sebagai salinan berskala 68% (lihat _file_kirim()).
+    Dokumen > POTONG_HALAMAN halaman dikirim sebagai beberapa job berurutan (potongan),
+    supaya satu job panjang tidak kena timeout/korup di spooler (insiden: cetak berhenti
+    ~halaman 103); tiap potongan diulang sendiri sehingga potongan yang sudah tercetak
+    tidak dicetak dobel."""
     with _file_kirim(file) as (kirim, opsi):
-        pengaturan = ",".join(([halaman] if halaman else []) + opsi)
-        sebelum = _job_ids(printer) if pantau else set()
-        try:
-            r = subprocess.run(
-                [str(sumatra), "-print-to", printer, "-silent", "-exit-when-done",
-                 *(["-print-settings", pengaturan] if pengaturan else []), str(kirim)],
-                capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
-        except subprocess.TimeoutExpired:
-            _matikan_sumatra(sumatra, kirim)
-            Peringatan(bunyi_maks_s=BUNYI_SEKALI_MAKS_S).nyalakan(
-                f'CETAK TERHENTI: SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik\n'
-                f'File: {file.name}\nPrinter: {printer}\n\n'
-                'Cek printer (offline / antrean macet). Program mencoba ulang otomatis.')
-            if pantau and (_job_ids(printer) - sebelum):
-                # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
-                # cukup pantau job-nya seperti biasa.
-                return _tunggu_job_bersih(printer, next(iter(_job_ids(printer) - sebelum)),
-                                          file.name, file)
-            raise CetakError(
-                f"SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik (printer offline/antrean "
-                "macet/dialog menunggu?). Cek printer; naikkan batas lewat env SUMATRA_TIMEOUT_S "
-                "kalau PC lambat.") from None
-        if r.returncode != 0:
-            raise CetakError(f"SumatraPDF gagal (kode {r.returncode}): "
-                             f"{r.stderr.strip() or r.stdout.strip()}")
-        if not pantau:
-            return True
-        baru = _job_ids(printer) - sebelum
-        if not baru:
-            return True   # keburu selesai sebelum sempat dicek -> anggap sukses
-        return _tunggu_job_bersih(printer, next(iter(baru)), file.name, file)
+        total = _jumlah_halaman(kirim)
+        awal, akhir = _rentang_job(halaman, total) if total else (1, 0)
+        if not total or akhir - awal + 1 <= POTONG_HALAMAN:
+            pengaturan = ",".join(([halaman] if halaman else []) + opsi)
+            return _kirim_satu_job(sumatra, printer, kirim, file.name, file, pengaturan, pantau)
+        panjang = akhir - awal + 1
+        bagian = _potongan(awal, akhir)
+        for n, (a, b) in enumerate(bagian, 1):
+            geser = a - awal   # halaman rentang yang sudah tercetak sebelum potongan ini
+            log.info("%s: potongan %d/%d (halaman %d-%d dari %d)", file.name, n, len(bagian), a, b, total)
+            pengaturan = ",".join([f"{a}-{b}"] + opsi)
+            ok, error = False, None
+            for percobaan in range(1 + PERCOBAAN_ULANG_CETAK):
+                if percobaan:
+                    log.warning("Mencoba ulang potongan %d/%d %s (percobaan %d/%d) ...", n, len(bagian),
+                                file.name, percobaan + 1, 1 + PERCOBAAN_ULANG_CETAK)
+                    time.sleep(JEDA_ULANG_CETAK_S)
+                try:
+                    ok, error = _kirim_satu_job(sumatra, printer, kirim, file.name, file, pengaturan, pantau), None
+                    break
+                except CetakError as e:
+                    error = e
+                    log.error("GAGAL cetak potongan %d/%d %s: %s", n, len(bagian), file.name, e)
+            if error is not None:
+                catat_sebagian(file, printer, "", geser, panjang)   # job_id kosong: tak ada yang dibuang
+                Peringatan(bunyi_maks_s=BUNYI_SEKALI_MAKS_S).nyalakan(
+                    f'CETAK GAGAL: {file.name} (potongan {n}/{len(bagian)})\nPrinter: {printer}\n\n{error}')
+                return False
+            if not ok:   # dilewati: _pantau_job mencatat jumlah halaman relatif potongan
+                _geser_catatan_sebagian(file, geser, panjang)
+                return False
+            time.sleep(JEDA_ANTAR_CETAK_S)
+        return True
 
 
 def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
