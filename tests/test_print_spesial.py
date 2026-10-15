@@ -5,11 +5,13 @@ sungguhan).
 
 Jalankan:  .venv\\Scripts\\python tests\\test_print_spesial.py
 """
+import os
 import re
 import sys
 import tempfile
 from pathlib import Path
 
+os.environ["CETAK_TANPA_PERINGATAN"] = "1"   # tes tidak boleh memunculkan pop up/suara sungguhan
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -470,13 +472,13 @@ def uji_cetak_timeout_jadi_cetak_error_dan_batch_lanjut():
 def uji_timeout_sumatra_dari_env():
     import os
     from unittest import mock
-    for nilai, harapan in (("300", 300), ("abc", 120), ("-5", 120), ("0", 120)):
+    for nilai, harapan in (("600", 600), ("abc", 300), ("-5", 300), ("0", 300)):
         with mock.patch.dict(os.environ, {"SUMATRA_TIMEOUT_S": nilai}):
             assert ps._timeout_sumatra() == harapan, (nilai, ps._timeout_sumatra())
     with mock.patch.dict(os.environ, clear=False):
         os.environ.pop("SUMATRA_TIMEOUT_S", None)
-        assert ps._timeout_sumatra() == 120
-    print("  _timeout_sumatra: env SUMATRA_TIMEOUT_S dipakai, tidak valid -> 120")
+        assert ps._timeout_sumatra() == 300
+    print("  _timeout_sumatra: env SUMATRA_TIMEOUT_S dipakai, bawaan & tidak valid -> 300 detik (5 menit)")
 
 
 # -------------------------------------------------- mode event (SPX Hemat / SPX Standard)
@@ -1071,6 +1073,66 @@ def uji_cetak_bulk_hasil_pilah_satuan_dan_satuan_dikurasi():
             shutil.rmtree(tgl / "SISA-SATUAN-1-2-3")
             assert len(ps.kumpulkan_label(tgl / "3", ["satuan"])[0]) == 1
     print("  cetak bulk: spesial-satuan/sisa-satuan (folder tingkat tanggal, sesi terakhir), satuan dikurasi dilewati")
+
+
+def uji_peringatan_cetak_terhenti_menyala_dan_padam():
+    from unittest import mock
+    muncul = []
+
+    class Palsu(ps.Peringatan):
+        def nyalakan(self, teks):
+            if self.aktif:
+                return
+            muncul.append(teks)
+            self.aktif = True
+
+    # 1) printer bermasalah lalu pulih -> peringatan menyala sekali, dipadamkan, file tetap selesai
+    urutan = iter([("Printing", 1, 5), ("PaperOut", 1, 5), ("PaperOut", 1, 5), ("Printing", 2, 5), ("Completed", 5, 5)])
+    with mock.patch.object(ps, "Peringatan", Palsu),             mock.patch.object(ps, "_job_info", lambda p, j: next(urutan)),             mock.patch.object(ps.time, "sleep", lambda s: None),             mock.patch("builtins.input", lambda prompt="": ""):
+        assert ps._tunggu_job_bersih("P", "7", "a.pdf", None) is True
+    assert len(muncul) == 1 and "PRINTER BERMASALAH" in muncul[0] and "a.pdf" in muncul[0], muncul
+
+    # 2) job menggantung (status normal tanpa kemajuan halaman > batas) -> peringatan macet sekali
+    muncul.clear()
+    jam = iter(range(0, 100000, 100))
+    hitung = {"n": 0}
+
+    def info(p, j):
+        hitung["n"] += 1
+        return ("Printing", 0, 5) if hitung["n"] < 8 else ("Completed", 5, 5)
+
+    with mock.patch.object(ps, "Peringatan", Palsu),             mock.patch.object(ps, "_job_info", info),             mock.patch.object(ps.time, "sleep", lambda s: None),             mock.patch.object(ps.time, "monotonic", lambda: next(jam)):
+        assert ps._tunggu_job_bersih("P", "8", "b.pdf", None) is True
+    assert len(muncul) == 1 and "tidak ada kemajuan" in muncul[0], muncul
+
+    # 3) timeout SumatraPDF + gagal akhir -> peringatan ikut muncul
+    import subprocess
+    muncul.clear()
+    with tempfile.TemporaryDirectory() as tmp:
+        a = Path(tmp) / "a.pdf"
+        a.write_bytes(b"%PDF-1.4")
+
+        def palsu(cmd, **kw):
+            if cmd[0] != "powershell":
+                raise subprocess.TimeoutExpired(cmd, 1)
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch.object(ps, "Peringatan", Palsu),                 mock.patch.object(ps.subprocess, "run", palsu),                 mock.patch.object(ps, "JEDA_ANTAR_CETAK_S", 0), mock.patch.object(ps, "JEDA_ULANG_CETAK_S", 0):
+            ps.cetak_semua(Path("SumatraPDF.exe"), "P", [a], False)
+    assert len(muncul) == 1 + ps.PERCOBAAN_ULANG_CETAK + 1, muncul   # tiap timeout + gagal akhir
+    assert any("CETAK GAGAL" in t for t in muncul)
+    print("  Peringatan: printer bermasalah / job macet / timeout SumatraPDF memunculkan pop up+suara, padam saat pulih")
+
+
+def uji_peringatan_nonaktif_lewat_env_tidak_membuat_thread():
+    n = len(__import__("threading").enumerate())
+    p = ps.Peringatan()
+    p.nyalakan("x")
+    p.nyalakan("y")   # diabaikan selagi aktif
+    assert p.aktif and len(__import__("threading").enumerate()) == n
+    p.padamkan()
+    assert not p.aktif
+    print("  Peringatan: CETAK_TANPA_PERINGATAN -> tidak ada pop up/suara/thread, hanya log")
 
 
 if __name__ == "__main__":

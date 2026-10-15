@@ -121,6 +121,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -280,16 +281,18 @@ JEDA_ANTAR_CETAK_S = 0.5   # jeda antar print job, supaya spooler tidak kebanjir
 
 def _timeout_sumatra() -> int:
     """Batas tunggu SumatraPDF mengirim 1 dokumen ke spooler (detik). Bisa dinaikkan di PC
-    yang lemah lewat environment variable SUMATRA_TIMEOUT_S; nilai tidak valid -> 120."""
+    yang lemah lewat environment variable SUMATRA_TIMEOUT_S; nilai tidak valid -> 300 (5 menit)."""
     try:
-        nilai = int(os.environ.get("SUMATRA_TIMEOUT_S", "120"))
+        nilai = int(os.environ.get("SUMATRA_TIMEOUT_S", "300"))
     except ValueError:
-        return 120
-    return nilai if nilai > 0 else 120
+        return 300
+    return nilai if nilai > 0 else 300
 
 
 TIMEOUT_SUMATRA_S = _timeout_sumatra()
 TIMEOUT_POWERSHELL_S = 20
+TIMEOUT_MACET_JOB_S = 300      # job di antrean tanpa kemajuan halaman selama ini -> peringatan (pop up + suara)
+BUNYI_SEKALI_MAKS_S = 30       # lama suara peringatan sekali-bunyi (timeout SumatraPDF) kalau pop up tak ditutup
 TUNGGU_PRINTER_PULIH_S = 180   # tanpa konsol: tunggu printer pulih sebelum melewati 1 file
 PERCOBAAN_ULANG_CETAK = 2      # percobaan tambahan per file yang gagal (timeout/SumatraPDF error)
 JEDA_ULANG_CETAK_S = 5
@@ -586,6 +589,85 @@ def dukungan_pemantauan_job() -> bool:
     return "ADA" in out
 
 
+# ============================================================== 2b. peringatan cetak terhenti
+class Peringatan:
+    """Pop up Windows (selalu di atas) + suara peringatan berulang supaya operator sadar cetak
+    terhenti. Berjalan di thread terpisah - TIDAK memblokir proses cetak (kalau printer pulih
+    sendiri, cetak jalan terus dan `padamkan()` menutup pop up + menghentikan suara). Suara
+    berhenti saat pop up ditutup (OK), `padamkan()`, atau `bunyi_maks_s` habis. Nonaktif di
+    selain Windows dan kalau env CETAK_TANPA_PERINGATAN diisi (dipakai tes)."""
+
+    _nomor = 0
+    _kunci = threading.Lock()
+
+    def __init__(self, bunyi_maks_s: float | None = None):
+        self.bunyi_maks_s = bunyi_maks_s
+        self.aktif = False
+        self._judul = ""
+        self._berhenti = threading.Event()
+
+    @staticmethod
+    def _nonaktif() -> bool:
+        return sys.platform != "win32" or bool(os.environ.get("CETAK_TANPA_PERINGATAN"))
+
+    def nyalakan(self, teks: str) -> None:
+        """Tampilkan pop up + bunyikan suara. Panggilan ulang saat masih aktif diabaikan."""
+        if self.aktif:
+            return
+        self.aktif = True
+        log.warning("PERINGATAN CETAK TERHENTI: %s", teks.replace("\n", " | "))
+        if self._nonaktif():
+            return
+        with Peringatan._kunci:
+            Peringatan._nomor += 1
+            self._judul = f"PERINGATAN CETAK TERHENTI #{os.getpid()}-{Peringatan._nomor}"
+        self._berhenti.clear()
+        threading.Thread(target=self._popup, args=(teks,), daemon=True).start()
+        threading.Thread(target=self._bunyi, daemon=True).start()
+
+    def padamkan(self) -> None:
+        """Masalah selesai: tutup pop up (kalau masih terbuka) dan hentikan suara."""
+        if not self.aktif:
+            return
+        self.aktif = False
+        self._berhenti.set()
+        if self._nonaktif():
+            return
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.FindWindowW(None, self._judul)
+            if hwnd:
+                ctypes.windll.user32.PostMessageW(hwnd, 0x0010, 0, 0)   # WM_CLOSE
+        except Exception:
+            pass
+
+    def _popup(self, teks: str) -> None:
+        try:
+            import ctypes
+            # MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL | MB_SETFOREGROUND | MB_TOPMOST
+            ctypes.windll.user32.MessageBoxW(0, teks, self._judul, 0x0 | 0x30 | 0x1000 | 0x10000 | 0x40000)
+        except Exception:
+            pass
+        self._berhenti.set()   # operator menekan OK -> suara berhenti
+
+    def _bunyi(self) -> None:
+        try:
+            import winsound
+        except ImportError:
+            return
+        mulai = time.monotonic()
+        while not self._berhenti.is_set():
+            if self.bunyi_maks_s is not None and time.monotonic() - mulai > self.bunyi_maks_s:
+                return
+            try:
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                for nada in (880, 660, 880, 660):   # sirene naik-turun
+                    winsound.Beep(nada, 250)
+            except Exception:
+                return
+            self._berhenti.wait(1.0)
+
+
 # ============================================================== 3. cetak + pantau antrian
 def _job_ids(printer: str) -> set[str]:
     out = _ps(f"Get-PrintJob -PrinterName '{_esc_ps(printer)}' -ErrorAction SilentlyContinue "
@@ -608,6 +690,17 @@ def _job_info(printer: str, job_id: str) -> tuple[str, int, int] | None:
 
 def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str,
                        file: Path | None = None) -> bool:
+    """Pantau 1 print job (lihat _pantau_job). Selama job bermasalah/macet, pop up + suara
+    peringatan menyala; keduanya dipadamkan saat pemantauan selesai."""
+    alarm = Peringatan()
+    try:
+        return _pantau_job(printer, job_id, nama_file, file, alarm)
+    finally:
+        alarm.padamkan()
+
+
+def _pantau_job(printer: str, job_id: str, nama_file: str, file: Path | None,
+                alarm: Peringatan) -> bool:
     """Pantau 1 print job sampai selesai/hilang dari antrian. True = lanjut normal
     (selesai atau tidak ada masalah), False = file TIDAK selesai (user pilih "lewati" karena
     printer tetap bermasalah, atau job hilang dari antrian di tengah jalan sesudah printer
@@ -616,6 +709,8 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str,
     pernah_bermasalah = False
     batas_tunggu = None   # hanya dipakai tanpa konsol interaktif (lihat EOFError di bawah)
     dicetak = total = 0
+    terakhir_maju = time.monotonic()   # kapan halaman tercetak terakhir bertambah (deteksi macet)
+    macet_diperingatkan = False
 
     def belum_selesai() -> bool:
         if file is not None and total and dicetak < total:
@@ -630,16 +725,33 @@ def _tunggu_job_bersih(printer: str, job_id: str, nama_file: str,
                             nama_file, dicetak, total)
                 return belum_selesai()
             return True   # job sudah tidak ada di antrian -> selesai dicetak
-        status, dicetak, total = info[0], max(dicetak, info[1]), info[2] or total
+        status, dicetak_lama = info[0], dicetak
+        dicetak, total = max(dicetak, info[1]), info[2] or total
+        if dicetak > dicetak_lama:
+            terakhir_maju = time.monotonic()
+            if macet_diperingatkan:   # printer jalan lagi
+                macet_diperingatkan = False
+                alarm.padamkan()
         if any(k in status for k in STATUS_JOB_SELESAI):
             return True
         if not any(k in status for k in STATUS_JOB_BERMASALAH):
+            if (not alarm.aktif and not macet_diperingatkan
+                    and time.monotonic() - terakhir_maju > TIMEOUT_MACET_JOB_S):
+                macet_diperingatkan = True
+                alarm.nyalakan(
+                    f"Cetak {nama_file} di printer \"{printer}\" tidak ada kemajuan "
+                    f"lebih dari {TIMEOUT_MACET_JOB_S // 60} menit (status: {status}, "
+                    f"{dicetak}/{total} halaman).\nCek printer: kertas, kabel/jaringan, antrean cetak.")
+            elif alarm.aktif and not macet_diperingatkan:   # masalah printer tadi sudah pulih
+                alarm.padamkan()
             time.sleep(1)
             continue
         if not pernah_bermasalah:
             log.warning('Printer "%s" bermasalah saat mencetak %s (status job: %s)',
                        printer, nama_file, status)
             pernah_bermasalah = True
+        alarm.nyalakan(f'PRINTER BERMASALAH ({status}) saat mencetak {nama_file}\n'
+                       f'Printer: {printer}\n\nCek printer: kertas habis / macet / offline / kabel.')
         if batas_tunggu is not None:
             aksi = None   # sudah diketahui tanpa konsol: jangan cetak pesan/prompt berulang
         else:
@@ -757,6 +869,10 @@ def cetak(sumatra: Path, printer: str, file: Path, pantau: bool,
                 capture_output=True, text=True, timeout=TIMEOUT_SUMATRA_S)
         except subprocess.TimeoutExpired:
             _matikan_sumatra(sumatra, kirim)
+            Peringatan(bunyi_maks_s=BUNYI_SEKALI_MAKS_S).nyalakan(
+                f'CETAK TERHENTI: SumatraPDF tidak selesai dalam {TIMEOUT_SUMATRA_S} detik\n'
+                f'File: {file.name}\nPrinter: {printer}\n\n'
+                'Cek printer (offline / antrean macet). Program mencoba ulang otomatis.')
             if pantau and (_job_ids(printer) - sebelum):
                 # Sumatra sudah sempat mengirim ke spooler: jangan ulang (bisa tercetak dobel),
                 # cukup pantau job-nya seperti biasa.
@@ -799,6 +915,8 @@ def cetak_semua(sumatra: Path, printer: str, file_pdf: list[Path],
                 error = e
                 log.error("GAGAL cetak %s: %s", f.name, e)
         if error is not None:
+            Peringatan(bunyi_maks_s=BUNYI_SEKALI_MAKS_S).nyalakan(
+                f'CETAK GAGAL: {f.name}\nPrinter: {printer}\n\n{error}')
             gagal.append(f)
             continue
         durasi = time.monotonic() - mulai
