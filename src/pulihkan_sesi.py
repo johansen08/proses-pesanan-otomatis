@@ -70,3 +70,64 @@ def folder_pemulihan(folder_label: Path, tanggal: str) -> Path:
     folder = folder_tanggal / nama_sesi.nama_pemulihan(terbesar + 1)
     folder.mkdir()
     return folder
+
+
+POLA_WAKTU = re.compile(r"_(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})\d{2}\.pdf$", re.IGNORECASE)
+
+
+def _baca_excel_sesi(folder_sesi: Path) -> dict[int, dict]:
+    """{nomor picklist: {total, resi, catatan}} dari PICKLIST.xlsx sesi (kolom L, M, N, U); kosong kalau
+    file tidak ada/tak terbaca."""
+    file = folder_sesi / "PICKLIST.xlsx"
+    if not file.exists():
+        return {}
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(file, read_only=True, data_only=False)
+        hasil = {}
+        for baris in wb.worksheets[0].iter_rows(min_row=6, min_col=12, max_col=21, values_only=True):
+            nomor, total, resi, catatan = baris[0], baris[1], baris[2], baris[9]
+            if isinstance(nomor, int):
+                hasil[nomor] = {"total": total if isinstance(total, (int, float)) else None,
+                                "resi": resi if isinstance(resi, (int, float)) else None,
+                                "catatan": str(catatan) if catatan else ""}
+        wb.close()
+        return hasil
+    except Exception:       # noqa: BLE001 - tampilan status tidak boleh gagal karena Excel rusak/terbuka
+        return {}
+
+
+def status_sesi(folder_sesi: Path, sesi: str, file_jurnal: Path | None, terhenti: dict[str, str],
+                tanpa_resi: set[str]) -> dict:
+    """Satu sesi untuk tab Pulih: {no, jam, pl: [{no, sub, nama, total, resi, st, catatan}]}. Status dari data
+    LOKAL (tanpa Jubelio): terhenti (jurnal terhenti), pdf-hilang (tak ada PDF-nya), kurang (resi < total
+    di PICKLIST.xlsx / ada peringatan tanpa resi), selain itu ok."""
+    daftar = daftar_picklist(file_jurnal, folder_sesi, sesi)
+    excel = _baca_excel_sesi(folder_sesi)
+    pdf = {m.group(1) for f in folder_sesi.rglob("*.pdf") if (m := re.match(r"^(PICK-\d+)_", f.name))}
+    waktu = [m.groups() for f in folder_sesi.rglob("*.pdf") if (m := POLA_WAKTU.search(f.name))]
+    jam = min((f"{h}.{mnt}" for _, h, mnt in waktu), default="--.--")
+    pl = []
+    for no, v in daftar.items():
+        angka = int(no.replace("PICK-", ""))
+        x = excel.get(angka, {})
+        total, resi = x.get("total"), x.get("resi")
+        st, catatan = "ok", x.get("catatan", "")[:160]
+        if no in terhenti:
+            st, catatan = "terhenti", terhenti[no]
+        elif no not in pdf:
+            st, catatan = "pdf-hilang", "File PDF tidak ada di folder sesi"
+        elif no in tanpa_resi or (total is not None and resi is not None and resi < total):
+            st = "kurang"
+        pl.append({"no": no, "sub": v.get("tag") or v.get("subfolder") or "(sesi)", "nama": v.get("nama") or "",
+                   "total": total, "resi": resi, "st": st, "catatan": catatan})
+    return {"no": folder_sesi.name, "jam": jam, "pl": pl}
+
+
+def asal_pemulihan(folder_pemulihan: Path) -> str | None:
+    """"YYYY-MM-DD/N" sesi asal folder N-PEMULIHAN dari penanda pulihan.json (None kalau tak ada/rusak)."""
+    import json
+    try:
+        return json.loads((folder_pemulihan / nama_sesi.NAMA_PENANDA_PULIHAN).read_text(encoding="utf-8"))["asal"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None

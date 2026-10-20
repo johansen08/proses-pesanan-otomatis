@@ -38,6 +38,12 @@ API (JSON):
                                  pilah/proses harian/download ulang masih berjalan; 400 kalau sebagian PDF sudah
                                  dikurasi ke folder hasil lain)
   GET  /api/pilah/job            status, baris log, kemajuan, dan "hasil" (ringkasan JSON) job pilah terakhir
+  GET  /api/pulih/sesi           sesi bernomor biasa 3 hari terakhir + status tiap picklist (data lokal) + nama folder
+                                 pemulihan berikutnya (`berikut`)
+  POST /api/pulih/cek            {"tanggal": "YYYY-MM-DD", "sesi": "10"} -> `main.py --pulihkan-sesi` MODE UJI (hanya membaca Jubelio)
+  POST /api/pulih/jalankan       sama, SUNGGUHAN (`--jalankan`): ulang resi/PDF/Excel SELURUH picklist sesi ke folder
+                                 baru N-PEMULIHAN (409 kalau pemulihan/proses harian/download ulang/pilah berjalan)
+  GET  /api/pulih/job            status, kemajuan, `hasil` per picklist, `folder` tujuan, baris log
   GET  /api/operator             {"aktif", "daftar", "terkunci"} (terkunci = proses harian/download ulang jalan)
   POST /api/operator             {"aksi": "tambah"|"aktif", "nama": "..."} (ganti operator aktif -> 409
                                  kalau proses harian/download ulang berjalan; lihat operator_aktif.py)
@@ -486,6 +492,122 @@ def mulai_pilah(data: dict, mode: str) -> None:
         threading.Thread(target=_kerjakan_pilah, args=(_pilah, perintah), daemon=True).start()
 
 
+# ---------------------------------------------------------------- pemulihan sesi (tab Pulih)
+_pulih: dict | None = None        # job pemulihan terakhir (satu sekaligus)
+
+
+def data_pulih(hari_ini: date | None = None) -> dict:
+    """Sesi bernomor biasa HARI_UI hari terakhir + status tiap picklist (data LOKAL: jurnal, PICKLIST.xlsx, PDF -
+    lihat pulihkan_sesi.status_sesi). `berikut` = nama folder pemulihan yang akan dibuat untuk tanggal itu."""
+    import peringatan_gagal
+    import peringatan_resi
+    import pulihkan_sesi
+    hari_ini = hari_ini or date.today()
+    peringatan_gagal.atur_folder(jh.FOLDER_LOG)
+    peringatan_resi.atur_folder(jh.FOLDER_LOG)
+    terhenti = {d["picklist"]: d.get("alasan") or "Terhenti" for d in peringatan_gagal.daftar_terhenti()}
+    tanpa_resi = {p for p in peringatan_resi.baca_target(HARI_UI)}
+    jurnal = jh.FOLDER_LOG / "picklist_terhenti.jsonl"
+    per_tanggal: dict[str, list[dict]] = {}
+    for folder in ps.daftar_folder_sesi(ps.FOLDER_LABEL, HARI_UI, hari_ini):
+        if not folder.name.isdigit():
+            continue
+        sesi = f"{folder.parent.name}/{folder.name}"
+        info = pulihkan_sesi.status_sesi(folder, sesi, jurnal, terhenti, tanpa_resi)
+        if not info["pl"]:
+            continue
+        info["pemulihan"] = sorted(d.name for d in folder.parent.iterdir()
+                                   if d.is_dir() and d.name.endswith("-" + nama_sesi.SUFIKS_PEMULIHAN)
+                                   and pulihkan_sesi.asal_pemulihan(d) == sesi)
+        per_tanggal.setdefault(folder.parent.name, []).append(info)
+    hasil = []
+    for t in sorted(per_tanggal):
+        terbesar = max((nama_sesi.nomor_sesi(d.name) or 0 for d in (ps.FOLDER_LABEL / t).iterdir() if d.is_dir()),
+                       default=0)
+        hasil.append({"tanggal": t, "berikut": nama_sesi.nama_pemulihan(terbesar + 1), "sesi": per_tanggal[t]})
+    return {"hari_ini": hari_ini.isoformat(), "hari": hasil}
+
+
+def info_pulih() -> dict:
+    j = _pulih
+    if not j:
+        return {"status": "kosong", "lines": []}
+    return dict(j)
+
+
+def mulai_pulih(data: dict, mode: str) -> None:
+    """Jalankan `main.py --pulihkan-sesi <tanggal>/<sesi> [--jalankan]` (proses terpisah). mode "cek" = mode uji
+    (hanya membaca Jubelio), "jalankan" = SUNGGUHAN (mengubah data di Jubelio, menulis folder N-PEMULIHAN).
+    ValueError = pilihan tidak valid, RuntimeError = proses lain masih berjalan."""
+    global _pulih
+    tanggal, sesi = data.get("tanggal"), data.get("sesi")
+    if not isinstance(tanggal, str) or not POLA_TANGGAL.match(tanggal):
+        raise ValueError("tanggal harus YYYY-MM-DD")
+    if not isinstance(sesi, str) or not sesi.isdigit():
+        raise ValueError("sesi harus nomor sesi biasa (mis. \"10\")")
+    folder = ps.FOLDER_LABEL / tanggal / str(int(sesi))
+    if not folder.is_dir():
+        raise ValueError(f"Sesi {tanggal}/{sesi} tidak ada")
+    import pulihkan_sesi
+    daftar = pulihkan_sesi.daftar_picklist(jh.FOLDER_LOG / "picklist_terhenti.jsonl", folder,
+                                           f"{tanggal}/{int(sesi)}")
+    if not daftar:
+        raise ValueError("Sesi itu tidak punya picklist yang bisa dipulihkan")
+    perintah = [sys.executable, str(ROOT / "src" / "main.py"), "--pulihkan-sesi", f"{tanggal}/{int(sesi)}"]
+    if mode == "jalankan":
+        perintah.append("--jalankan")
+    with _kunci:
+        if _pulih and _pulih["status"] == "jalan":
+            raise RuntimeError("Pemulihan sebelumnya masih berjalan")
+        if jh.keadaan()["status"] == "jalan" or (_lanjut and _lanjut["status"] == "jalan") \
+                or (_pilah and _pilah["status"] == "jalan"):
+            raise RuntimeError("Masih ada proses harian / download ulang / pilah yang berjalan - tunggu selesai")
+        _pulih = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal, "sesi": str(int(sesi)),
+                  "lines": [], "total": len(daftar), "maju": 0, "now": "", "hasil": {}, "folder": None, "kode": None}
+        threading.Thread(target=_kerjakan_pulih, args=(_pulih, perintah), daemon=True).start()
+
+
+_POLA_PULIH_OK = re.compile(r"^\s*OK (PICK-\d+): resi (\d+)/(\d+)(?: - belum dapat resi: (.*))?$")
+_POLA_PULIH_CEK = re.compile(r"^\s*CEK (PICK-\d+): kini (\d+)/(\d+)")
+_POLA_PULIH_GAGAL = re.compile(r"^\s*GAGAL (PICK-\d+): (.*)$")
+
+
+def _baris_pulih(job: dict, baris: str) -> None:
+    """Baca satu baris keluaran main.py --pulihkan-sesi: kemajuan, hasil per picklist, folder tujuan."""
+    m = re.search(r"=== Pulihkan (PICK-\d+)", baris)
+    if m:
+        job["now"] = baris[baris.index("PICK-"):]
+        return
+    if (m := _POLA_PULIH_OK.match(baris)):
+        resi, total = int(m.group(2)), int(m.group(3))
+        job["hasil"][m.group(1)] = {"resi": resi, "total": total, "sisa": total - resi}
+        job["maju"] += 1
+    elif (m := _POLA_PULIH_CEK.match(baris)):
+        job["hasil"][m.group(1)] = {"kini": int(m.group(2)), "total": int(m.group(3))}
+        job["maju"] += 1
+    elif (m := _POLA_PULIH_GAGAL.match(baris)):
+        job["hasil"][m.group(1)] = {"gagal": m.group(2)}
+        job["maju"] += 1
+    elif "Hasil pemulihan ke folder:" in baris:
+        job["folder"] = Path(baris.split("folder:", 1)[1].strip()).name
+
+
+def _kerjakan_pulih(job: dict, perintah: list[str]) -> None:
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+    try:
+        p = jh._luncurkan(perintah, env)
+        for baris in p.stdout:
+            baris = baris.rstrip()
+            _baris_pulih(job, baris)
+            job["lines"].append(baris)
+            del job["lines"][:-BARIS_LOG_MAKS]
+        job["kode"] = p.wait()
+    except OSError as e:
+        job["lines"].append(f"GAGAL menjalankan: {e}")
+        job["kode"] = -1
+    job["status"] = "selesai" if job["kode"] == 0 else "gagal"
+
+
 def _kerjakan_pilah(job: dict, perintah: list[str]) -> None:
     import pilah_satuan as pl
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
@@ -580,6 +702,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._kirim(200, data_pilah())
             if url.path == "/api/pilah/job":
                 return self._kirim(200, info_pilah())
+            if url.path == "/api/pulih/sesi":
+                return self._kirim(200, data_pulih())
+            if url.path == "/api/pulih/job":
+                return self._kirim(200, info_pulih())
             if url.path == "/api/operator":
                 return self._kirim(200, info_operator())
             if url.path == "/api/sebagian":
@@ -602,7 +728,7 @@ class Handler(BaseHTTPRequestHandler):
         # wajib JSON: form lintas-situs tidak bisa mengirim tipe ini tanpa preflight CORS
         if self.path not in ("/api/cetak", "/api/harian/jalankan", "/api/harian/hentikan",
                              "/api/terhenti/jalankan", "/api/operator", "/api/sebagian/lanjut",
-                             "/api/pilah/analisis", "/api/pilah/buat") \
+                             "/api/pilah/analisis", "/api/pilah/buat", "/api/pulih/cek", "/api/pulih/jalankan") \
                 or "application/json" not in (self.headers.get("Content-Type") or ""):
             return self._kirim(404, {"error": "tidak ada"})
         try:
@@ -612,6 +738,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._kirim(200, ubah_operator(data.get("aksi"), data.get("nama")))
                 except oa.OperatorError as e:
                     return self._kirim(400, {"error": str(e)})
+            if self.path in ("/api/pulih/cek", "/api/pulih/jalankan"):
+                try:
+                    mulai_pulih(data, self.path.rsplit("/", 1)[1])
+                except ValueError as e:
+                    return self._kirim(400, {"error": str(e)})
+                return self._kirim(200, {"mulai": True})
             if self.path in ("/api/pilah/analisis", "/api/pilah/buat"):
                 try:
                     mulai_pilah(data, self.path.rsplit("/", 1)[1])

@@ -204,6 +204,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   **Pilah satuan bisa memakai `N-PEMULIHAN`** (kode sesi `11P`, mis. `--sesi 1-2-11P`; UI mengirim kode itu): berguna kalau satuan sesi N tidak lengkap. Syarat jendela
   jam dinilai dari jam proses sesi ASAL (penanda `pulihan.json` di folder pemulihan), sesi N dan `NP` tidak boleh dipilih bersamaan (resi sama), tanpa `--sesi`
   pemulihan menggantikan sesi asalnya. Folder hasil: `SPESIAL-SATUAN-<kode>` (mis. `-11P`).
+  **UI tab Pulih (tersambung ke data nyata)**: `GET /api/pulih/sesi` (status tiap picklist dari data LOKAL: jurnal terhenti, `PICKLIST.xlsx`, PDF, peringatan tanpa resi),
+  `POST /api/pulih/cek|jalankan` (= `main.py --pulihkan-sesi` mode uji / sungguhan, proses terpisah, satu job sekaligus, 409 bila harian/download ulang/pilah berjalan),
+  `GET /api/pulih/job` (kemajuan, hasil per picklist `OK/CEK/GAGAL`, folder tujuan). Mode uji membaca Jubelio lewat `proses_label.cek_picklist()` (perkiraan resi sekarang).
   Tanpa `--jalankan` hanya melapor (folder tidak dibuat). Satu picklist gagal tidak menghentikan yang lain (exit 1 di akhir).
 - `src/peringatan_sisa.py` — penjaga "pesanan tak tersentuh" (insiden 2026-10-09: 2 resi wajib keluar,
   channel Tokopedia asli `TP-...` id 128 & kurir JNE, tidak pernah masuk picklist apa pun TANPA peringatan).

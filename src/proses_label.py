@@ -2394,6 +2394,20 @@ def resi_susulan(k: Klien, target: dict[str, list[str]], folder_tujuan: Path,
     return hasil
 
 
+def cek_picklist(k: Klien, picklist_no: str) -> tuple[int, int]:
+    """(total pesanan, yang sudah punya resi) picklist sekarang di Jubelio - HANYA membaca (mode uji
+    pemulihan). Pesanan yang sudah tidak ada di Picking > Selesai dianggap sudah punya resi
+    (sudah lanjut ke pengiriman), jadi angkanya perkiraan; `pulihkan_picklist` yang menentukan sungguhan."""
+    m = re.fullmatch(r"PICK-0*(\d+)", picklist_no.strip().upper())
+    if not m:
+        raise ProsesError(f"Format nomor picklist tidak dikenal: {picklist_no}")
+    p = k.get(f"sales/picklists/{int(m.group(1))}")
+    ids = {i["salesorder_id"] for i in p["items"]}
+    baris = {o["salesorder_id"]: o for o in _pesanan_picklist(k, p["picklist_no"]).values()}
+    ada = sum(1 for i in ids if i not in baris or _ada_resi(baris[i]))
+    return len(ids), ada
+
+
 def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
                       nama: str | None = None, tag: str | None = None,
                       subfolder: str | None = None) -> dict:

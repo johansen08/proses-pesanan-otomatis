@@ -184,6 +184,67 @@ def uji_server_ui_pilah_sesi_pemulihan():
     print("  server_ui pilah: sesi N-PEMULIHAN tampil (kode 11P), jam dari sesi asal, tidak bersamaan dengan sesi asalnya")
 
 
+def uji_server_ui_pulih_status_dan_job():
+    import json as _json
+    import peringatan_gagal
+    import peringatan_resi
+    hari_ini = date.today()
+    tgl = hari_ini.isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        log_dir = Path(tmp) / "logs"
+        log_dir.mkdir()
+        sesi = label / tgl / "10"
+        _buat(sesi / "SPESIAL", f"PICK-000000001_SPESIAL_A_{tgl}_172147.pdf", f"PICK-000000002_SPESIAL_B_{tgl}_172150.pdf")
+        _buat(sesi / "SATUAN", f"PICK-000000004_1QTY-REGULER-2A_{tgl}_172200.pdf")
+        (log_dir / "picklist_terhenti.jsonl").write_text("\n".join(_json.dumps(d) for d in [
+            {"op": "dibuat", "picklist": "PICK-000000003", "nama": "C", "tag": "SPESIAL", "subfolder": None, "sesi": f"{tgl}/10"},
+            {"op": "tambah", "picklist": "PICK-000000003", "nama": "C", "tag": "SPESIAL", "subfolder": None, "sesi": f"{tgl}/10",
+             "alasan": "timeout", "epoch": 9e12}]) + "\n", encoding="utf-8")
+        peringatan_resi.atur_folder(log_dir)
+        peringatan_resi.catat_tanpa_resi("PICK-000000002", "B", ["SP-1", "SP-2"])
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(su.jh, "FOLDER_LOG", log_dir):
+            d = su.data_pulih(hari_ini)
+            h = d["hari"][0]
+            assert h["tanggal"] == tgl and h["berikut"] == "11-PEMULIHAN", h
+            st = {p["no"]: p["st"] for p in h["sesi"][0]["pl"]}
+            assert st == {"PICK-000000001": "ok", "PICK-000000002": "kurang", "PICK-000000003": "terhenti",
+                          "PICK-000000004": "ok"}, st
+            for salah in ({"tanggal": "x", "sesi": "10"}, {"tanggal": tgl, "sesi": "10P"}, {"tanggal": tgl, "sesi": "99"}):
+                try:
+                    su.mulai_pulih(salah, "cek")
+                    assert False, salah
+                except ValueError:
+                    pass
+            # keluaran main.py dibaca jadi kemajuan, hasil per picklist, folder tujuan
+            keluaran = ["=== Pulihkan PICK-000000001 (A)", "  OK PICK-000000001: resi 3/3",
+                        "=== Pulihkan PICK-000000002 (B)", "  OK PICK-000000002: resi 1/3 - belum dapat resi: SP-1, SP-2",
+                        "  GAGAL PICK-000000004: boom", "Hasil pemulihan ke folder: C:\\x\\" + tgl + "\\11-PEMULIHAN"]
+            diluncurkan = []
+
+            def luncur(argumen, env):
+                diluncurkan.append(argumen)
+                return subprocess.Popen([sys.executable, "-c", "print(" + repr("\n".join(keluaran)) + ")"],
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+            with mock.patch.object(su.jh, "_luncurkan", luncur), \
+                    mock.patch.object(su.jh, "keadaan", return_value={"status": "kosong"}):
+                su.mulai_pulih({"tanggal": tgl, "sesi": "10"}, "jalankan")
+                assert "--jalankan" in diluncurkan[0] and f"{tgl}/10" in diluncurkan[0]
+                for _ in range(100):
+                    j = su.info_pulih()
+                    if j["status"] != "jalan":
+                        break
+                    time.sleep(0.05)
+                assert j["status"] == "selesai" and j["maju"] == 3 and j["folder"] == "11-PEMULIHAN", j
+                assert j["hasil"]["PICK-000000002"] == {"resi": 1, "total": 3, "sisa": 2}
+                assert j["hasil"]["PICK-000000004"] == {"gagal": "boom"}
+                su.mulai_pulih({"tanggal": tgl, "sesi": "10"}, "cek")
+                assert "--jalankan" not in diluncurkan[1]
+    peringatan_resi._file_peringatan = None
+    peringatan_gagal._file_peringatan = None
+    print("  server_ui pulih: status picklist dari data lokal, validasi, job membaca hasil per picklist & folder tujuan")
+
+
 def uji_server_ui_endpoint_harian():
     import jalankan_harian as jh
 

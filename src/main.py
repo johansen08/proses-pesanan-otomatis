@@ -1029,10 +1029,13 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
             json.dumps({"asal": args.pulihkan_sesi}), encoding="utf-8")
     for no, v in daftar.items():
         if not args.jalankan:
-            p = k.get(f"sales/picklists/{int(no.replace('PICK-', ''))}")
-            log.info("  %s (%s): %d pesanan, is_completed=%s", no, v["nama"],
-                     len({i['salesorder_id'] for i in p['items']}), p.get("is_completed"))
+            try:
+                total, ada = proses_label.cek_picklist(k, no)
+                log.info("  CEK %s: kini %d/%d (%s)", no, ada, total, v["nama"])
+            except Exception as e:      # noqa: BLE001 - picklist lain tetap dicek
+                log.error("  GAGAL %s: %s", no, e)
             continue
+        log.info("=== Pulihkan %s (%s)", no, v["nama"])
         try:
             baris = proses_label.pulihkan_picklist(
                 k, no, tujuan, FILE_RIWAYAT, nama=v["nama"], tag=v["tag"],
