@@ -162,6 +162,28 @@ def uji_server_ui_sesi_pemulihan_tampil_di_menu_cetak():
     print("  server_ui: folder N-PEMULIHAN tampil sebagai sesi tersendiri di menu Cetak & dianggap sesi terbaru")
 
 
+def uji_server_ui_pilah_sesi_pemulihan():
+    import json as _json
+    import pilah_satuan as pl
+    hari_ini = date.today()
+    tgl = hari_ini.isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        _buat(label / tgl / "11" / "SATUAN", f"PICK-000000002_1QTY-REGULER-2A_{tgl}_072000.pdf")
+        _buat(label / tgl / "11-PEMULIHAN" / "SATUAN", f"PICK-000000002_1QTY-REGULER-2A_{tgl}_180000.pdf")
+        (label / tgl / "11-PEMULIHAN" / "pulihan.json").write_text(_json.dumps({"asal": f"{tgl}/11"}), encoding="utf-8")
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(pl, "MASA_TENANG_S", 0):
+            sesi = su.data_pilah(hari_ini)["hari"][0]["sesi"]
+            assert [(x["no"], x["kode"], x.get("judul"), x["layak"]) for x in sesi] ==                 [(11, "11", None, True), (11, "11P", "11-PEMULIHAN", True)], sesi
+            # sesi N dan N-PEMULIHAN-nya tidak boleh dipilih bersamaan (resi sama)
+            try:
+                su.mulai_pilah({"tanggal": tgl, "sesi": ["11", "11P"], "min_resi": 3}, "analisis")
+                assert False
+            except ValueError as e:
+                assert "pilih salah satu" in str(e), e
+    print("  server_ui pilah: sesi N-PEMULIHAN tampil (kode 11P), jam dari sesi asal, tidak bersamaan dengan sesi asalnya")
+
+
 def uji_server_ui_endpoint_harian():
     import jalankan_harian as jh
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import nama_sesi
 import util_umum
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -82,8 +83,8 @@ def daftar_hasil(folder_sesi: Path, awalan: str) -> list[Path]:
     tanggal itu (cetak bulk bekerja per folder sesi; dengan begitu satu folder hasil tidak muncul
     berulang di --semua-sesi). Urut nama file. Kosong kalau bukan sesi terakhir / tidak ada."""
     folder_tanggal = folder_sesi.parent
-    sesi = [d for d in folder_tanggal.iterdir() if d.is_dir() and d.name.isdigit()]
-    if not sesi or folder_sesi.name != max(sesi, key=lambda d: int(d.name)).name:
+    sesi = [d for d in folder_tanggal.iterdir() if d.is_dir() and nama_sesi.urutan_sesi(d.name) is not None]
+    if not sesi or folder_sesi.name != max(sesi, key=lambda d: nama_sesi.urutan_sesi(d.name)).name:
         return []
     hasil = []
     for d in sorted(folder_tanggal.glob(f"{awalan}-*")):

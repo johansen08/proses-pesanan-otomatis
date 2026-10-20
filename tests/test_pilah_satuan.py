@@ -122,6 +122,46 @@ def uji_hanya_sesi_diproses_0700_1200_dan_2000_0700():
     print("  sesi boleh 07.00-12.00 & 20.00-07.00 (lewat tengah malam), 12.01-19.59 & tanpa cap waktu ditolak; --abaikan-jendela untuk uji")
 
 
+def uji_sesi_pemulihan_dipakai_pilah_dengan_jam_sesi_asal():
+    assert ps.parse_sesi("1-2-11P") == ["1", "2", "11P"] and ps.parse_sesi("11-PEMULIHAN") == ["11P"]
+    assert ps.parse_sesi("11p-3") == ["3", "11P"]
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+
+        def sesi(nama, jam, picklist, tanggal="2026-10-19"):
+            f = tmp / nama / "SATUAN"
+            f.mkdir(parents=True)
+            _pdf_label(f / f"PICK-{picklist:09d}_1QTY-REGULER-2A_{tanggal}_{jam}.pdf", [("O" + nama, "R" + nama)])
+        sesi("10", "170000", 1)                 # sore: di luar jendela
+        sesi("11", "072000", 2)                 # pagi: boleh
+        sesi("11-PEMULIHAN", "180000", 2)       # dibuat ulang sore hari
+        assert not ps.periksa_sesi(tmp / "11-PEMULIHAN")[0], "tanpa penanda: jam pemulihan (sore) dipakai -> ditolak"
+        (tmp / "11-PEMULIHAN" / "pulihan.json").write_text(json.dumps({"asal": "2026-10-19/11"}), encoding="utf-8")
+        # penanda menunjuk folder <tanggal>/<asal>: letakkan sesi di folder tanggal sungguhan
+        tgl = tmp.parent / "2026-10-19"
+        assert ps.sesi_asal(tmp / "11-PEMULIHAN") == tmp / "11-PEMULIHAN", "asal tidak ada di bawah folder tanggal -> diri sendiri"
+    with tempfile.TemporaryDirectory() as d:
+        tgl = Path(d) / "2026-10-19"
+        for nama, jam, pk in (("10", "170000", 1), ("11", "072000", 2), ("11-PEMULIHAN", "180000", 2)):
+            f = tgl / nama / "SATUAN"
+            f.mkdir(parents=True)
+            _pdf_label(f / f"PICK-{pk:09d}_1QTY-REGULER-2A_2026-10-19_{jam}.pdf", [("O" + nama, "R" + nama)])
+        (tgl / "11-PEMULIHAN" / "pulihan.json").write_text(json.dumps({"asal": "2026-10-19/11"}), encoding="utf-8")
+        assert ps.sesi_asal(tgl / "11-PEMULIHAN") == tgl / "11"
+        assert ps.periksa_sesi(tgl / "11-PEMULIHAN")[0], "jendela dinilai dari jam proses sesi ASAL (07.20)"
+        assert not ps.periksa_sesi(tgl / "10")[0]
+        pdfs, kode = ps.pdf_terpilih(tgl, ["11P"])
+        assert kode == ["11P"] and [f.parent.parent.name for f in pdfs] == ["11-PEMULIHAN"]
+        assert ps.nama_sesi(pdfs) == "11P"
+        try:
+            ps.pdf_terpilih(tgl, ["11", "11P"])
+            assert False, "sesi dan pemulihannya tidak boleh dipilih bersamaan"
+        except ps.SesiTidakValid as e:
+            assert "pilih salah satu" in str(e), e
+        assert ps.pdf_terpilih(tgl)[1] == ["11P"], "tanpa --sesi: pemulihan menggantikan sesi asalnya"
+    print("  pilah: sesi N-PEMULIHAN (kode 11P) bisa dipilah, jendela jam dari sesi asal, tidak bersamaan dengan sesi asalnya")
+
+
 def uji_resi_kurir_lain_tidak_dihitung_spesial():
     baris = [{"sku": "X", "resi": f"R{i}", "pesanan": f"O{i}", "kurir": "J&T Express Standard" if i < 2 else "SPX Hemat"}
              for i in range(2)] + [{"sku": "X", "resi": "R9", "pesanan": "O9", "kurir": "SiCepat Reguler"}]

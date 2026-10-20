@@ -40,6 +40,7 @@ from openpyxl import Workbook
 from pypdf import PdfReader, PdfWriter
 
 import kurasi_satuan
+import nama_sesi as pola_sesi
 import proses_label
 from sku_spesial import AWALAN_SKU_DIKECUALIKAN_SPESIAL, KURIR_DIIZINKAN, MIN_RESI
 
@@ -73,10 +74,11 @@ def parse_sesi(teks: str | None) -> list[str] | None:
     """"1-2-3" / "1,2,3" / "1 2 3" -> ["1", "2", "3"] (unik, urut); kosong -> None (semua sesi)."""
     if not teks or not teks.strip():
         return None
-    bagian = [b for b in re.split(r"[-,\s]+", teks.strip()) if b]
-    if not all(b.isdigit() for b in bagian):
-        raise ValueError(f"Sesi harus angka dipisah '-' atau ',': {teks!r}")
-    return sorted({str(int(b)) for b in bagian}, key=int)
+    bagian = [b for b in re.split(r"[-,\s]+", teks.strip().upper().replace("-PEMULIHAN", "P")) if b]
+    if not all(pola_sesi.POLA_KODE.match(b.upper()) for b in bagian):
+        raise ValueError(f"Sesi harus angka (P di belakang = folder N-PEMULIHAN) dipisah '-' atau ',': {teks!r}")
+    return sorted({f"{int(b.rstrip('Pp'))}{'P' if b.upper().endswith('P') else ''}" for b in bagian},
+                  key=pola_sesi.urutan_kode)
 
 
 class SesiTidakValid(ValueError):
@@ -119,6 +121,19 @@ def waktu_mulai_sesi(folder_sesi: Path) -> datetime | None:
     return min(waktu) if waktu else None
 
 
+def sesi_asal(folder_sesi: Path) -> Path:
+    """Folder N-PEMULIHAN dibuat ulang di jam pemulihan, padahal syarat jendela jam menyangkut kapan sesi
+    ASALNYA diproses (satuan gabungan J&T + SPX hanya dari proses pagi/malam). Penanda `pulihan.json`
+    ({"asal": "YYYY-MM-DD/N"}, ditulis main.py --pulihkan-sesi) menunjuk sesi asal; tanpa penanda =
+    folder itu sendiri."""
+    try:
+        asal = json.loads((folder_sesi / pola_sesi.NAMA_PENANDA_PULIHAN).read_text(encoding="utf-8"))["asal"]
+        folder = folder_sesi.parent.parent / asal
+        return folder if folder.is_dir() else folder_sesi
+    except (OSError, ValueError, KeyError, TypeError):
+        return folder_sesi
+
+
 def pdf_satuan_gabungan(folder_sesi: Path) -> list[Path]:
     """PDF di subfolder `SATUAN` persis (gabungan J&T + SPX) sebuah sesi."""
     return [f for f in (folder_sesi / FOLDER_SATUAN_GABUNG).glob("*.pdf") if POLA_PICK.match(f.name)]
@@ -141,7 +156,7 @@ def periksa_sesi(folder_sesi: Path, abaikan_jendela: bool = False) -> tuple[bool
         return False, f"Sesi masih menulis label ({int(umur)} detik lalu) - tunggu proses selesai"
     if abaikan_jendela:
         return True, None
-    mulai = waktu_mulai_sesi(folder_sesi)
+    mulai = waktu_mulai_sesi(sesi_asal(folder_sesi)) or waktu_mulai_sesi(folder_sesi)
     if mulai is None:
         return False, "Waktu proses sesi tidak diketahui"
     menit = mulai.hour * 60 + mulai.minute
@@ -157,10 +172,16 @@ def pdf_terpilih(folder_tanggal: Path, sesi: list[str] | None = None,
     if sesi:
         kandidat = sesi
     else:
-        kandidat = sorted((d.name for d in folder_tanggal.iterdir() if d.is_dir() and d.name.isdigit()), key=int)
+        kandidat = sorted((k for d in folder_tanggal.iterdir() if d.is_dir() and (k := pola_sesi.kode_sesi(d.name))),
+                          key=pola_sesi.urutan_kode)
+    ganda = sorted({k for k in kandidat if k.endswith("P") and k[:-1] in kandidat}, key=pola_sesi.urutan_kode)
+    if sesi and ganda:   # sesi asal + hasil pemulihannya berisi resi yang sama -> dobel
+        raise SesiTidakValid("Sesi " + ", ".join(f"{k[:-1]} dan {k}" for k in ganda) +
+                             ": pilih salah satu (N-PEMULIHAN berisi ulang semua picklist sesi N)")
+    kandidat = [k for k in kandidat if k not in {g[:-1] for g in ganda}] if not sesi else kandidat
     layak, ditolak = [], []
     for nomor in kandidat:
-        ok, alasan = periksa_sesi(folder_tanggal / nomor, abaikan_jendela)
+        ok, alasan = periksa_sesi(folder_tanggal / pola_sesi.folder_dari_kode(nomor), abaikan_jendela)
         (layak if ok else ditolak).append(nomor if ok else (nomor, alasan))
     if sesi and ditolak:
         raise SesiTidakValid("; ".join(f"Sesi {n}: {a}" for n, a in ditolak))
@@ -173,7 +194,8 @@ def pdf_terpilih(folder_tanggal: Path, sesi: list[str] | None = None,
 def cari_pdf_satuan(folder_tanggal: Path, sesi: list[str] | None = None) -> list[Path]:
     """PDF di subfolder `SATUAN` (gabungan J&T + SPX) sesi terpilih (default semua sesi), urut
     nomor PICK. Varian per kurir (JNT_SATUAN dst) TIDAK ikut."""
-    pola = [f"{s}/{FOLDER_SATUAN_GABUNG}/*.pdf" for s in sesi] if sesi else [f"*/{FOLDER_SATUAN_GABUNG}/*.pdf"]
+    pola = ([f"{pola_sesi.folder_dari_kode(s)}/{FOLDER_SATUAN_GABUNG}/*.pdf" for s in sesi] if sesi
+            else [f"*/{FOLDER_SATUAN_GABUNG}/*.pdf"])
     hasil = [f for p in pola for f in folder_tanggal.glob(p) if POLA_PICK.match(f.name)]
     return sorted(hasil, key=lambda f: int(POLA_PICK.match(f.name).group(1)))
 
@@ -307,7 +329,8 @@ def urutan_spesial(layak: dict[str, list[dict]]) -> list[tuple[str, list[dict]]]
 
 def nama_sesi(pdfs: list[Path]) -> str:
     """Sesi yang benar-benar dipakai, mis. "1-2-3" (dari nama folder sesi PDF)."""
-    return "-".join(sorted({f.parent.parent.name for f in pdfs}, key=lambda n: (not n.isdigit(), int(n) if n.isdigit() else 0, n)))
+    kode = {pola_sesi.kode_sesi(f.parent.parent.name) or f.parent.parent.name for f in pdfs}
+    return "-".join(sorted(kode, key=lambda n: (pola_sesi.POLA_KODE.match(n) is None, pola_sesi.urutan_kode(n), n)))
 
 
 def tulis_excel(folder: Path, layak: dict[str, list[dict]], sesi: str) -> Path:

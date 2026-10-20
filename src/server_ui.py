@@ -417,9 +417,11 @@ def data_pilah(hari_ini: date | None = None) -> dict:
         if not pdfs:
             continue
         layak, alasan = pl.periksa_sesi(folder)
-        mulai = pl.waktu_mulai_sesi(folder) or datetime.fromtimestamp(min(f.stat().st_mtime for f in pdfs))
+        mulai = (pl.waktu_mulai_sesi(pl.sesi_asal(folder)) or pl.waktu_mulai_sesi(folder)
+                 or datetime.fromtimestamp(min(f.stat().st_mtime for f in pdfs)))
         per_tanggal.setdefault(folder.parent.name, []).append({
-            "no": int(folder.name), "picklist": len(pdfs), "label": sum(_jumlah_halaman(f) for f in pdfs),
+            "no": nama_sesi.nomor_sesi(folder.name), "kode": nama_sesi.kode_sesi(folder.name),
+            **({} if folder.name.isdigit() else {"judul": folder.name}), "picklist": len(pdfs), "label": sum(_jumlah_halaman(f) for f in pdfs),
             "jam": mulai.strftime("%H.%M"), "layak": layak, "alasan": alasan})
     return {"hari_ini": hari_ini.isoformat(),
             "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
@@ -443,16 +445,20 @@ def mulai_pilah(data: dict, mode: str) -> None:
         raise ValueError("tanpa_pdf harus true/false")
     if not isinstance(tanggal, str) or not POLA_TANGGAL.match(tanggal):
         raise ValueError("tanggal harus YYYY-MM-DD")
-    if not isinstance(sesi, list) or not sesi or not all(isinstance(x, str) and x.isdigit() for x in sesi):
-        raise ValueError("sesi harus daftar nomor (mis. [\"1\", \"2\"])")
+    if not isinstance(sesi, list) or not sesi or not all(
+            isinstance(x, str) and nama_sesi.POLA_KODE.match(x) for x in sesi):
+        raise ValueError("sesi harus daftar kode (mis. [\"1\", \"2\", \"11P\"] - P = N-PEMULIHAN)")
     if isinstance(min_resi, bool) or not isinstance(min_resi, int) or not 1 <= min_resi <= 50:
         raise ValueError("min_resi harus angka 1-50")
-    sesi = sorted({str(int(x)) for x in sesi}, key=int)
+    sesi = sorted({f"{int(x.rstrip('P'))}{'P' if x.endswith('P') else ''}" for x in sesi}, key=nama_sesi.urutan_kode)
+    if any(k.endswith("P") and k[:-1] in sesi for k in sesi):
+        raise ValueError("Sesi N dan N-PEMULIHAN-nya berisi resi yang sama - pilih salah satu")
     folder = ps.FOLDER_LABEL / tanggal
     if not folder.is_dir():
         raise ValueError(f"Tidak ada folder label untuk {tanggal}")
     import pilah_satuan as pl
-    ditolak = [f"Sesi {x}: {alasan}" for x in sesi for ok, alasan in [pl.periksa_sesi(folder / x)] if not ok]
+    ditolak = [f"Sesi {x}: {alasan}" for x in sesi
+               for ok, alasan in [pl.periksa_sesi(folder / nama_sesi.folder_dari_kode(x))] if not ok]
     if ditolak:   # satuan gabungan J&T + SPX dari sesi 07.00-12.00 / 20.00-07.00 saja (lihat pilah_satuan.periksa_sesi)
         raise ValueError("; ".join(ditolak))
     if mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
@@ -475,7 +481,7 @@ def mulai_pilah(data: dict, mode: str) -> None:
                                "label sesi belum lengkap")
         _pilah = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal,
                   "tanpa_pdf": tanpa_pdf,
-                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / x)) for x in sesi),
+                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / nama_sesi.folder_dari_kode(x))) for x in sesi),
                   "maju": 0, "hasil": None, "kode": None}
         threading.Thread(target=_kerjakan_pilah, args=(_pilah, perintah), daemon=True).start()
 

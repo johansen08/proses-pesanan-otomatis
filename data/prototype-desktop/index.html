@@ -823,10 +823,12 @@ function pilahHari(t){   // mode server: dari /api/pilah/sesi; tanpa server: ses
 }
 const rakSku=k=>(PSKU.find(x=>x[0]===k)||[k,PKEL[(k.length*7+k.charCodeAt(k.length-1))%5]])[1];
 const P={tgl:iso(HARI0),sesi:null,min:3,hasil:null,tab:'spesial',cari:'',buka:new Set(),dibuat:false,sibuk:false,mode:'',prog:null,err:'',nBuat:null,tanpaPdf:false};
-const pNama=()=>[...P.sesi].sort((a,b)=>a-b).join('-');
+const sk=s=>String(s.kode||s.no);   // kunci sesi: "10" atau "11P" (= 11-PEMULIHAN)
+const urutKode=(a,b)=>parseInt(a)-parseInt(b)||(a.endsWith('P')-b.endsWith('P'));
+const pNama=()=>[...P.sesi].sort(urutKode).join('-');
 function pilahReset(){P.hasil=null;P.dibuat=false;P.err='';P.nBuat=null;P.buka.clear()}
 function hitungPilah(){
-  const ses=pilahHari(P.tgl).filter(s=>P.sesi.has(s.no)),tot={},sesiSku={};let batal=0;
+  const ses=pilahHari(P.tgl).filter(s=>P.sesi.has(sk(s))),tot={},sesiSku={};let batal=0;
   ses.forEach(s=>{batal+=s.batal;Object.entries(s.cnt).forEach(([k,n])=>{tot[k]=(tot[k]||0)+n;(sesiSku[k]=sesiSku[k]||{})[s.no]=n})});
   const spesial=[],sisa={};PKEL.forEach(k=>sisa[k]=0);
   Object.entries(tot).forEach(([k,n])=>{if(n>=P.min)spesial.push({sku:k,n,rak:rakSku(k),sesi:sesiSku[k]});else sisa[rakSku(k)]+=n});
@@ -840,7 +842,7 @@ async function muatPilah(){
   try{
     const d=await api('/api/pilah/sesi');Object.keys(PAPI).forEach(k=>delete PAPI[k]);d.hari.forEach(h=>PAPI[h.tanggal]=h.sesi);
     const j=await api('/api/pilah/job');
-    if(j.status==='jalan'&&!P.sibuk){P.tgl=j.tanggal;P.sesi=new Set(j.sesi.map(Number));P.sibuk=true;P.mode=j.mode;pilahPoll()}
+    if(j.status==='jalan'&&!P.sibuk){P.tgl=j.tanggal;P.sesi=new Set(j.sesi.map(String));P.sibuk=true;P.mode=j.mode;pilahPoll()}
     else if(!P.sibuk&&!P.hasil&&!P.dibuat){if(!layakSesi(P.tgl).length){const t=Object.keys(PAPI).filter(k=>layakSesi(k).length).sort().pop()||Object.keys(PAPI).filter(k=>PAPI[k].length).sort().pop();if(t)P.tgl=t}
       const ada=layakSesi(P.tgl);if(!P.sesi||![...P.sesi].every(n=>ada.includes(n))||!P.sesi.size)P.sesi=new Set(ada)}
   }catch(e){toast('Pilah: '+e.message)}
@@ -848,7 +850,7 @@ async function muatPilah(){
 }
 async function pilahJalankan(mode){
   P.err='';P.sibuk=true;P.mode=mode;P.prog={maju:0,total:0};gambarPilah();
-  try{await postJ('/api/pilah/'+mode,{tanggal:P.tgl,sesi:[...P.sesi].sort((a,b)=>a-b).map(String),min_resi:P.min,tanpa_pdf:P.tanpaPdf})}
+  try{await postJ('/api/pilah/'+mode,{tanggal:P.tgl,sesi:[...P.sesi].sort(urutKode),min_resi:P.min,tanpa_pdf:P.tanpaPdf})}
   catch(e){P.sibuk=false;P.err=e.message;gambarPilah();return}
   pilahPoll();
 }
@@ -878,7 +880,8 @@ async function bukaDiCetak(){
   }else toast('Prototype: folder hasil nanti muncul sebagai sesi/jenis baru di Cetak');
   asal='cetak';go('cetak');gambarCetak();
 }
-const layakSesi=t=>pilahHari(t).filter(s=>s.layak!==false).map(s=>s.no);   // aturan sama dengan pilah_satuan.periksa_sesi
+const layakSesi=t=>{const l=pilahHari(t).filter(s=>s.layak!==false).map(sk);return l.filter(k=>!l.includes(k+'P'))};   // N-PEMULIHAN menggantikan sesi asalnya
+//   // aturan sama dengan pilah_satuan.periksa_sesi
 const bentrokAda=h=>!P.tanpaPdf&&h.bentrok&&Object.keys(h.bentrok).length>0;
 const kelH=h=>[...new Set([...PKEL,...Object.keys(h.sisa)])];
 function gambarPilah(){
@@ -888,8 +891,8 @@ function gambarPilah(){
     return `<button class="dchip ${t===P.tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}<small style="color:var(--mut)">${pilahHari(t).length} sesi</small></button>`}).join('');
   const sesHtml=ses.map(s=>{const n=s.label;
     const off=s.layak===false;
-    return `<div class="psesi ${off?'off':''} ${P.sesi.has(s.no)?'sel':''}" data-s="${s.no}" ${off?'aria-disabled="true" title="'+esc(s.alasan||'')+'"':''}><span class="cb ${P.sesi.has(s.no)?'on':''}" ${off?'style="visibility:hidden"':''}>${ic('check')}</span>
-      <span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.picklist} picklist satuan &middot; ${n} label</small>${off?`<small class="why">Tidak bisa dipilah &mdash; ${esc(s.alasan||'')}</small>`:''}</span></div>`}).join('')||'<div class="empty">Belum ada label satuan di hari ini</div>';
+    return `<div class="psesi ${off?'off':''} ${P.sesi.has(sk(s))?'sel':''}" data-s="${sk(s)}" ${off?'aria-disabled="true" title="'+esc(s.alasan||'')+'"':''}><span class="cb ${P.sesi.has(sk(s))?'on':''}" ${off?'style="visibility:hidden"':''}>${ic('check')}</span>
+      <span class="tx"><b>${s.judul||'Sesi '+s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.picklist} picklist satuan &middot; ${n} label</small>${off?`<small class="why">Tidak bisa dipilah &mdash; ${esc(s.alasan||'')}</small>`:''}</span></div>`}).join('')||'<div class="empty">Belum ada label satuan di hari ini</div>';
   let hasilHtml='';
   if(h){
     const q=P.cari.toLowerCase(),sp=h.spesial.filter(x=>!q||x.sku.toLowerCase().includes(q));
@@ -910,7 +913,7 @@ function gambarPilah(){
   const nPdf=P.nBuat!=null?P.nBuat:h?h.spesial.length+kelH(h).filter(k=>h.sisa[k]).length:0;
   el.innerHTML=`<div class="col">
     <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
-    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===boleh.length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
+    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===layakSesi(P.tgl).length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
     <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Hanya satuan gabungan J&amp;T + SPX dari sesi yang diproses 07.00&ndash;12.00 atau 20.00&ndash;07.00.</div>${sesHtml}
     <div class="stp-h" style="margin-top:14px"><span class="no">3</span><b>Minimal resi per SKU</b></div>
     <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMin">${[2,3,4,5].map(n=>`<button data-n="${n}" class="${P.min===n?'on':''}">${n}</button>`).join('')}</div><span style="color:var(--mut)">3 = sama dengan aturan SKU spesial</span></div>
@@ -946,8 +949,8 @@ function gambarPilah(){
       <li>Label satuan<b>gabungan J&amp;T + SPX</b></li><li>Sesi diproses<b>07.00&ndash;12.00 / 20.00&ndash;07.00</b></li><li>Label dari<b>PDF yang ada</b></li><li>SKU &amp; resi<b>dari Jubelio</b></li><li>Gabung lintas sesi<b>ya</b></li><li>Pesanan batal<b>dilewati</b></li></ul></div>
    </aside>`;
   el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tgl=b.dataset.t;P.sesi=new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
-  el.querySelectorAll('.psesi:not(.off)').forEach(b=>b.onclick=()=>{if(P.sibuk)return;const n=+b.dataset.s;P.sesi.has(n)?P.sesi.delete(n):P.sesi.add(n);pilahReset();gambarPilah()});
-  el.querySelector('#pAll').onclick=()=>{P.sesi=P.sesi.size===boleh.length?new Set():new Set(boleh.map(s=>s.no));pilahReset();gambarPilah()};
+  el.querySelectorAll('.psesi:not(.off)').forEach(b=>b.onclick=()=>{if(P.sibuk)return;const n=b.dataset.s;if(P.sesi.has(n))P.sesi.delete(n);else{P.sesi.add(n);P.sesi.delete(n.endsWith('P')?n.slice(0,-1):n+'P')}   /* sesi N & N-PEMULIHAN berisi resi sama: pilih salah satu */pilahReset();gambarPilah()});
+  el.querySelector('#pAll').onclick=()=>{P.sesi=P.sesi.size===layakSesi(P.tgl).length?new Set():new Set(layakSesi(P.tgl));pilahReset();gambarPilah()};
   el.querySelectorAll('#pMin button').forEach(b=>b.onclick=()=>{P.min=+b.dataset.n;pilahReset();gambarPilah()});
   el.querySelectorAll('#pMode button').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tanpaPdf=b.dataset.m==='1';pilahReset();gambarPilah()});
   el.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{P.tab=b.dataset.tab;gambarPilah()});

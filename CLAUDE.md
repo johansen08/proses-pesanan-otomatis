@@ -201,6 +201,9 @@ project secara umum, root tidak boleh berisi file `.py`):
   dan riwayat — untuk SEMUA picklist sesi itu (yang tidak bermasalah ikut, jadi folder hasilnya satu sesi LENGKAP dengan Excel utuh; tidak ada pilihan sebagian). Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
   tidak disentuh. `src/nama_sesi.py` = satu-satunya pola nama folder sesi (`N` atau `N-PEMULIHAN`): cetak bulk, menu Cetak UI
   (judul "N-PEMULIHAN"), `--sesi`, dan penomoran sesi baru memperlakukannya sebagai sesi (pilah_satuan/kurasi tetap hanya sesi `N` biasa).
+  **Pilah satuan bisa memakai `N-PEMULIHAN`** (kode sesi `11P`, mis. `--sesi 1-2-11P`; UI mengirim kode itu): berguna kalau satuan sesi N tidak lengkap. Syarat jendela
+  jam dinilai dari jam proses sesi ASAL (penanda `pulihan.json` di folder pemulihan), sesi N dan `NP` tidak boleh dipilih bersamaan (resi sama), tanpa `--sesi`
+  pemulihan menggantikan sesi asalnya. Folder hasil: `SPESIAL-SATUAN-<kode>` (mis. `-11P`).
   Tanpa `--jalankan` hanya melapor (folder tidak dibuat). Satu picklist gagal tidak menghentikan yang lain (exit 1 di akhir).
 - `src/peringatan_sisa.py` — penjaga "pesanan tak tersentuh" (insiden 2026-10-09: 2 resi wajib keluar,
   channel Tokopedia asli `TP-...` id 128 & kurir JNE, tidak pernah masuk picklist apa pun TANPA peringatan).

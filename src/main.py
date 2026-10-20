@@ -102,6 +102,7 @@ Upload faktur ke IRESIS (iresis.py; dulu manual setelah proses pesanan selesai):
 (mengunggah 2 file berurutan: faktur N hari, lalu pesanan N hari)
 """
 import argparse
+import json
 import logging
 import os
 import re
@@ -1023,6 +1024,9 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
               if args.jalankan else None)
     if tujuan:
         log.info("Hasil pemulihan ke folder: %s", tujuan)
+        # penanda sesi asal: Pilah memakai jam proses sesi ASAL untuk syarat jendela satuan gabungan
+        (tujuan / nama_sesi.NAMA_PENANDA_PULIHAN).write_text(
+            json.dumps({"asal": args.pulihkan_sesi}), encoding="utf-8")
     for no, v in daftar.items():
         if not args.jalankan:
             p = k.get(f"sales/picklists/{int(no.replace('PICK-', ''))}")
