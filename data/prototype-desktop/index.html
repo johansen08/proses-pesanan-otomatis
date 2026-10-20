@@ -201,6 +201,15 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
 @media(max-width:1100px){.view.two.on,.view.pilah.on{display:block;overflow:auto}.col,.side{overflow:visible}.side{margin-top:16px}.top{flex-wrap:wrap}.view.cetak.on{overflow:auto}}
 
 
+
+/* pemulihan sesi (prototype) */
+.pltb td{vertical-align:middle}.pltb tr.pr{cursor:pointer}.pltb tr.pr:hover td{background:var(--bg)}
+.pltb td.pn{font:600 12.5px Consolas,monospace;white-space:nowrap}
+.pltb .cb{margin:0}
+.pill.w{background:var(--warnbg);color:var(--warn)}
+.protoban{border:1px dashed var(--warn);background:var(--warnbg);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:12.5px;margin:0 0 12px}
+.plrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.plrow:last-child{border:0}.plrow .t{flex:1}
 /* pilah satuan */
 .pilah{grid-template-columns:minmax(0,1fr) 350px;gap:24px}
 .stp-h{display:flex;align-items:center;gap:8px;margin:0 0 8px}
@@ -257,6 +266,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
   <button class="tab on" data-v="harian"><svg><use href="#play"/></svg>Harian<i class="bd" id="bd">4</i></button>
   <button class="tab" data-v="event"><svg><use href="#bolt"/></svg>Event</button>
   <button class="tab" data-v="pilah"><svg><use href="#layers"/></svg>Pilah</button>
+  <button class="tab" data-v="pulih"><svg><use href="#back"/></svg>Pulih</button>
   <button class="tab" data-v="cetak"><svg><use href="#print"/></svg>Cetak</button>
   <div class="sp"></div>
   <button class="tab" id="tema" title="Ganti tema"><svg><use href="#moon"/></svg>Tema</button>
@@ -290,6 +300,7 @@ input[type=search]{padding:9px 12px;border:1px solid var(--line);border-radius:1
   </section>
 
   <section class="view pilah" id="v-pilah"></section>
+  <section class="view pilah" id="v-pulih"></section>
 
   <section class="view" id="v-runner">
     <div class="card" style="display:flex;flex-direction:column;min-height:0">
@@ -520,10 +531,11 @@ async function initOperator(){
 }
 
 /* ---------- navigasi ---------- */
-const JUD={harian:'Harian',event:'Event',pilah:'Pilah satuan',cetak:'Cetak label',runner:'Proses berjalan'};
+const JUD={harian:'Harian',event:'Event',pilah:'Pilah satuan',pulih:'Pemulihan sesi',cetak:'Cetak label',runner:'Proses berjalan'};
 let asal='harian';
 function go(v){
   if(v==='pilah'){gambarPilah();muatPilah()}
+  if(v==='pulih')gambarPulih();
   $$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
   $$('.rail .tab[data-v]').forEach(t=>t.classList.toggle('on',t.dataset.v===(v==='runner'?asal:v)));
   $('#judul').textContent=JUD[v];
@@ -950,6 +962,121 @@ function gambarPilah(){
     $('#yaBuat').onclick=()=>{tutup();if(TERSAMBUNG)return pilahJalankan('buat');P.dibuat=true;gambarPilah();toast(P.tanpaPdf?'Excel SPESIAL-SATUAN-'+nm+' dibuat ✓':'Folder SPESIAL-SATUAN-'+nm+' dan SISA-SATUAN-'+nm+' dibuat ✓')}};
   const u=el.querySelector('#pUlang');if(u)u.onclick=()=>{pilahReset();gambarPilah()};
   const ce=el.querySelector('#pCetak');if(ce)ce.onclick=bukaDiCetak;
+}
+
+
+/* =========================================================
+   PEMULIHAN SESI - ulangi tahap SESUDAH picklist dibuat (resi, unduh ulang PDF, Excel) untuk picklist yang
+   sudah ada di sebuah sesi; hasil ke folder baru N-PEMULIHAN. TIDAK membuat picklist baru.
+   (prototype: data contoh; backend = main.py --pulihkan-sesi [--picklist ..] [--jalankan], belum disambung ke server)
+   ========================================================= */
+const PLNAMA=[['SPESIAL','T01-PTAA-67'],['SPESIAL','TRC4'],['SPESIAL','GL-FNA-3'],['SPESIAL','BM-AKS28-7'],['SPESIAL','MX1010-1'],['SPESIAL','C223-ANT78-1'],
+  ['SATUAN','1QTY-REGULER-2A'],['SATUAN','1QTY-REGULER-3A'],['SATUAN','1QTY-REGULER-1B'],['SATUAN','1QTY-REGULER-2B'],['SATUAN','1QTY-REGULER-3B'],
+  ['KOMBINASI','KOMBINASI-REGULER-LANTAI1'],['KOMBINASI','KOMBINASI-REGULER-LANTAI2'],['KOMBINASI','KOMBINASI-REGULER-LANTAI3'],['KOMBINASI','KOMBINASI-REGULER-LAINNYA'],
+  ['SPESIAL','ZU7'],['SPESIAL','MX-5043-1'],['SPESIAL','T01-BSCT-3'],['SPESIAL','C222-AK394-13'],['SPESIAL','M2-KCM26-1'],['(sesi)','SAMPEL-TIKTOK']];
+const PLDATA={};
+function plHari(t){
+  if(PLDATA[t])return PLDATA[t];
+  const r=rnd(+t.split('-').join('')%983+11),out=[];let pick=166000+Math.floor(r()*90);
+  [['9','15.32'],['10','17.20']].forEach(([no,jam])=>{
+    const pl=[];
+    PLNAMA.forEach(([sub,nama])=>{
+      if(r()<.25)return;
+      const total=sub==='SATUAN'?20+Math.floor(r()*40):sub==='KOMBINASI'?10+Math.floor(r()*35):2+Math.floor(r()*8),x=r();
+      let resi=total,st='ok',catatan='';
+      if(x<.38){resi=Math.max(0,total-1-Math.floor(r()*Math.min(total,6)));st='kurang';catatan='Shopee SPX Hemat: "The order is not valid to ship."'}
+      else if(x<.46){st='terhenti';resi=0;catatan='Gagal unduh PDF (timeout)'}
+      else if(x<.52){st='pdf-hilang';catatan='File PDF tidak ada di folder sesi'}
+      pl.push({no:'PICK-000'+(pick++),sub,nama,total,resi,st,catatan,kini:st==='kurang'?Math.min(total,resi+Math.floor(r()*(total-resi+1))):total});
+    });
+    out.push({no,jam,pl});
+  });
+  return PLDATA[t]=out;
+}
+const PU={tgl:iso(HARI0),sesi:null,pil:new Set(),masalah:true,cek:false,sibuk:false,hasil:null,prog:null,folder:''};
+const plBad=p=>p.st!=='ok';
+const plStat={ok:['ok','Lengkap'],kurang:['w','Resi kurang'],terhenti:['','Terhenti'],'pdf-hilang':['w','PDF hilang']};
+function plSesi(){const ses=plHari(PU.tgl);if(!PU.sesi||!ses.find(s=>s.no===PU.sesi))PU.sesi=ses.length?ses[ses.length-1].no:null;return ses.find(s=>s.no===PU.sesi)}
+function plReset(){PU.cek=false;PU.hasil=null;PU.prog=null;PU.pil=new Set();const s=plSesi();if(s)s.pl.filter(plBad).forEach(p=>PU.pil.add(p.no))}
+function plNoFolder(){
+  const ses=plHari(PU.tgl),mx=Math.max(0,...ses.map(s=>+s.no));return (mx+1)+'-PEMULIHAN'}
+function gambarPulih(){
+  const el=$('#v-pulih');
+  if(PU.sesi===null){PU.sesi=-1}
+  const ses=plHari(PU.tgl),sel=plSesi();
+  if(!PU._init||PU._tgl!==PU.tgl+'|'+(sel&&sel.no)){PU._init=true;PU._tgl=PU.tgl+'|'+(sel&&sel.no);if(!PU.sibuk&&!PU.hasil){PU.pil=new Set();if(sel)sel.pl.filter(plBad).forEach(p=>PU.pil.add(p.no))}}
+  const hariHtml=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d);
+    const n=plHari(t).reduce((a,s)=>a+s.pl.filter(plBad).length,0);
+    return `<button class="dchip ${t===PU.tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}<small style="color:${n?'var(--warn)':'var(--mut)'}">${n?n+' picklist bermasalah':'semua lengkap'}</small></button>`}).join('');
+  const sesHtml=ses.map(s=>{const bad=s.pl.filter(plBad).length;
+    return `<div class="psesi ${s.no===(sel&&sel.no)?'sel':''}" data-s="${s.no}"><span class="cb ${s.no===(sel&&sel.no)?'on':''}">${ic('check')}</span>
+     <span class="tx"><b>Sesi ${s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.pl.length} picklist &middot; ${s.pl.reduce((a,p)=>a+p.total,0)} pesanan</small></span>
+     ${bad?`<span class="pill w">${bad} bermasalah</span>`:'<span class="pill ok">lengkap</span>'}</div>`}).join('')||'<div class="empty">Belum ada sesi di hari ini</div>';
+  const daftar=sel?sel.pl.filter(p=>!PU.masalah||plBad(p)||PU.pil.has(p.no)):[];
+  const tbl=sel?`<div class="card" style="padding:6px 8px"><table class="tbl pltb"><thead><tr><th style="width:30px"></th><th>Picklist</th><th>Jenis / SKU</th><th class="num">Resi</th>${PU.cek?'<th class="num">Kini di Jubelio</th>':''}<th>Status</th></tr></thead><tbody>${
+    daftar.map(p=>{const h=PU.hasil&&PU.hasil[p.no],on=PU.pil.has(p.no),[k,t]=plStat[p.st];
+      return `<tr class="pr" data-p="${p.no}"><td><span class="cb ${on?'on':''}">${ic('check')}</span></td><td class="pn">${p.no}</td><td><b>${esc(p.nama)}</b> <span class="rk">${esc(p.sub)}</span>${p.catatan?`<br><small style="color:var(--mut)">${esc(p.catatan)}</small>`:''}</td>
+       <td class="num">${p.resi}/${p.total}</td>${PU.cek?`<td class="num" style="${p.kini>p.resi?'color:var(--ok)':''}">${p.kini}/${p.total}${p.kini>p.resi?' (+'+(p.kini-p.resi)+')':''}</td>`:''}
+       <td>${h?(h.sisa?`<span class="pill w">pulih, ${h.sisa} resi belum keluar</span>`:'<span class="pill ok">pulih ✓</span>'):`<span class="pill ${k}">${t}</span>`}</td></tr>`}).join('')||'<tr><td colspan="6" class="kosong">Tidak ada picklist bermasalah di sesi ini</td></tr>'}</tbody></table></div>`:'';
+  const nPil=[...PU.pil].length,nm=plNoFolder(),sblm=PU.hasil;
+  const dipilih=sel?sel.pl.filter(p=>PU.pil.has(p.no)):[];
+  const pesananPil=dipilih.reduce((a,p)=>a+p.total,0);
+  el.innerHTML=`<div class="col">
+    <div class="protoban"><b>PROTOTYPE</b> &mdash; data contoh. Tombol belum memanggil server; backend-nya <code>main.py --pulihkan-sesi</code> (sudah ada, sungguhan dari konsol).</div>
+    <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
+    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipulihkan</b></div>
+    <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Picklist yang SUDAH dibuat di sesi itu. Tidak ada picklist baru yang dibuat &mdash; hanya tahap sesudahnya diulang.</div>${sesHtml}
+    ${sel?`<div class="stp-h" style="margin-top:14px"><span class="no">3</span><b>Picklist</b><div class="sp"></div>
+      <label class="allrow" id="plMasalah" style="display:flex;align-items:center;gap:6px;color:var(--mut);cursor:pointer"><span>Hanya yang bermasalah</span><span class="sw ${PU.masalah?'on':''}" style="pointer-events:none"><i></i></span></label>
+      <button class="btn line sm auto" id="plAll" ${PU.sibuk?'disabled':''}>${daftar.length&&daftar.every(p=>PU.pil.has(p.no))?'Kosongkan':'Pilih semua'}</button></div>${tbl}`:''}
+   </div>
+   <aside class="side">
+    <div class="card">
+      <div style="display:flex;align-items:baseline;gap:8px"><span class="bignum">${nPil}</span><span style="color:var(--mut)">picklist dipilih${nPil?' &middot; '+pesananPil+' pesanan':''}</span></div>
+      <div style="color:var(--mut)">${sel?'Sesi '+sel.no+' &middot; '+PU.tgl:'Pilih sesi'}</div>
+      <div style="margin-top:12px"><div class="fold">${ic('folder')}<span><b>${PU.folder||nm}</b><small>label-pengiriman/${PU.tgl} &middot; folder BARU, sesi ${sel?sel.no:'…'} tidak diubah</small></span></div></div>
+      <div style="margin-top:10px">
+        <div class="plrow"><span class="t">Selesaikan picking</span><span style="color:var(--mut)">kalau belum</span></div>
+        <div class="plrow"><span class="t">Minta resi semua pesanan</span><span style="color:var(--mut)">termasuk yang telat</span></div>
+        <div class="plrow"><span class="t">Unduh ulang PDF label</span><span style="color:var(--mut)">nama &amp; subfolder sama</span></div>
+        <div class="plrow"><span class="t">Excel</span><span style="color:var(--mut)">detail resi + PICKLIST.xlsx</span></div>
+      </div>
+      ${PU.cek&&!PU.hasil?`<div class="note" style="margin-top:10px;background:var(--okbg);color:var(--ok)">Hasil cek (hanya membaca): ${dipilih.reduce((a,p)=>a+(p.kini-p.resi),0)} resi tambahan sudah keluar di Jubelio; ${dipilih.reduce((a,p)=>a+(p.total-p.kini),0)} masih kosong.</div>`:''}
+      ${PU.sibuk&&PU.prog?`<div class="prog" style="margin:12px 0 0"><i style="width:${Math.round(PU.prog.maju/PU.prog.total*100)}%"></i></div><div style="color:var(--mut);font-size:12.5px;margin-top:4px">Memulihkan ${PU.prog.maju}/${PU.prog.total} &middot; ${esc(PU.prog.now||'')}</div>`:''}
+      ${sblm&&!PU.sibuk?`<div class="step-ok" style="margin:12px 0 4px">${ic('check')}Selesai &mdash; ${Object.keys(sblm).length} picklist dipulihkan</div>
+        <div style="color:var(--mut);font-size:12.5px">${Object.values(sblm).filter(h=>h.sisa).length?Object.values(sblm).filter(h=>h.sisa).length+' picklist masih punya pesanan tanpa resi (Shopee belum menerbitkan) &mdash; jalankan pemulihan lagi nanti, hasilnya ke folder baru berikutnya.':'Semua resi sudah keluar.'}</div>
+        <button class="btn" id="plCetak" style="margin-top:8px">${ic('print')}Buka di Cetak</button>
+        <button class="btn line" id="plUlang" style="margin-top:8px">Pulihkan lagi</button>`:
+       `<button class="btn line" id="plCek" style="margin-top:12px" ${nPil&&!PU.sibuk?'':'disabled'}>${PU.cek?'Cek ulang':'Cek dulu (hanya membaca)'}</button>
+        <button class="btn" id="plJalan" style="margin-top:8px" ${nPil&&!PU.sibuk?'':'disabled'}>${PU.sibuk?'Memulihkan…':'Pulihkan '+nPil+' picklist'}</button>
+        <div style="color:var(--mut);font-size:12px;margin-top:6px">&ldquo;Cek dulu&rdquo; = mode uji: tidak meminta resi dan tidak mengunduh apa pun.</div>`}
+      <div class="terakhir">Mengubah data di Jubelio (selesaikan picking &amp; minta resi) &mdash; tidak membuat picklist baru.</div>
+    </div>
+    <div class="card"><b>Kapan dipakai</b><ul class="facts" style="margin-bottom:0">
+      <li>Label kurang pesanan<b>resi telat keluar</b></li><li>PDF gagal / hilang<b>unduh ulang</b></li><li>Excel tidak lengkap<b>diisi lagi</b></li><li>Hasil<b>folder N-PEMULIHAN</b></li><li>Cetak<b>menu Cetak</b></li></ul></div>
+   </aside>`;
+  el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(PU.sibuk)return;PU.tgl=b.dataset.t;PU.sesi=null;PU.hasil=null;PU.cek=false;PU.folder='';PU._init=false;gambarPulih()});
+  el.querySelectorAll('.psesi').forEach(b=>b.onclick=()=>{if(PU.sibuk)return;PU.sesi=b.dataset.s;PU.hasil=null;PU.cek=false;PU.folder='';PU._init=false;gambarPulih()});
+  el.querySelectorAll('tr.pr').forEach(tr=>tr.onclick=()=>{if(PU.sibuk||PU.hasil)return;const k=tr.dataset.p;PU.pil.has(k)?PU.pil.delete(k):PU.pil.add(k);PU.cek=false;gambarPulih()});
+  const m=el.querySelector('#plMasalah');if(m)m.onclick=()=>{PU.masalah=!PU.masalah;gambarPulih()};
+  const a=el.querySelector('#plAll');if(a)a.onclick=()=>{const semua=daftar.every(p=>PU.pil.has(p.no));daftar.forEach(p=>semua?PU.pil.delete(p.no):PU.pil.add(p.no));PU.cek=false;gambarPulih()};
+  const c=el.querySelector('#plCek');if(c)c.onclick=()=>{PU.cek=true;gambarPulih();toast('Cek selesai — tidak ada yang diubah')};
+  const j=el.querySelector('#plJalan');if(j)j.onclick=()=>{modal(`<h2>Pulihkan ${nPil} picklist?</h2>
+    <p>Untuk setiap picklist: selesaikan picking (kalau belum), minta resi semua pesanan, unduh ulang PDF, isi Excel. <b>Tidak ada picklist baru.</b></p>
+    <div class="fold">${ic('folder')}<span><b>${nm}</b><small>label-pengiriman/${PU.tgl} &middot; dibuat baru; sesi ${sel.no} tidak diubah</small></span></div>
+    <div class="note">Mengubah data di Jubelio. Pastikan bukan jendela Transfer Stok dan proses harian tidak sedang berjalan.</div>
+    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yaPl">Pulihkan</button></div>`);
+    $('#yaPl').onclick=()=>{tutup();plJalankan(dipilih,nm)}};
+  const cet=el.querySelector('#plCetak');if(cet)cet.onclick=()=>{asal='cetak';go('cetak');toast('Folder '+PU.folder+' muncul sebagai sesi di menu Cetak')};
+  const u=el.querySelector('#plUlang');if(u)u.onclick=()=>{PU.hasil=null;PU.cek=false;PU.folder='';PU._init=false;gambarPulih()};
+}
+function plJalankan(daftar,nm){
+  PU.sibuk=true;PU.folder=nm;PU.hasil=null;PU.prog={maju:0,total:daftar.length,now:''};gambarPulih();
+  const hasil={},r=rnd(daftar.length*31+7);let i=0;
+  const iv=setInterval(()=>{
+    if(i>=daftar.length){clearInterval(iv);PU.sibuk=false;PU.prog=null;PU.hasil=hasil;gambarPulih();toast('Pemulihan selesai ✓ — '+nm);return}
+    const p=daftar[i++];const sisa=p.kini<p.total&&r()<.7?p.total-p.kini:0;
+    hasil[p.no]={sisa};PU.prog={maju:i,total:daftar.length,now:p.no+' '+p.nama};gambarPulih()},420);
 }
 
 /* ---------- init ---------- */
