@@ -53,10 +53,56 @@ def dari_pdf(folder_sesi: Path) -> dict[str, dict]:
     return hasil
 
 
+def kelas_jenis(nama: str) -> str:
+    """Jenis picklist dari nama/label di kolom T PICKLIST.xlsx (= nama file PDF)."""
+    n = (nama or "").upper()
+    if n.startswith("1QTY-REGULER"):
+        return "satuan"
+    if n.startswith("KOMBINASI-REGULER"):
+        return "kombinasi"
+    if n.startswith(("GTL-SICEPAT", "LAZADA", "JNE-LEX", "URGENT")):
+        return "urgent"
+    if n.startswith("SHOPEE-PAGI"):
+        return "spx-pagi"
+    if n.startswith("JNT-SIANG"):
+        return "jnt-siang"
+    if n.startswith("SAMPEL"):
+        return "sampel"
+    return "spesial"
+
+
+# (tag, subfolder) bawaan per jenis kalau tidak ada contoh lain di sesi yang sama
+BAWAAN_JENIS = {"satuan": (None, "SATUAN"), "kombinasi": (None, "KOMBINASI"), "urgent": (None, "URGENT"),
+                "spx-pagi": (None, "SPX_PAGI"), "jnt-siang": (None, "JNT_SIANG"), "sampel": (None, None),
+                "spesial": ("SPESIAL", None)}
+
+
+def dari_excel(folder_sesi: Path, tahu: dict[str, dict]) -> dict[str, dict]:
+    """{no picklist: {nama, tag, subfolder}} dari PICKLIST.xlsx sesi (kolom L nomor, T jenis/label).
+    Menangkap picklist yang TIDAK punya PDF (belum ada resi sama sekali, mis. spesial yang resinya 0) dan
+    tidak tercatat di jurnal (jurnal ada di PC lain / sesi lama). Baris "PICKLIST CANCEL" (nomor terlompat)
+    dilewati. Tag/subfolder ditebak dari jenisnya, memakai contoh `tahu` (picklist sejenis yang sudah diketahui
+    di sesi ini, mis. tag kurir JNT_SPESIAL) lebih dulu, baru nilai BAWAAN_JENIS."""
+    contoh: dict[str, tuple] = {}
+    for v in tahu.values():
+        contoh.setdefault(kelas_jenis(v.get("nama")), (v.get("tag"), v.get("subfolder")))
+    hasil = {}
+    for angka, x in _baca_excel_sesi(folder_sesi).items():
+        jenis = x.get("jenis")
+        if not jenis or jenis.strip().upper() == "PICKLIST CANCEL":
+            continue
+        tag, subfolder = contoh.get(kelas_jenis(jenis)) or BAWAAN_JENIS[kelas_jenis(jenis)]
+        hasil[f"PICK-{angka:09d}"] = {"nama": jenis.strip(), "tag": tag, "subfolder": subfolder}
+    return hasil
+
+
 def daftar_picklist(file_jurnal: Path | None, folder_sesi: Path, sesi: str) -> dict[str, dict]:
-    """Gabungan jurnal + nama PDF (jurnal menang), urut nomor picklist."""
+    """SEMUA picklist sesi, urut nomor: PICKLIST.xlsx sesi (paling lengkap, termasuk picklist tanpa PDF) +
+    nama PDF + jurnal; yang lebih rinci menang (jurnal > PDF > Excel)."""
     gabung = dari_pdf(folder_sesi)
     gabung.update(dari_jurnal(file_jurnal, sesi))
+    for no, v in dari_excel(folder_sesi, gabung).items():
+        gabung.setdefault(no, v)
     return dict(sorted(gabung.items()))
 
 
@@ -86,10 +132,11 @@ def _baca_excel_sesi(folder_sesi: Path) -> dict[int, dict]:
         wb = load_workbook(file, read_only=True, data_only=False)
         hasil = {}
         for baris in wb.worksheets[0].iter_rows(min_row=6, min_col=12, max_col=21, values_only=True):
-            nomor, total, resi, catatan = baris[0], baris[1], baris[2], baris[9]
+            nomor, total, resi, jenis, catatan = baris[0], baris[1], baris[2], baris[8], baris[9]
             if isinstance(nomor, int):
                 hasil[nomor] = {"total": total if isinstance(total, (int, float)) else None,
                                 "resi": resi if isinstance(resi, (int, float)) else None,
+                                "jenis": str(jenis) if jenis else "",
                                 "catatan": str(catatan) if catatan else ""}
         wb.close()
         return hasil
@@ -115,6 +162,8 @@ def status_sesi(folder_sesi: Path, sesi: str, file_jurnal: Path | None, terhenti
         st, catatan = "ok", x.get("catatan", "")[:160]
         if no in terhenti:
             st, catatan = "terhenti", terhenti[no]
+        elif no not in pdf and resi == 0:
+            st, catatan = "kurang", "Belum ada resi sama sekali (belum ada PDF)"
         elif no not in pdf:
             st, catatan = "pdf-hilang", "File PDF tidak ada di folder sesi"
         elif no in tanpa_resi or (total is not None and resi is not None and resi < total):

@@ -196,7 +196,8 @@ project secara umum, root tidak boleh berisi file `.py`):
   `channel_status/marketplace_status` pesanan yang tak kunjung dapat resi ke log.
 - `src/pulihkan_sesi.py` — **pemulihan satu sesi** (`main.py --pulihkan-sesi YYYY-MM-DD/N [--jalankan]`):
   TIDAK membuat picklist baru; untuk semua picklist yang sudah dibuat di sesi itu (daftar dari `logs/picklist_terhenti.jsonl`
-  per `sesi` + nama PDF di folder sesi) mengulang tahap sesudahnya lewat `proses_label.pulihkan_picklist()`: selesaikan picking, minta resi
+  per `sesi` + nama PDF di folder sesi + `PICKLIST.xlsx` sesi — Excel menangkap picklist tanpa PDF/jurnal, mis. spesial yang resinya 0: insiden 2026-10-20, 93 dari 103 terdeteksi;
+  tag/subfolder ditebak dari jenis di kolom T dengan contoh picklist sejenis di sesi itu) mengulang tahap sesudahnya lewat `proses_label.pulihkan_picklist()`: selesaikan picking, minta resi
   untuk SEMUA pesanan picklist (bukan hanya yang belum-dicetak seperti `--lanjut`), unduh ulang PDF, `detail-resi-*.xlsx`, `PICKLIST.xlsx`
   dan riwayat — untuk SEMUA picklist sesi itu (yang tidak bermasalah ikut, jadi folder hasilnya satu sesi LENGKAP dengan Excel utuh; tidak ada pilihan sebagian). Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
   tidak disentuh. `src/nama_sesi.py` = satu-satunya pola nama folder sesi (`N` atau `N-PEMULIHAN`): cetak bulk, menu Cetak UI

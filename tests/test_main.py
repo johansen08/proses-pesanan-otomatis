@@ -280,6 +280,39 @@ def uji_pulihkan_sesi_daftar_picklist_dari_jurnal_dan_pdf():
     print("  pulihkan_sesi: daftar picklist dari jurnal (per sesi) + nama PDF, picklist sesi lain tidak ikut")
 
 
+def uji_pulihkan_sesi_picklist_tanpa_pdf_dan_jurnal_ikut_dari_picklist_xlsx():
+    """Insiden 2026-10-20: sesi 103 picklist, hanya 93 terdeteksi - 10 picklist spesial resinya 0 tidak punya PDF
+    dan tidak tercatat di jurnal (jurnal PC lain). PICKLIST.xlsx sesi harus melengkapi daftarnya."""
+    import pulihkan_sesi as ps
+    from openpyxl import Workbook
+    with tempfile.TemporaryDirectory() as tmp:
+        sesi = Path(tmp) / "2026-10-19" / "11"
+        (sesi / "JNT_SPESIAL").mkdir(parents=True)
+        (sesi / "SATUAN").mkdir()
+        (sesi / "JNT_SPESIAL" / "PICK-000000010_JNT_SPESIAL_AAA_2026-10-19_200000.pdf").write_bytes(b"x")
+        (sesi / "SATUAN" / "PICK-000000012_1QTY-REGULER-2A_2026-10-19_200100.pdf").write_bytes(b"x")
+        wb = Workbook()
+        ws = wb.active
+        for baris, (no, total, resi, jenis) in enumerate([
+                (10, 3, 3, "AAA"), (11, 3, 0, "BBB"),                # 11: spesial tanpa resi -> tanpa PDF
+                (12, 5, 5, "1QTY-REGULER-2A"), (13, 4, 0, "ZZZ"),
+                (14, 9, 9, "1QTY-REGULER-3A"), (15, None, None, "PICKLIST CANCEL"),
+                (16, 8, 8, "LAZADA"), (17, 8, 8, "KOMBINASI-REGULER-LANTAI1")], start=6):
+            ws.cell(baris, 12, no), ws.cell(baris, 13, total), ws.cell(baris, 14, resi), ws.cell(baris, 20, jenis)
+        wb.save(sesi / "PICKLIST.xlsx")
+        d = ps.daftar_picklist(None, sesi, "2026-10-19/11")
+        assert list(d) == [f"PICK-{n:09d}" for n in (10, 11, 12, 13, 14, 16, 17)], list(d)      # 15 = PICKLIST CANCEL
+        assert d["PICK-000000011"] == {"nama": "BBB", "tag": "JNT_SPESIAL", "subfolder": None}, d["PICK-000000011"]
+        assert d["PICK-000000014"] == {"nama": "1QTY-REGULER-3A", "tag": None, "subfolder": "SATUAN"}
+        assert d["PICK-000000016"] == {"nama": "LAZADA", "tag": None, "subfolder": "URGENT"}
+        assert d["PICK-000000017"]["subfolder"] == "KOMBINASI"
+        status = ps.status_sesi(sesi, "2026-10-19/11", None, {}, set())
+        st = {p["no"]: p["st"] for p in status["pl"]}
+        assert st["PICK-000000011"] == "kurang" and st["PICK-000000010"] == "ok", st
+        assert st["PICK-000000014"] == "pdf-hilang", st
+    print("  pulihkan_sesi: picklist tanpa PDF/jurnal ikut dari PICKLIST.xlsx sesi (tag/subfolder ditebak dari jenisnya)")
+
+
 def uji_folder_pemulihan_dan_nama_sesi():
     import nama_sesi as ns
     import pulihkan_sesi as ps
