@@ -491,6 +491,10 @@ def _main() -> int:
                         "ke menu Upload Resi IRESIS (dulu manual, setelah proses pesanan "
                         "selesai) - langkah terakhir tiap TIPE proses-harian.bat; tanpa "
                         "--jalankan = mode uji, hanya unduh & tampilkan rencana")
+    ap.add_argument("--resi-susulan", action="store_true",
+                    help="cek ulang pesanan yang dulu 'belum dapat resi' (peringatan --hari N hari "
+                         "terakhir); yang kini sudah punya resi diunduh labelnya ke "
+                         "label-pengiriman/<hari ini>/SUSULAN. Tanpa --jalankan hanya melapor")
     ap.add_argument("--paksa", action="store_true",
                     help="dipakai bersama --upload-iresis: tetap jalan walau jam 20.00-04.59 "
                         "(jendela yang biasanya melewati IRESIS)")
@@ -555,6 +559,8 @@ def _main() -> int:
     if (galat := ambil_kunci(log, args)):
         log.error(galat)
         return 1
+    if args.resi_susulan:
+        return resi_susulan(log, args)
     if args.upload_iresis:
         # penjaga pesanan tak tersentuh: langkah terakhir tiap TIPE, TETAP jalan walau upload
         # IRESIS dilewati di jendela malam (jam_tanpa_iresis()) - tidak pernah menggagalkan TIPE
@@ -951,6 +957,38 @@ def lanjut_picklist(log: logging.Logger, args) -> int:
     baris = proses_label.lanjutkan(k, args.lanjut, FOLDER_LABEL_SESI, FILE_RIWAYAT,
                                    nama=args.nama, tag=args.tag, subfolder=args.subfolder)
     log.info("SELESAI: %s", baris)
+    return 0
+
+
+def resi_susulan(log: logging.Logger, args) -> int:
+    """Label tambahan untuk pesanan yang saat proses belum dapat resi tapi kini sudah (lihat
+    proses_label.resi_susulan()). Bukan proses picklist: tidak membuat folder sesi bernomor;
+    label ke label-pengiriman/<hari ini>/SUSULAN. Pesanan yang sudah dibuat susulannya
+    dicatat di logs/resi_susulan.jsonl supaya tidak diunduh dua kali."""
+    import jurnal_peringatan
+    import proses_label
+
+    target = peringatan_resi.baca_target(args.hari)
+    jurnal = FOLDER_LOG / "resi_susulan.jsonl"
+    sudah = {d.get("pesanan") for d in jurnal_peringatan.baca_baris(jurnal)}
+    baru = {p: [n for n in ns if n not in sudah] for p, ns in target.items()}
+    baru = {p: ns for p, ns in baru.items() if ns}
+    log.info("Resi susulan: %d pesanan di %d picklist (peringatan %d hari terakhir)",
+             sum(len(v) for v in baru.values()), len(baru), args.hari)
+    if not baru:
+        return 0
+    k = proses_label.Klien(login(log))
+    folder = FOLDER_LABEL / datetime.now().strftime("%Y-%m-%d") / "SUSULAN"
+    hasil = proses_label.resi_susulan(k, baru, folder, args.jalankan)
+    for b in hasil["label"]:
+        if args.jalankan and b["file"]:
+            jurnal_peringatan.tambah_baris(jurnal, {"pesanan": b["pesanan"], "picklist": b["picklist"],
+                                                    "file": b["file"], "waktu": datetime.now().isoformat()})
+    log.info("SELESAI resi susulan: %d sudah punya resi%s, %d masih kosong, %d batal",
+             len(hasil["label"]), "" if args.jalankan else " (mode uji; tambahkan --jalankan untuk unduh)",
+             len(hasil["masih_kosong"]), len(hasil["batal"]))
+    if hasil["masih_kosong"]:
+        log.warning("Masih tanpa resi: %s", ", ".join(hasil["masih_kosong"]))
     return 0
 
 

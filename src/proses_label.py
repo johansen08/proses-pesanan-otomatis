@@ -1817,10 +1817,11 @@ def _cek_batal_detail(k: Klien, rows: list[dict]) -> None:
                 r.update({x: o.get(x) for x in ("internal_status", "wms_status", "channel_status")})
 
 
-def minta_resi(k: Klien, ids: list[int]) -> list[dict]:
+def minta_resi(k: Klien, ids: list[int], tunggu_s: int | None = None) -> list[dict]:
     """Ulangi seperti web sampai semua nomor resi terisi (atau batas waktu habis).
     Pesanan yang dibatalkan tidak ditunggu."""
-    batas = time.monotonic() + TUNGGU_RESI_S
+    tunggu_s = TUNGGU_RESI_S if tunggu_s is None else tunggu_s
+    batas = time.monotonic() + tunggu_s
     while True:
         rows = k.post("wms/sales/shipments/orders/", {"ids": ids})
         tunggu = [r for r in rows if not _ada_resi(r) and not _batal(r)]
@@ -1831,7 +1832,18 @@ def minta_resi(k: Klien, ids: list[int]) -> list[dict]:
             kosong = [r["salesorder_no"] for r in tunggu if not _batal(r)]
             if kosong:
                 log.warning("  %d pesanan belum dapat resi setelah %d detik: %s",
-                            len(kosong), TUNGGU_RESI_S, kosong)
+                            len(kosong), tunggu_s, kosong)
+                # alasan dari marketplace (insiden 2026-10-19: Shopee SPX Hemat "The order is not
+                # valid to ship." berjam-jam) - dicatat supaya sebab tidak perlu ditebak lagi
+                alasan = {}
+                for r in tunggu:
+                    if not _batal(r):
+                        a = (f"channel_status={r.get('channel_status')!r} "
+                             f"marketplace_status={r.get('marketplace_status')!r}")
+                        alasan.setdefault(a, []).append(str(r.get("salesorder_no")))
+                for a, nomor in alasan.items():
+                    log.warning("  Alasan dari Jubelio untuk %d pesanan: %s (mis. %s)",
+                                len(nomor), a, ", ".join(nomor[:3]))
             return rows
         k.tidur(JEDA_RESI_S)
 
@@ -2306,6 +2318,79 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
 
     for h in hasil:
         h.pop("mulai", None)
+    return hasil
+
+
+def _pesanan_picklist(k: Klien, picklist_no: str) -> dict[str, dict]:
+    """{no pesanan: baris finish-pick} untuk satu picklist (is_printed 0 dan 1 digabung)."""
+    hasil = {}
+    for printed in (0, 1):
+        page = 1
+        while True:
+            j = k.get("wms/sales/v2/orders/finish-pick/", {
+                "q": picklist_no, "page": page, "page_size": 200, "is_printed": printed,
+                "sort_by": "transaction_date", "sort_direction": "DESC"})
+            data = j.get("data") or []
+            for o in data:
+                if o.get("picklist_no") in (None, picklist_no):
+                    hasil[str(o.get("salesorder_no"))] = o
+            if not data or page * 200 >= int(j.get("totalCount") or 0):
+                break
+            page += 1
+    return hasil
+
+
+def resi_susulan(k: Klien, target: dict[str, list[str]], folder_tujuan: Path,
+                 jalankan: bool, sudah: set[str] | None = None) -> dict:
+    """Resi susulan (insiden 2026-10-19: ratusan pesanan Shopee SPX Hemat tidak dapat resi
+    dalam 180 dtk, resinya baru keluar belakangan sehingga tidak ikut label PDF).
+    `target`: {no picklist: [no pesanan tanpa resi]} (dari peringatan_resi.baca_target()).
+    `sudah`: no pesanan yang labelnya sudah pernah dibuat susulan (dilewati).
+    Mode uji (`jalankan` False): hanya membaca status tiap pesanan (GET), tidak meminta resi
+    & tidak mengunduh. Mode sungguhan: minta resi sekali lagi (tunggu singkat) lalu unduh
+    label HANYA pesanan yang kini punya resi ke `folder_tujuan/<picklist>_SUSULAN_...pdf`.
+    Mengembalikan {"label": [{picklist, pesanan, file}], "masih_kosong": [...], "batal": [...]}."""
+    sudah = sudah or set()
+    hasil = {"label": [], "masih_kosong": [], "batal": []}
+    for picklist_no, nomor in target.items():
+        nomor = [n for n in nomor if n not in sudah]
+        if not nomor:
+            continue
+        baris = _pesanan_picklist(k, picklist_no)
+        ids = {n: baris[n]["salesorder_id"] for n in nomor if n in baris}
+        hilang = [n for n in nomor if n not in baris]
+        if hilang:
+            log.info("  %s: %d pesanan tidak lagi ada di Picking > Selesai (sudah dicetak/dikirim?): %s",
+                     picklist_no, len(hilang), ", ".join(hilang))
+        if not ids:
+            continue
+        if jalankan:
+            rows = minta_resi(k, list(ids.values()), tunggu_s=20)
+        else:
+            rows = []
+            for n, i in ids.items():
+                d = k.get(f"sales/orders/{i}")
+                rows.append({"salesorder_no": n, "salesorder_id": i,
+                             "tracking_no": d.get("tracking_no"), "internal_status": d.get("internal_status"),
+                             "wms_status": d.get("wms_status"), "channel_status": d.get("channel_status")})
+        ada = [r for r in rows if _ada_resi(r)]
+        hasil["batal"] += [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and _batal(r)]
+        hasil["masih_kosong"] += [str(r.get("salesorder_no")) for r in rows
+                                  if not _ada_resi(r) and not _batal(r)]
+        log.info("  %s: %d dari %d pesanan sudah punya resi%s", picklist_no, len(ada), len(ids),
+                 "" if jalankan else " (mode uji, label tidak diunduh)")
+        if not (ada and jalankan):
+            if ada:
+                hasil["label"] += [{"picklist": picklist_no, "pesanan": str(r["salesorder_no"]),
+                                    "file": ""} for r in ada]
+            continue
+        tujuan = folder_tujuan / f"{picklist_no}_SUSULAN_{datetime.now():%Y-%m-%d_%H%M%S}.pdf"
+        sumber = {baris[str(r["salesorder_no"])].get("source") for r in ada}
+        file = str(unduh_label(k, [r["salesorder_id"] for r in ada], tujuan,
+                               lazada=sumber == {CHANNEL_ID_LAZADA}))
+        log.info("  Label susulan: %s", file)
+        hasil["label"] += [{"picklist": picklist_no, "pesanan": str(r["salesorder_no"]),
+                            "file": file} for r in ada]
     return hasil
 
 

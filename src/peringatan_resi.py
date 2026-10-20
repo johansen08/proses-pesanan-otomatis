@@ -47,7 +47,28 @@ def catat_tanpa_resi(picklist_no: str, sku: str, nomor_pesanan: list[str]) -> No
     catat(f"{len(nomor_pesanan)} pesanan picklist {picklist_no} (SKU {sku}) belum dapat resi: "
           f"{', '.join(nomor_pesanan)}. Kemungkinan ada request cancel yang masih diproses - "
           f"informasikan no pesanan ini ke tim admin/CS (kalau cancel disetujui nanti jadi "
-          f"cancelled, kalau ditolak nanti jadi ready to ship dan resi keluar).")
+          f"cancelled, kalau ditolak nanti jadi ready to ship dan resi keluar). Kalau resi sudah "
+          f"keluar: .\\bat\\jalankan.bat --resi-susulan --jalankan (label tambahan).")
+
+
+def baca_target(hari: int, sekarang: float | None = None) -> dict[str, list[str]]:
+    """{no picklist: [no pesanan]} dari peringatan `hari` hari terakhir (untuk resi susulan,
+    main.py --resi-susulan). Nomor pesanan dibaca dari teks peringatan catat_tanpa_resi()."""
+    import re
+    import time
+
+    batas = (sekarang if sekarang is not None else time.time()) - hari * 86400
+    hasil: dict[str, list[str]] = {}
+    for d in jurnal_peringatan.baca_baris(_file_peringatan):
+        if d.get("epoch", 0) < batas:
+            continue
+        m = re.search(r"picklist (PICK-\d+) \(SKU .*?\) belum dapat resi: (.*?)\. Kemungkinan",
+                      d.get("pesan", ""))
+        if m:
+            for n in (x.strip() for x in m.group(2).split(",") if x.strip()):
+                if n not in hasil.setdefault(m.group(1), []):
+                    hasil[m.group(1)].append(n)
+    return hasil
 
 
 def baca_sejak(epoch: float) -> list[str]:

@@ -186,7 +186,12 @@ project secara umum, root tidak boleh berisi file `.py`):
   tanda ada request cancel dari customer/channel yang masih diproses Jubelio, sehingga tim
   resi perlu tahu nomor pesanannya untuk diinformasikan ke tim admin/CS. Peringatan di
   `logs/pesanan_tanpa_resi.jsonl`; dicetak di tempat yang sama (akhir `main.py` & rekap
-  waktu tiap TIPE).
+  waktu tiap TIPE). **Resi susulan** (insiden 2026-10-19: 715 pesanan Shopee SPX Hemat tidak dapat resi dalam 180 dtk sejak
+  ±15.30, Jubelio menjawab `marketplace_status` "The order is not valid to ship.", resi baru keluar belakangan sehingga tidak ikut
+  label PDF): `main.py --resi-susulan [--hari N] [--jalankan]` membaca peringatan di atas, cek ulang tiap pesanan
+  (`proses_label.resi_susulan()`), dan yang kini punya resi diunduh ke `label-pengiriman/<hari ini>/SUSULAN/PICK-..._SUSULAN_*.pdf`
+  (dicatat di `logs/resi_susulan.jsonl` agar tidak dobel). Tanpa `--jalankan` hanya membaca. `minta_resi()` kini mencatat alasan
+  `channel_status/marketplace_status` pesanan yang tak kunjung dapat resi ke log.
 - `src/peringatan_sisa.py` — penjaga "pesanan tak tersentuh" (insiden 2026-10-09: 2 resi wajib keluar,
   channel Tokopedia asli `TP-...` id 128 & kurir JNE, tidak pernah masuk picklist apa pun TANPA peringatan).
   Dipanggil `main.py --upload-iresis` (langkah terakhir tiap TIPE; tetap jalan walau upload IRESIS dilewati

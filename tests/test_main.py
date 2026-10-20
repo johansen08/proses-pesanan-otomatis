@@ -3,6 +3,7 @@ lewat test_proses_label.py & test_sku_spesial.py untuk bagian yang dipanggilnya)
 
 Jalankan:  .venv\\Scripts\\python tests\\test_main.py
 """
+import time
 import os
 import sys
 import tempfile
@@ -244,6 +245,11 @@ def uji_peringatan_resi_tanpa_resi():
         pesan = pr._sesi[0]
         assert "PICK-000154839" in pesan and "SO9068180" in pesan and "SO9068214" in pesan, pesan
         assert len(pr.baca_sejak(0)) == 1 and pr.baca_sejak(9e12) == []
+        pr.catat_tanpa_resi("PICK-000154840", "ZU7", ["SO1"])
+        pr.catat_tanpa_resi("PICK-000154839", "T01-BSBI-5", ["SO9068214", "SO3"])
+        assert pr.baca_target(1) == {"PICK-000154839": ["SO9068180", "SO9068214", "SO3"],
+                                     "PICK-000154840": ["SO1"]}, pr.baca_target(1)
+        assert pr.baca_target(1, sekarang=time.time() + 10 * 86400) == {}, "peringatan lebih tua dari batas hari diabaikan"
     pr._file_peringatan = None
     print("  peringatan_resi: pesanan tanpa resi (bukan batal) dicatat untuk diinformasikan ke CS")
 
