@@ -280,6 +280,26 @@ def uji_pulihkan_sesi_daftar_picklist_dari_jurnal_dan_pdf():
     print("  pulihkan_sesi: daftar picklist dari jurnal (per sesi) + nama PDF, picklist sesi lain tidak ikut")
 
 
+def uji_folder_pemulihan_dan_nama_sesi():
+    import nama_sesi as ns
+    import pulihkan_sesi as ps
+    assert ns.nomor_sesi("10") == 10 and ns.nomor_sesi("11-PEMULIHAN") == 11
+    assert ns.nomor_sesi("pilah") is None and ns.nomor_sesi("SPESIAL-SATUAN-1") is None
+    assert ns.urutan_sesi("11") < ns.urutan_sesi("11-PEMULIHAN") < ns.urutan_sesi("12")
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp)
+        (label / "2026-10-19" / "10").mkdir(parents=True)
+        (label / "2026-10-19" / "SPESIAL-SATUAN-1").mkdir()
+        f = ps.folder_pemulihan(label, "2026-10-19")
+        assert f.name == "11-PEMULIHAN" and f.is_dir()
+        assert ps.folder_pemulihan(label, "2026-10-19").name == "12-PEMULIHAN"
+        assert m._sesi_valid("2026-10-19/11-PEMULIHAN") == "2026-10-19/11-PEMULIHAN"
+        (label / datetime.now().strftime("%Y-%m-%d") / "12-PEMULIHAN").mkdir(parents=True)
+        with mock.patch.object(m, "FOLDER_LABEL", label):
+            assert m.sesi_label_baru().endswith("/13"), "nomor sesi baru melewati folder pemulihan"
+    print("  folder pemulihan: N-PEMULIHAN dinomori setelah sesi terbesar; sesi baru berikutnya tidak bentrok")
+
+
 def uji_upload_iresis_mode_uji_gagal_dan_sukses():
     import logging
     import os

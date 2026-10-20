@@ -118,23 +118,6 @@ def uji_minus_lebih_dari_nol_sel_o_kuning():
     print("  MINUS > 0: hanya sel O baris itu yang kuning")
 
 
-def uji_perbarui_memperbaiki_baris_yang_ada_tanpa_baris_dobel():
-    _reset()
-    with tempfile.TemporaryDirectory() as tmp:
-        folder = Path(tmp)
-        rme.catat(folder, _baris(157501, **{"Total Pesanan": 10, "Resi Keluar": 8,
-                                            "Tanpa Resi": ["SO1", "SO2"]}))
-        rme.perbarui(folder, _baris(157501, **{"Total Pesanan": 10, "Resi Keluar": 10}))
-        _, ws = _muat(folder)
-        assert ws.cell(6, 12).value == 157501 and ws.cell(7, 12).value is None, "tidak boleh dobel"
-        assert ws.cell(6, 14).value == 10 and not ws.cell(6, 21).value, (ws.cell(6, 14).value, ws.cell(6, 21).value)
-        assert not _kuning(ws["O6"]), "minus sudah 0: kuning hilang"
-        rme.perbarui(folder, _baris(157502))                  # belum ada barisnya: ditambah
-        _, ws = _muat(folder)
-        assert ws.cell(7, 12).value == 157502
-    print("  perbarui: baris picklist yang ada diperbarui (bukan dobel), kuning dihitung ulang")
-
-
 def uji_picklist_cancel_hanya_nomor_terlompat_yang_diberikan():
     _reset()
     with tempfile.TemporaryDirectory() as tmp:

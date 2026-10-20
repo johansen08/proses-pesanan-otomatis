@@ -64,6 +64,7 @@ from urllib.parse import parse_qs, urlparse
 
 import jalankan_harian as jh
 import kurasi_satuan
+import nama_sesi
 import operator_aktif as oa
 import print_spesial as ps
 
@@ -140,7 +141,8 @@ def data_sesi(hari_ini: date | None = None) -> dict:
         if not jenis_out:
             continue   # sesi tanpa label jenis yang ditampilkan (mis. baru dibuat/kosong)
         per_tanggal.setdefault(folder.parent.name, []).append({
-            "no": int(folder.name), "id": f"{folder.parent.name}/{folder.name}",
+            "no": nama_sesi.nomor_sesi(folder.name), "id": f"{folder.parent.name}/{folder.name}",
+            **({} if folder.name.isdigit() else {"judul": folder.name}),
             "jam": datetime.fromtimestamp(min(waktu)).strftime("%H.%M") if waktu else "--.--",
             "jenis": jenis_out})
     for tanggal in sorted(per_tanggal):   # folder hasil pilah (pilah_satuan.py) ikut bisa dicetak

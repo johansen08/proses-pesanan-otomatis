@@ -147,6 +147,21 @@ def uji_server_ui_urgent_lazada_kelompok_sendiri():
     print("  server_ui: label Lazada tampil di kelompok 'Urgent Lazada - skala 68%', JNE-LEX tetap di URGENT")
 
 
+def uji_server_ui_sesi_pemulihan_tampil_di_menu_cetak():
+    hari_ini = date.today()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        _buat(label / hari_ini.isoformat() / "10" / "SPESIAL", "PICK-000000001_SPESIAL_A_2026-10-19_172147.pdf")
+        _buat(label / hari_ini.isoformat() / "11-PEMULIHAN" / "SPESIAL", "PICK-000000001_SPESIAL_A_2026-10-19_180000.pdf")
+        with mock.patch.object(ps, "FOLDER_LABEL", label), \
+                mock.patch.object(ps, "FILE_SUDAH_DICETAK", Path(tmp) / "sudah_dicetak.txt"):
+            sesi = su.data_sesi(hari_ini)["hari"][0]["sesi"]
+            assert [s["id"] for s in sesi] == [f"{hari_ini.isoformat()}/10", f"{hari_ini.isoformat()}/11-PEMULIHAN"], sesi
+            assert sesi[1]["no"] == 11 and sesi[1]["judul"] == "11-PEMULIHAN" and "judul" not in sesi[0]
+            assert ps.folder_sesi_terbaru(label).name == "11-PEMULIHAN"
+    print("  server_ui: folder N-PEMULIHAN tampil sebagai sesi tersendiri di menu Cetak & dianggap sesi terbaru")
+
+
 def uji_server_ui_endpoint_harian():
     import jalankan_harian as jh
 

@@ -2394,30 +2394,14 @@ def resi_susulan(k: Klien, target: dict[str, list[str]], folder_tujuan: Path,
     return hasil
 
 
-def hapus_detail_picklist(folder_label: Path, picklist_no: str, tag: str | None) -> None:
-    """Buang baris `picklist_no` dari file detail resi sesi (spesial & bukan-spesial milik `tag`)
-    supaya pemulihan (pulihkan_picklist) tidak menggandakan baris. File yang belum ada dilewati."""
-    for dasar in (NAMA_DETAIL_SPESIAL, NAMA_DETAIL_BUKAN_SPESIAL):
-        file = folder_label / nama_detail_per_kurir(dasar, tag)
-        if not file.exists():
-            continue
-        with _lock_wb:
-            _, ws = _wb_detail_spesial(file)
-            kol = KOLOM_DETAIL_SPESIAL.index("No Picklist") + 1
-            for r in range(ws.max_row, 1, -1):
-                if ws.cell(r, kol).value == picklist_no:
-                    ws.delete_rows(r)
-
-
 def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
-                      pdf_lama: Path, nama: str | None = None, tag: str | None = None,
+                      nama: str | None = None, tag: str | None = None,
                       subfolder: str | None = None) -> dict:
     """Pemulihan satu picklist yang SUDAH dibuat (tidak pernah membuat picklist baru): selesaikan
     picking kalau belum, minta resi untuk SEMUA pesanannya (termasuk yang labelnya sudah pernah
     diunduh - beda dari lanjutkan() yang hanya melihat Picking > Selesai belum-dicetak), unduh
-    ulang PDF, lalu isi ulang Excel (detail resi, PICKLIST.xlsx, riwayat). PDF lama picklist ini
-    dipindah (bukan dihapus) ke `pdf_lama` HANYA setelah PDF baru berhasil diunduh, supaya cetak
-    bulk tidak mencetak dobel."""
+    ulang PDF, lalu isi Excel (detail resi, PICKLIST.xlsx, riwayat). Semua keluaran ditulis ke
+    `folder_label` = folder BARU `N-PEMULIHAN` (lihat pulihkan_sesi.py); sesi asal tidak disentuh."""
     m = re.fullmatch(r"PICK-0*(\d+)", picklist_no.strip().upper())
     if not m:
         raise ProsesError(f"Format nomor picklist tidak dikenal: {picklist_no}")
@@ -2449,18 +2433,8 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
                                   f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
         file_label = str(unduh_label(k, ada_resi, tujuan, lazada="LAZADA" in (nama or "").upper()))
         log.info("  Label: %s", file_label)
-        for lama in sorted(folder_label.rglob(f"{picklist_no}_*.pdf")):
-            if lama.resolve() == Path(file_label).resolve():
-                continue
-            dest = pdf_lama / lama.relative_to(folder_label)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            if dest.exists():
-                dest = dest.with_name(f"{dest.stem}_{datetime.now():%H%M%S}{dest.suffix}")
-            lama.replace(dest)
-            log.info("  PDF lama dipindah: %s", dest)
 
     if tag and tag.endswith(TAG_SPESIAL):
-        hapus_detail_picklist(folder_label, picklist_no, tag)
         if baris_ada_resi:
             catat_detail_spesial(folder_label, nama_detail_per_kurir(
                 NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
@@ -2474,7 +2448,7 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
              "File Label": file_label, "Catatan": catatan, "Tanpa Resi": tanpa_resi,
              "Durasi": durasi(time.monotonic() - mulai)}
     catat_riwayat(file_riwayat, baris)
-    rekap_master_excel.perbarui(folder_label, baris)
+    rekap_master_excel.catat(folder_label, baris)
     return baris
 
 

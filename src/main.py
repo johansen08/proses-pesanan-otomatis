@@ -112,6 +112,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import nama_sesi
 import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
@@ -151,8 +152,8 @@ def sesi_label_baru() -> str:
     folder_tanggal.mkdir(parents=True, exist_ok=True)
     urutan_terbesar = 0
     for item in folder_tanggal.iterdir():
-        if item.is_dir() and item.name.isdigit():
-            urutan_terbesar = max(urutan_terbesar, int(item.name))
+        if item.is_dir() and (nomor := nama_sesi.nomor_sesi(item.name)) is not None:
+            urutan_terbesar = max(urutan_terbesar, nomor)
     nama = f"{tanggal}/{urutan_terbesar + 1}"
     (FOLDER_LABEL / nama).mkdir(parents=True, exist_ok=True)
     return nama
@@ -161,7 +162,7 @@ def sesi_label_baru() -> str:
 def _sesi_valid(teks: str) -> str:
     """Validasi --sesi: harus pola folder sesi `YYYY-MM-DD/N` (lihat sesi_label_baru())."""
     teks = teks.replace("\\", "/").strip("/")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}/\d+", teks):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}/\d+(-PEMULIHAN)?", teks):
         raise argparse.ArgumentTypeError(f"format sesi harus YYYY-MM-DD/N, bukan {teks!r}")
     return teks
 
@@ -1002,8 +1003,8 @@ def resi_susulan(log: logging.Logger, args) -> int:
 
 def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
     """Pemulihan satu sesi (lihat pulihkan_sesi.py): tidak membuat picklist baru dan tidak membuat
-    folder sesi baru. PDF lama dipindah ke data/pdf-lama-pulihan/<sesi>/ (di luar label-pengiriman
-    supaya tidak ikut tercetak)."""
+    picklist baru. Hasil ke folder BARU label-pengiriman/<tanggal sesi>/N-PEMULIHAN (dibuat hanya
+    saat --jalankan); sesi asal tidak diubah."""
     import proses_label
     import pulihkan_sesi
 
@@ -1022,7 +1023,10 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
         return 1
     k = proses_label.Klien(login(log))
     gagal = 0
-    pdf_lama = FOLDER_DATA / "pdf-lama-pulihan" / args.pulihkan_sesi
+    tujuan = (pulihkan_sesi.folder_pemulihan(FOLDER_LABEL, args.pulihkan_sesi.split("/")[0])
+              if args.jalankan else None)
+    if tujuan:
+        log.info("Hasil pemulihan ke folder: %s", tujuan)
     for no, v in daftar.items():
         if not args.jalankan:
             p = k.get(f"sales/picklists/{int(no.replace('PICK-', ''))}")
@@ -1031,7 +1035,7 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
             continue
         try:
             baris = proses_label.pulihkan_picklist(
-                k, no, folder, FILE_RIWAYAT, pdf_lama, nama=v["nama"], tag=v["tag"],
+                k, no, tujuan, FILE_RIWAYAT, nama=v["nama"], tag=v["tag"],
                 subfolder=v["subfolder"])
             log.info("  OK %s: resi %s/%s%s", no, baris["Resi Keluar"], baris["Total Pesanan"],
                      f" - belum dapat resi: {', '.join(baris['Tanpa Resi'])}" if baris["Tanpa Resi"] else "")
@@ -1039,8 +1043,8 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
             gagal += 1
             log.error("  GAGAL %s: %s", no, e)
     if args.jalankan:
-        log.info("SELESAI pemulihan sesi %s: %d picklist, %d gagal", args.pulihkan_sesi,
-                 len(daftar), gagal)
+        log.info("SELESAI pemulihan sesi %s -> %s: %d picklist, %d gagal", args.pulihkan_sesi,
+                 tujuan.name, len(daftar), gagal)
     return 1 if gagal else 0
 
 

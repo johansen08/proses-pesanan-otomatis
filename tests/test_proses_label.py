@@ -435,31 +435,29 @@ def uji_detail_resi_bukan_spesial_saat_kurang_dari_min_resi():
     print("  detail-resi-bukan-spesial.xlsx: baris yang tercetak tetap dicatat walau SKU gugur (< MIN_RESI)")
 
 
-def uji_pulihkan_picklist_unduh_ulang_tanpa_menggandakan_excel():
+def uji_pulihkan_picklist_tulis_ke_folder_pemulihan_sesi_asal_utuh():
     j = JubelioPalsu(_html_label())
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
     ids = [9068214, 9068180, 9068161, 9067835]
     _picklist_selesai(j, ids)
     with tempfile.TemporaryDirectory() as d:
-        folder = Path(d) / "label" / "2026-10-19" / "10"
-        pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, folder, tag=pl.TAG_SPESIAL)
+        asal = Path(d) / "label" / "2026-10-19" / "10"
+        pl.lanjutkan_picklist(k, 154839, "PICK-000154839", len(ids), SKU, asal, tag=pl.TAG_SPESIAL)
         pl.tutup_riwayat()
-        lama = list((folder / pl.TAG_SPESIAL).glob("PICK-000154839_*.pdf"))
-        assert len(lama) == 1
-        pdf_lama = Path(d) / "pdf-lama"
-        import time
-        time.sleep(1.1)                 # nama file memuat detik: PDF baru harus beda nama
-        pl.pulihkan_picklist(k, "PICK-000154839", folder, Path(d) / "riwayat.xlsx", pdf_lama,
+        lama = list((asal / pl.TAG_SPESIAL).glob("PICK-000154839_*.pdf"))
+        pulih = Path(d) / "label" / "2026-10-19" / "11-PEMULIHAN"
+        pl.pulihkan_picklist(k, "PICK-000154839", pulih, Path(d) / "riwayat.xlsx",
                              nama=SKU, tag=pl.TAG_SPESIAL)
         pl.tutup_riwayat()
-        baru = list((folder / pl.TAG_SPESIAL).glob("PICK-000154839_*.pdf"))
-        assert len(baru) == 1 and baru[0] != lama[0] and baru[0].exists(), baru
-        assert not lama[0].exists() and (pdf_lama / pl.TAG_SPESIAL / lama[0].name).exists(), \
-            "PDF lama dipindah, bukan dihapus"
+        assert len(lama) == 1 and lama[0].exists(), "sesi asal tidak boleh disentuh"
+        baru = list((pulih / pl.TAG_SPESIAL).glob("PICK-000154839_*.pdf"))
+        assert len(baru) == 1 and baru[0].exists(), baru
         from openpyxl import load_workbook
-        baris = list(load_workbook(folder / pl.NAMA_DETAIL_SPESIAL).active.values)
-        assert len(baris) == 1 + len(ids), f"detail tidak boleh dobel: {baris}"
-    print("  pulihkan_picklist: PDF diunduh ulang, PDF lama dipindah, detail resi tidak dobel")
+        baris = list(load_workbook(pulih / pl.NAMA_DETAIL_SPESIAL).active.values)
+        assert len(baris) == 1 + len(ids), baris
+        assert (pulih / "PICKLIST.xlsx").exists()
+        assert len(list(load_workbook(asal / pl.NAMA_DETAIL_SPESIAL).active.values)) == 1 + len(ids)
+    print("  pulihkan_picklist: PDF & Excel ke folder N-PEMULIHAN, sesi asal utuh")
 
 
 class JubelioPalsuUrgent:

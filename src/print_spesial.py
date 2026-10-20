@@ -127,6 +127,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import kurasi_satuan
+import nama_sesi
 import serah_terima
 import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
@@ -329,9 +330,10 @@ def folder_sesi_terbaru(folder_label: Path = FOLDER_LABEL) -> Path:
         if not folder_tanggal.is_dir() or not POLA_TANGGAL_SESI.match(folder_tanggal.name):
             continue
         for item in folder_tanggal.iterdir():
-            if not item.is_dir() or not item.name.isdigit():
+            urutan = nama_sesi.urutan_sesi(item.name)
+            if not item.is_dir() or urutan is None:
                 continue
-            kunci = (folder_tanggal.name, int(item.name))
+            kunci = (folder_tanggal.name, *urutan)
             if terbaik is None or kunci > terbaik[0]:
                 terbaik = (kunci, item)
     if terbaik is None:
@@ -357,8 +359,8 @@ def daftar_folder_sesi(folder_label: Path = FOLDER_LABEL, hari: int = HARI_SEMUA
         if tanggal < batas:
             continue
         for item in folder_tanggal.iterdir():
-            if item.is_dir() and item.name.isdigit():
-                hasil.append(((tanggal, int(item.name)), item))
+            if item.is_dir() and (urutan := nama_sesi.urutan_sesi(item.name)) is not None:
+                hasil.append(((tanggal, *urutan), item))
     return [item for _, item in sorted(hasil, key=lambda x: x[0])]
 
 

@@ -668,14 +668,22 @@ $('#printer').onchange=updBtn;
 /* ---------- cetak ke banyak printer: file terpilih dibagi berurutan & seimbang (server) ---------- */
 let PRINTERS=[],PRN_VIRTUAL=[];
 function printerTerpilih(){try{return JSON.parse(localStorage.getItem('printerBanyak')||'[]')}catch(e){return[]}}
+/* file terpilih -> yang dikirim ke server. File sudah tercetak boleh dipilih lagi (saat filter "sembunyikan yang sudah
+   dicetak" dimatikan) dan dicetak ULANG: server diberi ulang:true. File satuan yang sudah dikurasi tetap tidak
+   dikirim (isinya sudah ada di folder hasil pilah - mencetaknya lagi = dobel). */
+function pilihanFile(){const files=[];let ulang=0,nk=0;
+  ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(!pil.has(kf(s.id,j.nama,f.f)))return;
+    if(f.kurasi){nk++;return}if(f.done)ulang++;files.push(f.rel)})));
+  return{files,ulang,nk}}
 $('#cetakBanyakBtn').onclick=()=>{
   const fisik=PRINTERS.filter(p=>!PRN_VIRTUAL.includes(p));
   if(!fisik.length)return toast('Tidak ada printer terdeteksi');
-  const awal=printerTerpilih(),files=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
+  const awal=printerTerpilih(),{files,ulang}=pilihanFile();if(!files.length)return toast('Tidak ada file yang bisa dicetak (satuan dikurasi dilewati)');
   modal(`<h2>Cetak ${files.length} file di banyak printer</h2>
    <p style="margin:4px 0 8px">File dibagi berurutan &amp; seimbang menurut jumlah halaman. Tiap printer mengeluarkan tumpukan yang urut.</p>
    <div id="bpList">${fisik.map((p,i)=>{const sibuk=cjobs[p]&&cjobs[p].status==='jalan';
      return `<label style="display:flex;gap:8px;align-items:center;margin:6px 0;${sibuk?'opacity:.5':''}"><input type="checkbox" class="bpC" data-p="${esc(p)}" ${sibuk?'disabled':(awal.length?awal.includes(p):true)?'checked':''}> <span>${esc(p)}${sibuk?' — sedang mencetak':''}</span></label>`}).join('')}</div>
+   ${ulang?`<div class="note">${ulang} file sudah pernah tercetak &mdash; akan dicetak ULANG.</div>`:''}
    <div class="note" id="bpInfo"></div>
    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="bpYa">Cetak</button></div>`);
   const pilihan=()=>$$('.bpC').filter(c=>c.checked).map(c=>c.dataset.p);
@@ -683,7 +691,7 @@ $('#cetakBanyakBtn').onclick=()=>{
   $$('.bpC').forEach(c=>c.onchange=info);info();
   $('#bpYa').onclick=async()=>{const printers=pilihan();if(!printers.length)return;
     try{localStorage.setItem('printerBanyak',JSON.stringify(printers))}catch(e){}
-    let r;try{r=await postJ('/api/cetak',{files,printers})}catch(e){return toast('Gagal mulai: '+e.message)}
+    let r;try{r=await postJ('/api/cetak',{files,printers,ulang:ulang>0})}catch(e){return toast('Gagal mulai: '+e.message)}
     tutup();pil.clear();gambarCetak();
     Object.keys(r.jobs).forEach(p=>lacak(p,r.jobs[p].file));
     toast('Mencetak di '+Object.keys(r.jobs).length+' printer')};
@@ -724,14 +732,15 @@ async function tickCetak(p){
   gambarJobs();renderJob();
 }
 $('#cetakBtn').onclick=()=>{
-  const g={};let tot=0,nf=0,nk=0;
-  ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){const n=(s.judul||'Sesi '+s.no)+' · '+j.nama;g[n]=(g[n]||0)+1;tot+=f.n||0;nf++;if(f.kurasi)nk++}})));
+  const g={};let tot=0,nf=0,nk=0,nu=0;
+  ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f))){const n=(s.judul||'Sesi '+s.no)+' · '+j.nama;g[n]=(g[n]||0)+1;tot+=f.n||0;nf++;if(f.kurasi)nk++;else if(f.done)nu++}})));
   modal(`<h2>Cetak ${nf} file${API?'':' ('+tot+' label)'}?</h2><p>Printer: <b>${esc($('#printer').value)}</b></p><div class="chips">${Object.keys(g).map(n=>`<span class="chip" style="pointer-events:none">${esc(n)} · ${g[n]} file</span>`).join('')}</div>
+   ${nu?`<div class="note">${nu} file sudah pernah tercetak &mdash; akan dicetak ULANG.</div>`:''}
    ${nk?`<div class="note">${nk} file satuan sudah dikurasi &mdash; isinya sudah ada di SPESIAL-SATUAN / SISA-SATUAN, jadi akan dilewati saat dicetak.</div>`:''}
    <div class="acts"><button class="btn line" onclick="tutup()">Batal</button><button class="btn" id="yaC">Cetak</button></div>`);
   $('#yaC').onclick=async()=>{tutup();const printer=$('#printer').value;
-    if(API){const files=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))files.push(f.rel)})));
-      try{await postJ('/api/cetak',{files,printer})}catch(e){return toast('Gagal mulai: '+e.message)}
+    if(API){const{files,ulang}=pilihanFile();if(!files.length)return toast('Tidak ada file yang bisa dicetak (satuan dikurasi dilewati)');
+      try{await postJ('/api/cetak',{files,printer,ulang:ulang>0})}catch(e){return toast('Gagal mulai: '+e.message)}
       pil.clear();gambarCetak();lacak(printer,files.length);tampilJob(printer);return}
     /* mode contoh */
     const mark=[];ss.forEach(s=>s.jenis.forEach(j=>j.files.forEach(f=>{if(pil.has(kf(s.id,j.nama,f.f)))mark.push(f)})));

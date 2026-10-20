@@ -140,6 +140,8 @@ project secara umum, root tidak boleh berisi file `.py`):
   `print_spesial.py --file-dari ... --printer ... --tanpa-konfirmasi` (jangan mencetak langsung dari
   server). Penjagaan: Host harus localhost, POST wajib JSON, path divalidasi `pilih_file_spesifik()`,
   satu job sekaligus. Menu Harian di UI SUNGGUHAN lewat `src/jalankan_harian.py` (lihat di bawah).
+  **Cetak ulang dari UI** (2026-10-20): saat filter "sembunyikan yang sudah dicetak" dimatikan, file bertanda tercetak boleh dipilih dan
+  UI mengirim `ulang:true` (-> `--cetak-ulang-semua`, hanya untuk file terpilih); satuan yang sudah dikurasi tetap tidak dikirim.
   Peluncurnya `proses-pesanan.bat` (`--buka --menu harian`; `--menu cetak` membuka Cetak dulu); server kedua
   dicegah (`Server.allow_reuse_address = False` — di Windows SO_REUSEADDR membolehkan bind ganda ke
   port yang sama), klik kedua hanya membuka tampilan. Job cetak dikunci PER PRINTER (`_jobs[printer]`):
@@ -193,12 +195,13 @@ project secara umum, root tidak boleh berisi file `.py`):
   (dicatat di `logs/resi_susulan.jsonl` agar tidak dobel). Tanpa `--jalankan` hanya membaca. `minta_resi()` kini mencatat alasan
   `channel_status/marketplace_status` pesanan yang tak kunjung dapat resi ke log.
 - `src/pulihkan_sesi.py` — **pemulihan satu sesi** (`main.py --pulihkan-sesi YYYY-MM-DD/N [--picklist PICK-..] [--jalankan]`):
-  TIDAK membuat picklist/folder sesi baru; untuk semua picklist yang sudah dibuat di sesi itu (daftar dari `logs/picklist_terhenti.jsonl`
+  TIDAK membuat picklist baru; untuk semua picklist yang sudah dibuat di sesi itu (daftar dari `logs/picklist_terhenti.jsonl`
   per `sesi` + nama PDF di folder sesi) mengulang tahap sesudahnya lewat `proses_label.pulihkan_picklist()`: selesaikan picking, minta resi
-  untuk SEMUA pesanan picklist (bukan hanya yang belum-dicetak seperti `--lanjut`), unduh ulang PDF, isi ulang `detail-resi-*.xlsx`
-  (baris picklist itu dibuang dulu — tidak dobel), `PICKLIST.xlsx` (`rekap_master_excel.perbarui()` memperbarui baris yang ada) dan riwayat.
-  PDF lama picklist dipindah (bukan dihapus) ke `data/pdf-lama-pulihan/<sesi>/` setelah PDF baru berhasil, supaya cetak bulk tidak dobel.
-  Tanpa `--jalankan` hanya melapor. Satu picklist gagal tidak menghentikan yang lain (exit 1 di akhir).
+  untuk SEMUA pesanan picklist (bukan hanya yang belum-dicetak seperti `--lanjut`), unduh ulang PDF, `detail-resi-*.xlsx`, `PICKLIST.xlsx`
+  dan riwayat. Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
+  tidak disentuh. `src/nama_sesi.py` = satu-satunya pola nama folder sesi (`N` atau `N-PEMULIHAN`): cetak bulk, menu Cetak UI
+  (judul "N-PEMULIHAN"), `--sesi`, dan penomoran sesi baru memperlakukannya sebagai sesi (pilah_satuan/kurasi tetap hanya sesi `N` biasa).
+  Tanpa `--jalankan` hanya melapor (folder tidak dibuat). Satu picklist gagal tidak menghentikan yang lain (exit 1 di akhir).
 - `src/peringatan_sisa.py` — penjaga "pesanan tak tersentuh" (insiden 2026-10-09: 2 resi wajib keluar,
   channel Tokopedia asli `TP-...` id 128 & kurir JNE, tidak pernah masuk picklist apa pun TANPA peringatan).
   Dipanggil `main.py --upload-iresis` (langkah terakhir tiap TIPE; tetap jalan walau upload IRESIS dilewati
