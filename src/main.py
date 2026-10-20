@@ -108,6 +108,7 @@ import os
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -502,6 +503,8 @@ def _main() -> int:
                          "(yang bermasalah maupun tidak) ulangi tahap sesudah picklist dibuat (resi, "
                          "unduh ulang PDF, isi Excel) ke folder baru N-PEMULIHAN yang lengkap; TIDAK "
                          "membuat picklist baru. Tanpa --jalankan hanya melapor")
+    ap.add_argument("--paralel", type=int, default=5, metavar="N",
+                    help="dengan --pulihkan-sesi: jumlah picklist yang dipulihkan bersamaan (1-10, bawaan 5)")
     ap.add_argument("--paksa", action="store_true",
                     help="dipakai bersama --upload-iresis: tetap jalan walau jam 20.00-04.59 "
                         "(jendela yang biasanya melewati IRESIS)")
@@ -1002,8 +1005,8 @@ def resi_susulan(log: logging.Logger, args) -> int:
 
 
 def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
-    """Pemulihan satu sesi (lihat pulihkan_sesi.py): tidak membuat picklist baru dan tidak membuat
-    picklist baru. Hasil ke folder BARU label-pengiriman/<tanggal sesi>/N-PEMULIHAN (dibuat hanya
+    """Pemulihan satu sesi (lihat pulihkan_sesi.py): tidak membuat picklist baru. Picklist dikerjakan
+    PARALEL (--paralel, bawaan MAKS_WORKER_PARALEL); Excel ditulis berurutan nomor picklist. Hasil ke folder BARU label-pengiriman/<tanggal sesi>/N-PEMULIHAN (dibuat hanya
     saat --jalankan); sesi asal tidak diubah."""
     import proses_label
     import pulihkan_sesi
@@ -1019,7 +1022,6 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
     if not daftar:
         return 1
     k = proses_label.Klien(login(log))
-    gagal = 0
     tujuan = (pulihkan_sesi.folder_pemulihan(FOLDER_LABEL, args.pulihkan_sesi.split("/")[0])
               if args.jalankan else None)
     if tujuan:
@@ -1027,24 +1029,43 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
         # penanda sesi asal: Pilah memakai jam proses sesi ASAL untuk syarat jendela satuan gabungan
         (tujuan / nama_sesi.NAMA_PENANDA_PULIHAN).write_text(
             json.dumps({"asal": args.pulihkan_sesi}), encoding="utf-8")
-    for no, v in daftar.items():
+    pekerja = max(1, min(args.paralel, 10))
+    log.info("Dikerjakan paralel: %d picklist sekaligus", pekerja)
+
+    def kerja(no: str, v: dict) -> dict:
         if not args.jalankan:
-            try:
-                total, ada = proses_label.cek_picklist(k, no)
-                log.info("  CEK %s: kini %d/%d (%s)", no, ada, total, v["nama"])
-            except Exception as e:      # noqa: BLE001 - picklist lain tetap dicek
-                log.error("  GAGAL %s: %s", no, e)
-            continue
+            total, ada = proses_label.cek_picklist(k, no)
+            return {"total": total, "ada": ada}
         log.info("=== Pulihkan %s (%s)", no, v["nama"])
-        try:
-            baris = proses_label.pulihkan_picklist(
-                k, no, tujuan, FILE_RIWAYAT, nama=v["nama"], tag=v["tag"],
-                subfolder=v["subfolder"])
-            log.info("  OK %s: resi %s/%s%s", no, baris["Resi Keluar"], baris["Total Pesanan"],
-                     f" - belum dapat resi: {', '.join(baris['Tanpa Resi'])}" if baris["Tanpa Resi"] else "")
-        except Exception as e:      # noqa: BLE001 - picklist lain tetap dipulihkan
-            gagal += 1
-            log.error("  GAGAL %s: %s", no, e)
+        return proses_label.pulihkan_picklist(k, no, tujuan, FILE_RIWAYAT, nama=v["nama"], tag=v["tag"],
+                                              subfolder=v["subfolder"], tulis=False)
+
+    urut = list(daftar)
+    selesai: dict[str, dict | Exception] = {}
+    tertulis = 0       # Excel ditulis berurutan nomor picklist (awalan yang sudah selesai), bukan urutan selesai
+    gagal = 0
+    with ThreadPoolExecutor(max_workers=pekerja) as ex:
+        masa = {ex.submit(kerja, no, v): no for no, v in daftar.items()}
+        for f in as_completed(masa):
+            no = masa[f]
+            try:
+                hasil = f.result()
+            except Exception as e:      # noqa: BLE001 - picklist lain tetap dipulihkan
+                gagal += 1
+                selesai[no] = e
+                log.error("  GAGAL %s: %s", no, e)
+            else:
+                selesai[no] = hasil
+                if not args.jalankan:
+                    log.info("  CEK %s: kini %d/%d (%s)", no, hasil["ada"], hasil["total"], daftar[no]["nama"])
+                else:
+                    log.info("  OK %s: resi %s/%s%s", no, hasil["Resi Keluar"], hasil["Total Pesanan"],
+                             f" - belum dapat resi: {', '.join(hasil['Tanpa Resi'])}" if hasil["Tanpa Resi"] else "")
+            while args.jalankan and tertulis < len(urut) and urut[tertulis] in selesai:
+                h = selesai[urut[tertulis]]
+                if isinstance(h, dict):
+                    proses_label.tulis_hasil_pulihan(tujuan, h, FILE_RIWAYAT)
+                tertulis += 1
     if args.jalankan:
         log.info("SELESAI pemulihan sesi %s -> %s: %d picklist, %d gagal", args.pulihkan_sesi,
                  tujuan.name, len(daftar), gagal)

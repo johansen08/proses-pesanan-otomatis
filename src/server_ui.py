@@ -563,31 +563,39 @@ def mulai_pulih(data: dict, mode: str) -> None:
                 or (_pilah and _pilah["status"] == "jalan"):
             raise RuntimeError("Masih ada proses harian / download ulang / pilah yang berjalan - tunggu selesai")
         _pulih = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal, "sesi": str(int(sesi)),
-                  "lines": [], "total": len(daftar), "maju": 0, "now": "", "hasil": {}, "folder": None, "kode": None}
+                  "lines": [], "total": len(daftar), "maju": 0, "aktif": {}, "tahap": {}, "hasil": {}, "folder": None, "kode": None}
         threading.Thread(target=_kerjakan_pulih, args=(_pulih, perintah), daemon=True).start()
 
 
-_POLA_PULIH_OK = re.compile(r"^\s*OK (PICK-\d+): resi (\d+)/(\d+)(?: - belum dapat resi: (.*))?$")
-_POLA_PULIH_CEK = re.compile(r"^\s*CEK (PICK-\d+): kini (\d+)/(\d+)")
-_POLA_PULIH_GAGAL = re.compile(r"^\s*GAGAL (PICK-\d+): (.*)$")
+# keluaran main.py berawalan "2026-10-20 08:41 INFO   " (util_umum.atur_log) - awalan itu opsional di sini
+_AWAL_LOG = r"^(?:\d{4}-\d{2}-\d{2} \d{2}:\d{2} \w+\s+)?\s*"
+_POLA_PULIH_OK = re.compile(_AWAL_LOG + r"OK (PICK-\d+): resi (\d+)/(\d+)(?: - belum dapat resi: (.*))?$")
+_POLA_PULIH_CEK = re.compile(_AWAL_LOG + r"CEK (PICK-\d+): kini (\d+)/(\d+)")
+_POLA_PULIH_GAGAL = re.compile(_AWAL_LOG + r"(?:GAGAL|TERHENTI) (PICK-\d+): (.*)$")
+_POLA_PULIH_MULAI = re.compile(_AWAL_LOG + r"=== Pulihkan (PICK-\d+) \((.*)\)")
+_POLA_PULIH_TAHAP = re.compile(_AWAL_LOG + r"\[(\d)\] (PICK-\d+)")
 
 
 def _baris_pulih(job: dict, baris: str) -> None:
     """Baca satu baris keluaran main.py --pulihkan-sesi: kemajuan, hasil per picklist, folder tujuan."""
-    m = re.search(r"=== Pulihkan (PICK-\d+)", baris)
-    if m:
-        job["now"] = baris[baris.index("PICK-"):]
-        return
-    if (m := _POLA_PULIH_OK.match(baris)):
+    if (m := _POLA_PULIH_MULAI.match(baris)):
+        job["aktif"][m.group(1)] = f"{m.group(1)} {m.group(2)}"
+    elif (m := _POLA_PULIH_TAHAP.match(baris)):
+        nama = job["aktif"].get(m.group(2))
+        if nama:     # tahap terakhir yang dicapai picklist itu (3 picking, 5 resi, 6 unduh PDF)
+            job["tahap"][m.group(2)] = {"3": "picking", "5": "minta resi", "6": "unduh PDF"}.get(m.group(1), "")
+    elif (m := _POLA_PULIH_OK.match(baris)):
         resi, total = int(m.group(2)), int(m.group(3))
         job["hasil"][m.group(1)] = {"resi": resi, "total": total, "sisa": total - resi}
         job["maju"] += 1
+        job["aktif"].pop(m.group(1), None)
     elif (m := _POLA_PULIH_CEK.match(baris)):
         job["hasil"][m.group(1)] = {"kini": int(m.group(2)), "total": int(m.group(3))}
         job["maju"] += 1
     elif (m := _POLA_PULIH_GAGAL.match(baris)):
         job["hasil"][m.group(1)] = {"gagal": m.group(2)}
         job["maju"] += 1
+        job["aktif"].pop(m.group(1), None)
     elif "Hasil pemulihan ke folder:" in baris:
         job["folder"] = Path(baris.split("folder:", 1)[1].strip()).name
 

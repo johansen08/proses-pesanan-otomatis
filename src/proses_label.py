@@ -2410,12 +2410,14 @@ def cek_picklist(k: Klien, picklist_no: str) -> tuple[int, int]:
 
 def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
                       nama: str | None = None, tag: str | None = None,
-                      subfolder: str | None = None) -> dict:
+                      subfolder: str | None = None, tulis: bool = True) -> dict:
     """Pemulihan satu picklist yang SUDAH dibuat (tidak pernah membuat picklist baru): selesaikan
     picking kalau belum, minta resi untuk SEMUA pesanannya (termasuk yang labelnya sudah pernah
     diunduh - beda dari lanjutkan() yang hanya melihat Picking > Selesai belum-dicetak), unduh
     ulang PDF, lalu isi Excel (detail resi, PICKLIST.xlsx, riwayat). Semua keluaran ditulis ke
-    `folder_label` = folder BARU `N-PEMULIHAN` (lihat pulihkan_sesi.py); sesi asal tidak disentuh."""
+    `folder_label` = folder BARU `N-PEMULIHAN` (lihat pulihkan_sesi.py); sesi asal tidak disentuh.
+    `tulis` False: hanya kerja Jubelio + PDF (aman dijalankan paralel); Excel/riwayat TIDAK ditulis -
+    pemanggil memanggil tulis_hasil_pulihan() berurutan nomor picklist supaya baris Excel rapi."""
     m = re.fullmatch(r"PICK-0*(\d+)", picklist_no.strip().upper())
     if not m:
         raise ProsesError(f"Format nomor picklist tidak dikenal: {picklist_no}")
@@ -2427,7 +2429,9 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
     ids = sorted({i["salesorder_id"] for i in p["items"]})
     log.info("=== Pulihkan %s (SKU %s, %d pesanan)", picklist_no, sku, len(ids))
     mulai = time.monotonic()
+    log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, p["picklist_id"])
+    log.info("  [5] %s: minta resi untuk %d pesanan", picklist_no, len(ids))
     rows = minta_resi(k, ids)
     baris_ada_resi = [r for r in rows if _ada_resi(r)]
     ada_resi = [r["salesorder_id"] for r in baris_ada_resi]
@@ -2445,25 +2449,33 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
         folder_tujuan = (folder_label / sub) if sub else folder_label
         tujuan = folder_tujuan / (f"{awalan}{_nama_file(nama_file)}_"
                                   f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
+        log.info("  [6] %s: unduh label PDF (%d pesanan)", picklist_no, len(ada_resi))
         file_label = str(unduh_label(k, ada_resi, tujuan, lazada="LAZADA" in (nama or "").upper()))
         log.info("  Label: %s", file_label)
-
-    if tag and tag.endswith(TAG_SPESIAL):
-        if baris_ada_resi:
-            catat_detail_spesial(folder_label, nama_detail_per_kurir(
-                NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
-                else NAMA_DETAIL_BUKAN_SPESIAL, tag), [
-                {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
-                 "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
 
     peringatan_gagal.tandai_selesai(picklist_no)
     baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
              "No Picklist": picklist_no, "Total Pesanan": len(ids), "Resi Keluar": len(ada_resi),
              "File Label": file_label, "Catatan": catatan, "Tanpa Resi": tanpa_resi,
              "Durasi": durasi(time.monotonic() - mulai)}
+    if tag and tag.endswith(TAG_SPESIAL) and baris_ada_resi:
+        baris["_detail"] = (nama_detail_per_kurir(
+            NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI else NAMA_DETAIL_BUKAN_SPESIAL, tag), [
+            {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
+             "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
+    if tulis:
+        tulis_hasil_pulihan(folder_label, baris, file_riwayat)
+    return baris
+
+
+def tulis_hasil_pulihan(folder_label: Path, baris: dict, file_riwayat: Path) -> None:
+    """Tulis hasil satu picklist pemulihan ke Excel: detail resi spesial (kunci "_detail" di `baris`),
+    riwayat_picklist.xlsx dan PICKLIST.xlsx folder pemulihan. Dipanggil berurutan nomor picklist."""
+    detail = baris.pop("_detail", None)
+    if detail:
+        catat_detail_spesial(folder_label, detail[0], detail[1])
     catat_riwayat(file_riwayat, baris)
     rekap_master_excel.catat(folder_label, baris)
-    return baris
 
 
 def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,

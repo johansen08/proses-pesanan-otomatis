@@ -217,9 +217,13 @@ def uji_server_ui_pulih_status_dan_job():
                 except ValueError:
                     pass
             # keluaran main.py dibaca jadi kemajuan, hasil per picklist, folder tujuan
-            keluaran = ["=== Pulihkan PICK-000000001 (A)", "  OK PICK-000000001: resi 3/3",
-                        "=== Pulihkan PICK-000000002 (B)", "  OK PICK-000000002: resi 1/3 - belum dapat resi: SP-1, SP-2",
-                        "  GAGAL PICK-000000004: boom", "Hasil pemulihan ke folder: C:\\x\\" + tgl + "\\11-PEMULIHAN"]
+            awal = "2026-10-20 08:41 INFO   "      # awalan util_umum.atur_log: sebelumnya lupa -> progress tidak pernah update
+            keluaran = [awal + "=== Pulihkan PICK-000000001 (A)", awal + "  [5] PICK-000000001: minta resi untuk 3 pesanan",
+                        awal + "  OK PICK-000000001: resi 3/3",
+                        awal + "=== Pulihkan PICK-000000002 (B)",
+                        awal + "  OK PICK-000000002: resi 1/3 - belum dapat resi: SP-1, SP-2",
+                        "2026-10-20 08:42 ERROR   GAGAL PICK-000000004: boom",
+                        awal + "Hasil pemulihan ke folder: C:\\x\\" + tgl + "\\11-PEMULIHAN"]
             diluncurkan = []
 
             def luncur(argumen, env):
@@ -236,6 +240,8 @@ def uji_server_ui_pulih_status_dan_job():
                         break
                     time.sleep(0.05)
                 assert j["status"] == "selesai" and j["maju"] == 3 and j["folder"] == "11-PEMULIHAN", j
+                assert j["aktif"] == {}, "picklist yang selesai/gagal keluar dari daftar berjalan"
+                assert j["tahap"]["PICK-000000001"] == "minta resi", j["tahap"]
                 assert j["hasil"]["PICK-000000002"] == {"resi": 1, "total": 3, "sisa": 2}
                 assert j["hasil"]["PICK-000000004"] == {"gagal": "boom"}
                 su.mulai_pulih({"tanggal": tgl, "sesi": "10"}, "cek")

@@ -313,6 +313,49 @@ def uji_pulihkan_sesi_picklist_tanpa_pdf_dan_jurnal_ikut_dari_picklist_xlsx():
     print("  pulihkan_sesi: picklist tanpa PDF/jurnal ikut dari PICKLIST.xlsx sesi (tag/subfolder ditebak dari jenisnya)")
 
 
+def uji_pulihkan_sesi_cli_paralel_excel_berurutan_nomor():
+    """Picklist dipulihkan PARALEL (selesai tidak berurutan) tapi Excel/riwayat ditulis berurutan nomor
+    picklist; satu picklist gagal tidak menghentikan yang lain (exit 1)."""
+    import logging
+    import threading
+    import time as _t
+    from types import SimpleNamespace
+
+    import proses_label
+    import pulihkan_sesi
+    ditulis, serentak, puncak, kunci = [], [0], [0], threading.Lock()
+
+    def palsu(k, no, tujuan, riwayat, nama=None, tag=None, subfolder=None, tulis=True):
+        with kunci:
+            serentak[0] += 1
+            puncak[0] = max(puncak[0], serentak[0])
+        _t.sleep(0.4 - int(no[-1]) * 0.08)           # nomor kecil selesai PALING AKHIR
+        with kunci:
+            serentak[0] -= 1
+        if no.endswith("3"):
+            raise RuntimeError("boom")
+        return {"No Picklist": no, "Resi Keluar": 2, "Total Pesanan": 2, "Tanpa Resi": []}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label"
+        folder = label / "2026-10-19" / "10"
+        for n in range(1, 6):
+            (folder / "SATUAN").mkdir(parents=True, exist_ok=True)
+            (folder / "SATUAN" / f"PICK-00000000{n}_1QTY-REGULER-2A_2026-10-19_0{n}0000.pdf").write_bytes(b"x")
+        args = SimpleNamespace(pulihkan_sesi="2026-10-19/10", jalankan=True, paralel=5)
+        with mock.patch.object(m, "FOLDER_LABEL", label), mock.patch.object(m, "FOLDER_LOG", Path(tmp) / "logs"), \
+                mock.patch.object(m, "login", return_value="T"), \
+                mock.patch.object(proses_label, "pulihkan_picklist", palsu), \
+                mock.patch.object(proses_label, "tulis_hasil_pulihan",
+                                  lambda tujuan, h, riwayat: ditulis.append(h["No Picklist"])):
+            kode = m.pulihkan_sesi_cli(logging.getLogger("uji-pulih"), args)
+        assert kode == 1, "ada picklist gagal -> exit 1"
+        assert ditulis == ["PICK-000000001", "PICK-000000002", "PICK-000000004", "PICK-000000005"], ditulis
+        assert puncak[0] > 1, "harus berjalan paralel"
+        assert (label / "2026-10-19" / "11-PEMULIHAN" / "pulihan.json").exists()
+    print("  pulihkan_sesi_cli: dikerjakan paralel, Excel ditulis berurutan nomor, satu gagal tidak menghentikan")
+
+
 def uji_folder_pemulihan_dan_nama_sesi():
     import nama_sesi as ns
     import pulihkan_sesi as ps

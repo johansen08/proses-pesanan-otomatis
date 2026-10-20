@@ -1026,6 +1026,7 @@ function gambarPulih(){
        <td>${h?(h.gagal?`<span class="pill" title="${esc(h.gagal)}">gagal</span>`:h.sisa?`<span class="pill w">pulih, ${h.sisa} resi belum keluar</span>`:'<span class="pill ok">pulih ✓</span>'):`<span class="pill ${k}">${t}</span>${p.st==='ok'?' <small style="color:var(--mut)">ikut disalin</small>':' <small style="color:var(--mut)">akan diperbaiki</small>'}`}</td></tr>`}).join('')||'<tr><td colspan="5" class="kosong">Tidak ada picklist bermasalah di sesi ini</td></tr>'}</tbody></table></div>`:'';
   const dipilih=sel?sel.pl:[],nPil=dipilih.length,nBad=dipilih.filter(plBad).length,nm=plNoFolder(),sblm=PU.hasil;
   const pesananPil=dipilih.reduce((a,p)=>a+(p.total||0),0);
+  const scCol=(el.querySelector('.col')||{}).scrollTop||0,scSide=(el.querySelector('.side')||{}).scrollTop||0;   // pertahankan posisi gulir saat dirender ulang (poll tiap detik)
   el.innerHTML=`<div class="col">
     ${TERSAMBUNG?`<div class="note" style="margin:0 0 12px;background:var(--bg);color:var(--mut)">Status dari data lokal (jurnal, PICKLIST.xlsx, PDF). &ldquo;Cek dulu&rdquo; membaca Jubelio tanpa mengubah apa pun; &ldquo;Pulihkan&rdquo; mengubah data di Jubelio.${PU.err?` <b style="color:var(--bad)">${esc(PU.err)}</b>`:''}</div>`:'<div class="protoban"><b>PROTOTYPE</b> &mdash; data contoh (buka lewat server_ui.py untuk data sungguhan).</div>'}
     <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
@@ -1046,7 +1047,7 @@ function gambarPulih(){
         <div class="plrow"><span class="t">Excel</span><span style="color:var(--mut)">detail resi + PICKLIST.xlsx</span></div>
       </div>
       ${PU.cek&&!PU.hasil?`<div class="note" style="margin-top:10px;background:var(--okbg);color:var(--ok)">Hasil cek (hanya membaca): ${dipilih.reduce((a,p)=>a+Math.max(0,(p.kini||0)-(p.resi||0)),0)} resi tambahan sudah keluar di Jubelio; ${dipilih.reduce((a,p)=>a+Math.max(0,(p.total||0)-(p.kini==null?(p.resi||0):p.kini)),0)} masih kosong.</div>`:''}
-      ${PU.sibuk&&PU.prog?`<div class="prog" style="margin:12px 0 0"><i style="width:${Math.round(PU.prog.maju/PU.prog.total*100)}%"></i></div><div style="color:var(--mut);font-size:12.5px;margin-top:4px">Memulihkan ${PU.prog.maju}/${PU.prog.total} &middot; ${esc(PU.prog.now||'')}</div>`:''}
+      ${PU.sibuk&&PU.prog?`<div class="prog" style="margin:12px 0 0"><i style="width:${plPct(PU.prog)}%"></i></div><div style="color:var(--mut);font-size:12.5px;margin-top:4px"><b>${PU.modeJob==='cek'?'Mengecek':'Memulihkan'} ${PU.prog.maju}/${PU.prog.total}</b> &middot; ${plPct(PU.prog)}% &middot; ${plLama()}${(PU.prog.aktif||[]).length?' &middot; '+PU.prog.aktif.length+' berjalan bersamaan':''}</div>${(PU.prog.aktif||[]).slice(0,6).map(x=>`<div class="plrow" style="font-size:12px"><span class="t" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.nama)}</span><span class="pill m">${esc(x.tahap||'mulai')}</span></div>`).join('')}`:''}
       ${sblm&&!PU.sibuk?`<div class="step-ok" style="margin:12px 0 4px">${ic('check')}Selesai &mdash; ${Object.keys(sblm).length} picklist ada di ${PU.folder}</div>
         <div style="color:var(--mut);font-size:12.5px">${Object.values(sblm).filter(h=>h.sisa).length?Object.values(sblm).filter(h=>h.sisa).length+' picklist masih punya pesanan tanpa resi (Shopee belum menerbitkan) &mdash; jalankan pemulihan lagi nanti, hasilnya ke folder baru berikutnya.':'Semua resi sudah keluar.'}</div>
         <button class="btn" id="plCetak" style="margin-top:8px">${ic('print')}Buka di Cetak</button>
@@ -1059,6 +1060,7 @@ function gambarPulih(){
     <div class="card"><b>Kapan dipakai</b><ul class="facts" style="margin-bottom:0">
       <li>Label kurang pesanan<b>resi telat keluar</b></li><li>PDF gagal / hilang<b>unduh ulang</b></li><li>Excel tidak lengkap<b>diisi lagi</b></li><li>Isi hasil<b>seluruh sesi, lengkap</b></li><li>Folder<b>N-PEMULIHAN</b></li><li>Cetak<b>menu Cetak</b></li></ul></div>
    </aside>`;
+  const c0=el.querySelector('.col'),s0=el.querySelector('.side');if(c0)c0.scrollTop=scCol;if(s0)s0.scrollTop=scSide;
   el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(PU.sibuk)return;PU.tgl=b.dataset.t;PU.sesi=null;PU.hasil=null;PU.cek=false;PU.folder='';gambarPulih()});
   el.querySelectorAll('.psesi').forEach(b=>b.onclick=()=>{if(PU.sibuk)return;PU.sesi=b.dataset.s;PU.hasil=null;PU.cek=false;PU.folder='';gambarPulih()});
   const m=el.querySelector('#plMasalah');if(m)m.onclick=()=>{PU.masalah=!PU.masalah;gambarPulih()};
@@ -1073,6 +1075,8 @@ function gambarPulih(){
   const u=el.querySelector('#plUlang');if(u)u.onclick=()=>{PU.hasil=null;PU.cek=false;PU.folder='';gambarPulih()};
 }
 /* ---- sambungan ke server_ui.py (main.py --pulihkan-sesi) ---- */
+const plPct=pr=>{const f={'picking':.2,'minta resi':.5,'unduh PDF':.8},part=(pr.aktif||[]).reduce((a,x)=>a+(f[x.tahap]||.1),0);return Math.min(100,Math.round((pr.maju+part)/Math.max(1,pr.total)*100))};
+const plLama=()=>{const d=Math.max(0,Math.round((Date.now()-(PU.mulaiAt||Date.now()))/1000));return d>=60?Math.floor(d/60)+' mnt '+d%60+' dtk':d+' dtk'};
 let plT=null;
 async function muatPulih(){
   if(!TERSAMBUNG)return;
@@ -1085,16 +1089,16 @@ async function muatPulih(){
   gambarPulih();
 }
 async function plApi(mode,no){
-  PU.err='';PU.sibuk=true;PU.modeJob=mode;PU.hasil=null;PU.prog={maju:0,total:(plSesi()||{pl:[]}).pl.length,now:''};gambarPulih();
+  PU.err='';PU.sibuk=true;PU.modeJob=mode;PU.hasil=null;PU.mulaiAt=Date.now();PU.prog={maju:0,total:(plSesi()||{pl:[]}).pl.length,aktif:[]};gambarPulih();
   try{await postJ('/api/pulih/'+mode,{tanggal:PU.tgl,sesi:String(no)})}
   catch(e){PU.sibuk=false;PU.prog=null;PU.err=e.message;gambarPulih();toast('Gagal mulai: '+e.message);return}
   plPoll();
 }
-const plPoll=()=>{clearInterval(plT);plT=setInterval(plTick,1200);plTick()};
+const plPoll=()=>{clearInterval(plT);PU.mulaiAt=PU.mulaiAt||Date.now();plT=setInterval(plTick,1000);plTick()};
 async function plTick(){
   try{
     const j=await api('/api/pulih/job');
-    if(j.status==='jalan'){PU.prog={maju:j.maju||0,total:j.total||0,now:j.now||''};PU.folder=j.folder||PU.folder;if($('#v-pulih').classList.contains('on'))gambarPulih();return}
+    if(j.status==='jalan'){PU.prog={maju:j.maju||0,total:j.total||0,aktif:Object.entries(j.aktif||{}).map(([no,nama])=>({nama,tahap:(j.tahap||{})[no]||''}))};PU.folder=j.folder||PU.folder;if($('#v-pulih').classList.contains('on'))gambarPulih();return}
     clearInterval(plT);PU.sibuk=false;PU.prog=null;
     const sel=plSesi(),h=j.hasil||{};
     if(j.mode==='cek'){PU.cek=j.status==='selesai';if(sel)sel.pl.forEach(p=>{if(h[p.no]&&h[p.no].kini!=null)p.kini=h[p.no].kini});
@@ -1105,12 +1109,12 @@ async function plTick(){
   }catch(e){clearInterval(plT);PU.sibuk=false;PU.prog=null;PU.err='Koneksi ke server terputus: '+e.message;gambarPulih()}
 }
 function plJalankan(daftar,nm){
-  PU.sibuk=true;PU.folder=nm;PU.hasil=null;PU.prog={maju:0,total:daftar.length,now:''};gambarPulih();
+  PU.sibuk=true;PU.folder=nm;PU.hasil=null;PU.mulaiAt=Date.now();PU.prog={maju:0,total:daftar.length,aktif:[]};gambarPulih();
   const hasil={},r=rnd(daftar.length*31+7);let i=0;
   const iv=setInterval(()=>{
     if(i>=daftar.length){clearInterval(iv);PU.sibuk=false;PU.prog=null;PU.hasil=hasil;gambarPulih();toast('Pemulihan selesai ✓ — '+nm);return}
     const p=daftar[i++];const sisa=p.kini<p.total&&r()<.7?p.total-p.kini:0;
-    hasil[p.no]={sisa};PU.prog={maju:i,total:daftar.length,now:p.no+' '+p.nama};gambarPulih()},420);
+    hasil[p.no]={sisa};PU.prog={maju:i,total:daftar.length,aktif:[{nama:p.no+' '+p.nama,tahap:'unduh PDF'}]};gambarPulih()},420);
 }
 
 /* ---------- init ---------- */
