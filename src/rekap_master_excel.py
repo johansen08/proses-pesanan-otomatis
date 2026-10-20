@@ -240,6 +240,48 @@ def _isian_kuning():
     return PatternFill(fill_type="solid", fgColor=WARNA_KUNING)
 
 
+def perbarui(folder_sesi: Path, baris_riwayat: dict) -> None:
+    """Pemulihan sesi (pulihkan_sesi.py): perbarui baris picklist yang SUDAH ada di PICKLIST.xlsx
+    (cocok kolom L) - kolom M/N/U diisi ulang dan warna kuning dihitung ulang - alih-alih
+    menambah baris dobel. Belum ada barisnya: ditambah seperti catat()."""
+    n = _angka_picklist(baris_riwayat.get("No Picklist", ""))
+    if n is None:
+        return
+    from openpyxl.styles import PatternFill
+
+    try:
+        with _lock:
+            buku = _buka(Path(folder_sesi))
+            if buku is None:
+                return
+            ws = buku.ws
+            baris = next((r for r in range(BARIS_DATA_AWAL, buku.baris_berikut)
+                          if ws.cell(r, KOLOM_L_PICKLIST).value == n
+                          and ws.cell(r, KOLOM_T_JENIS).value != TEKS_TERLOMPAT), None)
+            if baris is None:
+                _tulis_baris(buku, baris_riwayat, None)
+            else:
+                total, resi = baris_riwayat.get("Total Pesanan"), baris_riwayat.get("Resi Keluar")
+                if total is not None:
+                    ws.cell(baris, KOLOM_M_LOLOS, total)
+                if resi is not None:
+                    ws.cell(baris, KOLOM_N_PRINT, resi)
+                catatan = " | ".join(x for x in (
+                    _catatan_proses, ", ".join(baris_riwayat.get("Tanpa Resi") or [])) if x)
+                ws.cell(baris, KOLOM_U_CATATAN).value = catatan or None
+                for c in range(KOLOM_FILL_AWAL, KOLOM_FILL_AKHIR + 1):
+                    ws.cell(baris, c).fill = PatternFill(fill_type=None)
+                if str(baris_riwayat.get("Catatan", "")).startswith(("GAGAL", "TERHENTI")):
+                    _tandai_kuning(ws, baris)
+                elif isinstance(total, (int, float)) and isinstance(resi, (int, float)) \
+                        and total - resi > 0:
+                    _tandai_kuning(ws, baris, KOLOM_O_MINUS, KOLOM_O_MINUS)
+            buku.kotor = True
+            _simpan(buku)
+    except Exception as e:     # noqa: BLE001 - jangan sampai pemulihan lain ikut gagal
+        log.warning("  Gagal perbarui %s di %s: %s", baris_riwayat.get("No Picklist"), NAMA_FILE, e)
+
+
 def _baris_kosong(buku: _Buku, tanggal: date) -> int:
     """Ambil baris berikutnya: salin rumus & gaya baris contoh (kecuali baris contoh itu
     sendiri), lalu isi operator & tanggal."""

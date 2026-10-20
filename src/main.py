@@ -495,6 +495,12 @@ def _main() -> int:
                     help="cek ulang pesanan yang dulu 'belum dapat resi' (peringatan --hari N hari "
                          "terakhir); yang kini sudah punya resi diunduh labelnya ke "
                          "label-pengiriman/<hari ini>/SUSULAN. Tanpa --jalankan hanya melapor")
+    ap.add_argument("--pulihkan-sesi", metavar="YYYY-MM-DD/N", type=_sesi_valid,
+                    help="pemulihan satu sesi: untuk SEMUA picklist yang sudah dibuat di sesi itu "
+                         "ulangi tahap sesudah picklist dibuat (resi, unduh ulang PDF, isi ulang "
+                         "Excel); TIDAK membuat picklist baru. Tanpa --jalankan hanya melapor")
+    ap.add_argument("--picklist", action="append", metavar="PICK-000xxxxxx",
+                    help="dengan --pulihkan-sesi: batasi ke picklist ini (boleh diulang)")
     ap.add_argument("--paksa", action="store_true",
                     help="dipakai bersama --upload-iresis: tetap jalan walau jam 20.00-04.59 "
                         "(jendela yang biasanya melewati IRESIS)")
@@ -561,6 +567,8 @@ def _main() -> int:
         return 1
     if args.resi_susulan:
         return resi_susulan(log, args)
+    if args.pulihkan_sesi:
+        return pulihkan_sesi_cli(log, args)
     if args.upload_iresis:
         # penjaga pesanan tak tersentuh: langkah terakhir tiap TIPE, TETAP jalan walau upload
         # IRESIS dilewati di jendela malam (jam_tanpa_iresis()) - tidak pernah menggagalkan TIPE
@@ -990,6 +998,50 @@ def resi_susulan(log: logging.Logger, args) -> int:
     if hasil["masih_kosong"]:
         log.warning("Masih tanpa resi: %s", ", ".join(hasil["masih_kosong"]))
     return 0
+
+
+def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
+    """Pemulihan satu sesi (lihat pulihkan_sesi.py): tidak membuat picklist baru dan tidak membuat
+    folder sesi baru. PDF lama dipindah ke data/pdf-lama-pulihan/<sesi>/ (di luar label-pengiriman
+    supaya tidak ikut tercetak)."""
+    import proses_label
+    import pulihkan_sesi
+
+    folder = FOLDER_LABEL / args.pulihkan_sesi
+    if not folder.is_dir():
+        log.error("Folder sesi %s tidak ada", folder)
+        return 1
+    daftar = pulihkan_sesi.daftar_picklist(FOLDER_LOG / "picklist_terhenti.jsonl", folder,
+                                           args.pulihkan_sesi)
+    if args.picklist:
+        pilih = {("PICK-" + re.sub(r"\D", "", x).zfill(9)) for x in args.picklist}
+        daftar = {n: v for n, v in daftar.items() if n in pilih}
+    log.info("Pemulihan sesi %s: %d picklist%s", args.pulihkan_sesi, len(daftar),
+             "" if args.jalankan else " (MODE UJI - tambahkan --jalankan untuk memulihkan)")
+    if not daftar:
+        return 1
+    k = proses_label.Klien(login(log))
+    gagal = 0
+    pdf_lama = FOLDER_DATA / "pdf-lama-pulihan" / args.pulihkan_sesi
+    for no, v in daftar.items():
+        if not args.jalankan:
+            p = k.get(f"sales/picklists/{int(no.replace('PICK-', ''))}")
+            log.info("  %s (%s): %d pesanan, is_completed=%s", no, v["nama"],
+                     len({i['salesorder_id'] for i in p['items']}), p.get("is_completed"))
+            continue
+        try:
+            baris = proses_label.pulihkan_picklist(
+                k, no, folder, FILE_RIWAYAT, pdf_lama, nama=v["nama"], tag=v["tag"],
+                subfolder=v["subfolder"])
+            log.info("  OK %s: resi %s/%s%s", no, baris["Resi Keluar"], baris["Total Pesanan"],
+                     f" - belum dapat resi: {', '.join(baris['Tanpa Resi'])}" if baris["Tanpa Resi"] else "")
+        except Exception as e:      # noqa: BLE001 - picklist lain tetap dipulihkan
+            gagal += 1
+            log.error("  GAGAL %s: %s", no, e)
+    if args.jalankan:
+        log.info("SELESAI pemulihan sesi %s: %d picklist, %d gagal", args.pulihkan_sesi,
+                 len(daftar), gagal)
+    return 1 if gagal else 0
 
 
 def upload_faktur_iresis(log: logging.Logger, args) -> int:

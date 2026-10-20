@@ -2394,6 +2394,90 @@ def resi_susulan(k: Klien, target: dict[str, list[str]], folder_tujuan: Path,
     return hasil
 
 
+def hapus_detail_picklist(folder_label: Path, picklist_no: str, tag: str | None) -> None:
+    """Buang baris `picklist_no` dari file detail resi sesi (spesial & bukan-spesial milik `tag`)
+    supaya pemulihan (pulihkan_picklist) tidak menggandakan baris. File yang belum ada dilewati."""
+    for dasar in (NAMA_DETAIL_SPESIAL, NAMA_DETAIL_BUKAN_SPESIAL):
+        file = folder_label / nama_detail_per_kurir(dasar, tag)
+        if not file.exists():
+            continue
+        with _lock_wb:
+            _, ws = _wb_detail_spesial(file)
+            kol = KOLOM_DETAIL_SPESIAL.index("No Picklist") + 1
+            for r in range(ws.max_row, 1, -1):
+                if ws.cell(r, kol).value == picklist_no:
+                    ws.delete_rows(r)
+
+
+def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
+                      pdf_lama: Path, nama: str | None = None, tag: str | None = None,
+                      subfolder: str | None = None) -> dict:
+    """Pemulihan satu picklist yang SUDAH dibuat (tidak pernah membuat picklist baru): selesaikan
+    picking kalau belum, minta resi untuk SEMUA pesanannya (termasuk yang labelnya sudah pernah
+    diunduh - beda dari lanjutkan() yang hanya melihat Picking > Selesai belum-dicetak), unduh
+    ulang PDF, lalu isi ulang Excel (detail resi, PICKLIST.xlsx, riwayat). PDF lama picklist ini
+    dipindah (bukan dihapus) ke `pdf_lama` HANYA setelah PDF baru berhasil diunduh, supaya cetak
+    bulk tidak mencetak dobel."""
+    m = re.fullmatch(r"PICK-0*(\d+)", picklist_no.strip().upper())
+    if not m:
+        raise ProsesError(f"Format nomor picklist tidak dikenal: {picklist_no}")
+    p = k.get(f"sales/picklists/{int(m.group(1))}")
+    picklist_no = p["picklist_no"]
+    skus = sorted({str(i.get("item_code")) for i in p["items"]})
+    sku = nama or "+".join(skus)
+    nama_file = nama or (skus[0] if len(skus) == 1 else "LANJUTAN")
+    ids = sorted({i["salesorder_id"] for i in p["items"]})
+    log.info("=== Pulihkan %s (SKU %s, %d pesanan)", picklist_no, sku, len(ids))
+    mulai = time.monotonic()
+    selesaikan_picking(k, p["picklist_id"])
+    rows = minta_resi(k, ids)
+    baris_ada_resi = [r for r in rows if _ada_resi(r)]
+    ada_resi = [r["salesorder_id"] for r in baris_ada_resi]
+    batal = [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and _batal(r)]
+    tanpa_resi = [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and not _batal(r)]
+    peringatan_resi.catat_tanpa_resi(picklist_no, sku, tanpa_resi)
+    catatan = "; ".join(teks for teks in (
+        "PULIHAN SESI", f"batal, tidak dicetak: {', '.join(batal)}" if batal else "",
+        f"belum dapat resi: {', '.join(tanpa_resi)}" if tanpa_resi else "") if teks)
+
+    file_label = ""
+    if ada_resi:
+        awalan = f"{picklist_no}_{tag}_" if tag else f"{picklist_no}_"
+        sub = subfolder if subfolder is not None else tag
+        folder_tujuan = (folder_label / sub) if sub else folder_label
+        tujuan = folder_tujuan / (f"{awalan}{_nama_file(nama_file)}_"
+                                  f"{datetime.now():%Y-%m-%d_%H%M%S}.pdf")
+        file_label = str(unduh_label(k, ada_resi, tujuan, lazada="LAZADA" in (nama or "").upper()))
+        log.info("  Label: %s", file_label)
+        for lama in sorted(folder_label.rglob(f"{picklist_no}_*.pdf")):
+            if lama.resolve() == Path(file_label).resolve():
+                continue
+            dest = pdf_lama / lama.relative_to(folder_label)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.exists():
+                dest = dest.with_name(f"{dest.stem}_{datetime.now():%H%M%S}{dest.suffix}")
+            lama.replace(dest)
+            log.info("  PDF lama dipindah: %s", dest)
+
+    if tag and tag.endswith(TAG_SPESIAL):
+        hapus_detail_picklist(folder_label, picklist_no, tag)
+        if baris_ada_resi:
+            catat_detail_spesial(folder_label, nama_detail_per_kurir(
+                NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI
+                else NAMA_DETAIL_BUKAN_SPESIAL, tag), [
+                {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
+                 "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
+
+    peringatan_gagal.tandai_selesai(picklist_no)
+    baris = {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
+             "No Picklist": picklist_no, "Total Pesanan": len(ids), "Resi Keluar": len(ada_resi),
+             "File Label": file_label, "Catatan": catatan, "Tanpa Resi": tanpa_resi,
+             "Durasi": durasi(time.monotonic() - mulai)}
+    catat_riwayat(file_riwayat, baris)
+    rekap_master_excel.perbarui(folder_label, baris)
+    return baris
+
+
 def lanjutkan(k: Klien, picklist_no: str, folder_label: Path, file_riwayat: Path,
               nama: str | None = None, tag: str | None = None,
               subfolder: str | None = None) -> dict:

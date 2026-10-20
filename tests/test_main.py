@@ -254,6 +254,32 @@ def uji_peringatan_resi_tanpa_resi():
     print("  peringatan_resi: pesanan tanpa resi (bukan batal) dicatat untuk diinformasikan ke CS")
 
 
+def uji_pulihkan_sesi_daftar_picklist_dari_jurnal_dan_pdf():
+    import pulihkan_sesi as ps
+    from peringatan_gagal import _tulis_terhenti
+    import peringatan_gagal as pg
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        sesi = tmp / "2026-10-19" / "10"
+        (sesi / "SPESIAL").mkdir(parents=True)
+        (sesi / "SATUAN").mkdir()
+        (sesi / "SPESIAL" / "PICK-000166100_SPESIAL_T01-PTAA-67_2026-10-19_172147.pdf").write_bytes(b"x")
+        (sesi / "SATUAN" / "PICK-000166137_1QTY-REGULER-2A_2026-10-19_174142.pdf").write_bytes(b"x")
+        (sesi / "PICK-000166099_SAMPEL-TIKTOK_2026-10-19_172024.pdf").write_bytes(b"x")
+        d = ps.dari_pdf(sesi)
+        assert d["PICK-000166100"] == {"nama": "T01-PTAA-67", "tag": "SPESIAL", "subfolder": None}, d
+        assert d["PICK-000166137"] == {"nama": "1QTY-REGULER-2A", "tag": None, "subfolder": "SATUAN"}, d
+        assert d["PICK-000166099"] == {"nama": "SAMPEL-TIKTOK", "tag": None, "subfolder": None}, d
+        pg.atur_folder(tmp)
+        _tulis_terhenti("dibuat", "PICK-000166101", "T01-PTAA-75", sesi, "x", "SPESIAL", None)
+        _tulis_terhenti("dibuat", "PICK-000166200", "LAIN", tmp / "2026-10-19" / "3", "x", None, None)
+        gab = ps.daftar_picklist(tmp / "picklist_terhenti.jsonl", sesi, "2026-10-19/10")
+        assert list(gab) == ["PICK-000166099", "PICK-000166100", "PICK-000166101", "PICK-000166137"], gab
+        assert gab["PICK-000166101"]["nama"] == "T01-PTAA-75"
+        pg._file_peringatan = None
+    print("  pulihkan_sesi: daftar picklist dari jurnal (per sesi) + nama PDF, picklist sesi lain tidak ikut")
+
+
 def uji_upload_iresis_mode_uji_gagal_dan_sukses():
     import logging
     import os
