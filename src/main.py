@@ -498,10 +498,9 @@ def _main() -> int:
                          "label-pengiriman/<hari ini>/SUSULAN. Tanpa --jalankan hanya melapor")
     ap.add_argument("--pulihkan-sesi", metavar="YYYY-MM-DD/N", type=_sesi_valid,
                     help="pemulihan satu sesi: untuk SEMUA picklist yang sudah dibuat di sesi itu "
-                         "ulangi tahap sesudah picklist dibuat (resi, unduh ulang PDF, isi ulang "
-                         "Excel); TIDAK membuat picklist baru. Tanpa --jalankan hanya melapor")
-    ap.add_argument("--picklist", action="append", metavar="PICK-000xxxxxx",
-                    help="dengan --pulihkan-sesi: batasi ke picklist ini (boleh diulang)")
+                         "(yang bermasalah maupun tidak) ulangi tahap sesudah picklist dibuat (resi, "
+                         "unduh ulang PDF, isi Excel) ke folder baru N-PEMULIHAN yang lengkap; TIDAK "
+                         "membuat picklist baru. Tanpa --jalankan hanya melapor")
     ap.add_argument("--paksa", action="store_true",
                     help="dipakai bersama --upload-iresis: tetap jalan walau jam 20.00-04.59 "
                         "(jendela yang biasanya melewati IRESIS)")
@@ -1014,9 +1013,6 @@ def pulihkan_sesi_cli(log: logging.Logger, args) -> int:
         return 1
     daftar = pulihkan_sesi.daftar_picklist(FOLDER_LOG / "picklist_terhenti.jsonl", folder,
                                            args.pulihkan_sesi)
-    if args.picklist:
-        pilih = {("PICK-" + re.sub(r"\D", "", x).zfill(9)) for x in args.picklist}
-        daftar = {n: v for n, v in daftar.items() if n in pilih}
     log.info("Pemulihan sesi %s: %d picklist%s", args.pulihkan_sesi, len(daftar),
              "" if args.jalankan else " (MODE UJI - tambahkan --jalankan untuk memulihkan)")
     if not daftar:

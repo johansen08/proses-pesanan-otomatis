@@ -194,11 +194,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   (`proses_label.resi_susulan()`), dan yang kini punya resi diunduh ke `label-pengiriman/<hari ini>/SUSULAN/PICK-..._SUSULAN_*.pdf`
   (dicatat di `logs/resi_susulan.jsonl` agar tidak dobel). Tanpa `--jalankan` hanya membaca. `minta_resi()` kini mencatat alasan
   `channel_status/marketplace_status` pesanan yang tak kunjung dapat resi ke log.
-- `src/pulihkan_sesi.py` — **pemulihan satu sesi** (`main.py --pulihkan-sesi YYYY-MM-DD/N [--picklist PICK-..] [--jalankan]`):
+- `src/pulihkan_sesi.py` — **pemulihan satu sesi** (`main.py --pulihkan-sesi YYYY-MM-DD/N [--jalankan]`):
   TIDAK membuat picklist baru; untuk semua picklist yang sudah dibuat di sesi itu (daftar dari `logs/picklist_terhenti.jsonl`
   per `sesi` + nama PDF di folder sesi) mengulang tahap sesudahnya lewat `proses_label.pulihkan_picklist()`: selesaikan picking, minta resi
   untuk SEMUA pesanan picklist (bukan hanya yang belum-dicetak seperti `--lanjut`), unduh ulang PDF, `detail-resi-*.xlsx`, `PICKLIST.xlsx`
-  dan riwayat. Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
+  dan riwayat — untuk SEMUA picklist sesi itu (yang tidak bermasalah ikut, jadi folder hasilnya satu sesi LENGKAP dengan Excel utuh; tidak ada pilihan sebagian). Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
   tidak disentuh. `src/nama_sesi.py` = satu-satunya pola nama folder sesi (`N` atau `N-PEMULIHAN`): cetak bulk, menu Cetak UI
   (judul "N-PEMULIHAN"), `--sesi`, dan penomoran sesi baru memperlakukannya sebagai sesi (pilah_satuan/kurasi tetap hanya sesi `N` biasa).
   Tanpa `--jalankan` hanya melapor (folder tidak dibuat). Satu picklist gagal tidak menghentikan yang lain (exit 1 di akhir).
