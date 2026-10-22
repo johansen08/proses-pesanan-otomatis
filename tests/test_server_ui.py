@@ -184,6 +184,29 @@ def uji_server_ui_pilah_sesi_pemulihan():
     print("  server_ui pilah: sesi N-PEMULIHAN tampil (kode 11P), jam dari sesi asal, tidak bersamaan dengan sesi asalnya")
 
 
+def uji_server_ui_pilah_lanjutan():
+    import pilah_satuan as pl
+    hari_ini = date.today()
+    tgl = hari_ini.isoformat()
+    with tempfile.TemporaryDirectory() as tmp:
+        label = Path(tmp) / "label-pengiriman"
+        _buat(label / tgl / "1" / "SATUAN", f"PICK-000000002_1QTY-REGULER-2A_{tgl}_072000.pdf")
+        _buat(label / tgl / "2" / "SATUAN", f"PICK-000000003_1QTY-REGULER-2A_{tgl}_080000.pdf")
+        _buat(label / tgl / "SISA-SATUAN-1", "SISA-SATUAN_1QTY-REGULER-2A_1resi.pdf")   # sisa belum dilanjutkan
+        _buat(label / tgl / "SISA-SATUAN-9" / "sudah-dipilah-lagi", "SISA-SATUAN_x_1resi.pdf")   # sudah dipindah -> bukan
+        with mock.patch.object(ps, "FOLDER_LABEL", label), mock.patch.object(pl, "MASA_TENANG_S", 0):
+            assert su.data_pilah(hari_ini)["hari"][0]["lanjutan"] == ["1"]
+            for data, kata in (({"lanjutan_dari": "1; rm"}, "lanjutan_dari harus label"),
+                               ({"lanjutan_dari": "7"}, "tidak ditemukan"),
+                               ({"lanjutan_dari": "1", "sesi": ["1"]}, "sudah termasuk")):
+                try:
+                    su.mulai_pilah({"tanggal": tgl, "sesi": ["2"], "min_resi": 3, **data}, "analisis")
+                    assert False, data
+                except ValueError as e:
+                    assert kata in str(e), e
+    print("  server_ui pilah: daftar hasil yang bisa dilanjutkan; lanjutan_dari divalidasi (format, hasil ada, sesi tumpang tindih)")
+
+
 def uji_server_ui_pulih_status_dan_job():
     import json as _json
     import peringatan_gagal

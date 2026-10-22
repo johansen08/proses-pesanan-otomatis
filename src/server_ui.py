@@ -389,6 +389,7 @@ def ubah_operator(aksi, nama) -> dict:
 _pilah: dict | None = None       # job pilah terakhir (satu sekaligus)
 _hal_cache: dict[tuple, int] = {}
 POLA_TANGGAL = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+POLA_LABEL_PILAH = re.compile(r"^\d+P?(?:-\d+P?)*(?:\+\d+P?(?:-\d+P?)*)*$")   # label hasil pilah: "1-2", "1-2+3"
 
 
 def _jumlah_halaman(f: Path) -> int:
@@ -430,7 +431,19 @@ def data_pilah(hari_ini: date | None = None) -> dict:
             **({} if folder.name.isdigit() else {"judul": folder.name}), "picklist": len(pdfs), "label": sum(_jumlah_halaman(f) for f in pdfs),
             "jam": mulai.strftime("%H.%M"), "layak": layak, "alasan": alasan})
     return {"hari_ini": hari_ini.isoformat(),
-            "hari": [{"tanggal": t, "sesi": per_tanggal[t]} for t in sorted(per_tanggal)]}
+            "hari": [{"tanggal": t, "sesi": per_tanggal[t], "lanjutan": _hasil_bisa_dilanjutkan(ps.FOLDER_LABEL / t)}
+                     for t in sorted(per_tanggal)]}
+
+
+def _hasil_bisa_dilanjutkan(folder_tanggal: Path) -> list[str]:
+    """Label hasil pilah (mis. "1-2", "1-2+3") yang SISA-SATUAN-nya masih berisi PDF di tingkat atas - itulah
+    yang bisa dilanjutkan dengan sesi baru (pilah lanjutan). Yang sisanya sudah dipindah/tidak ada: tidak."""
+    awalan = kurasi_satuan.AWALAN_SISA + "-"
+    try:
+        return sorted(d.name[len(awalan):] for d in folder_tanggal.iterdir()
+                      if d.is_dir() and d.name.startswith(awalan) and any(d.glob("*.pdf")))
+    except OSError:
+        return []
 
 
 def info_pilah() -> dict:
@@ -463,17 +476,24 @@ def mulai_pilah(data: dict, mode: str) -> None:
     if not folder.is_dir():
         raise ValueError(f"Tidak ada folder label untuk {tanggal}")
     import pilah_satuan as pl
+    lanjutan = data.get("lanjutan_dari")
+    if lanjutan is not None and (not isinstance(lanjutan, str) or not POLA_LABEL_PILAH.match(lanjutan)):
+        raise ValueError("lanjutan_dari harus label hasil pilah sebelumnya (mis. \"1-2\" atau \"1-2+3\")")
     ditolak = [f"Sesi {x}: {alasan}" for x in sesi
                for ok, alasan in [pl.periksa_sesi(folder / nama_sesi.folder_dari_kode(x))] if not ok]
     if ditolak:   # satuan gabungan J&T + SPX dari sesi 07.00-12.00 / 20.00-07.00 saja (lihat pilah_satuan.periksa_sesi)
         raise ValueError("; ".join(ditolak))
-    if mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
+    if lanjutan:   # pilah lanjutan: hasil lama harus ada, sesi tidak tumpang tindih, SISA lama belum dicetak
+        pl.periksa_lanjutan(folder, lanjutan, sesi)
+    elif mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
         bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi), "-".join(sesi))
         if bentrok:
             raise ValueError(pl.pesan_bentrok(bentrok))
     perintah = [sys.executable, str(ROOT / "src" / "pilah_satuan.py"), "--folder", str(folder),
                 "--sesi", "-".join(sesi), "--min-resi", str(min_resi), "--json",
                 "--cache", str(jh.FOLDER_LOG / "pilah_analisis.json")]
+    if lanjutan:
+        perintah += ["--lanjutan-dari", lanjutan]
     if mode == "analisis":
         perintah.append("--analisis-saja")
     if tanpa_pdf:
@@ -486,8 +506,9 @@ def mulai_pilah(data: dict, mode: str) -> None:
             raise RuntimeError("Masih ada proses harian / download ulang yang berjalan - tunggu selesai, "
                                "label sesi belum lengkap")
         _pilah = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal,
-                  "tanpa_pdf": tanpa_pdf,
-                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / nama_sesi.folder_dari_kode(x))) for x in sesi),
+                  "tanpa_pdf": tanpa_pdf, "lanjutan_dari": lanjutan,
+                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / nama_sesi.folder_dari_kode(x)))
+                              for x in sesi + (pl.parse_sesi(lanjutan.replace("+", "-")) if lanjutan else [])),
                   "maju": 0, "hasil": None, "kode": None}
         threading.Thread(target=_kerjakan_pilah, args=(_pilah, perintah), daemon=True).start()
 

@@ -131,6 +131,11 @@ project secara umum, root tidak boleh berisi file `.py`):
   dianggap sudah tercetak oleh cetak bulk (`print_spesial.sudah_atau_dikurasi()`) & ditandai pill "dikurasi" di UI Cetak (disembunyikan bersama
   yang tercetak); berlaku selama folder hasilnya ada. Status "tercetak" file hasil dijaga bila dibuat ulang dengan isi identik (sidik SHA-256),
   dilupakan bila isinya berubah/hilang (`lupakan_sudah_dicetak()`).
+  **Pilah LANJUTAN** (2026-10-22; `--sesi 3 --lanjutan-dari 1-2`, API `lanjutan_dari`): sesi baru digabung dengan satuan sesi lama TANPA resi yang
+  sudah jadi `SPESIAL-SATUAN-1-2` (dibaca dari `detail-resi-spesial-satuan-*.xlsx`/PDF-nya, yang mungkin sudah tercetak) -> `SPESIAL/SISA-SATUAN-1-2+3`
+  (bertingkat: `--lanjutan-dari 1-2+3`). Folder spesial lama tidak disentuh; PDF `SISA-SATUAN-1-2` dipindah ke subfolder `sudah-dipilah-lagi`
+  (folder tetap ada supaya penanda dikurasi sesi lama berlaku). Ditolak bila SISA lama sudah (sebagian) tercetak (label dobel), sesi baru tumpang
+  tindih, atau hasil lama tak ada. Tombol/pilihan di UI web belum ada (baru CLI + API).
   UI: tab "Pilah" (`/api/pilah/sesi|analisis|buat|job` di `server_ui.py`, proses terpisah + cache `logs/pilah_analisis.json`
   supaya "Buat folder" tidak memanggil Jubelio lagi); folder hasil ikut tampil di menu Cetak. Tes: `tests/test_pilah_satuan.py`, `tests/test_server_ui.py`.
 - `src/server_ui.py` — server lokal (stdlib, hanya 127.0.0.1) untuk UI desktop di

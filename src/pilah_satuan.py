@@ -56,6 +56,7 @@ UMUR_CACHE_MAKS_S = 15 * 60
 # lengkap, jadi tidak boleh dipilah (0 = nonaktif, dipakai tes).
 MASA_TENANG_S = 120
 FOLDER_SATUAN_GABUNG = "SATUAN"
+FOLDER_SISA_TERPAKAI = "sudah-dipilah-lagi"   # di SISA-SATUAN-<lama>: PDF sisa yang digantikan pilah lanjutan
 # Jendela (menit sejak 00.00, batas inklusif); (mulai > akhir) = melewati tengah malam.
 JENDELA_PILAH_MENIT = ((7 * 60, 12 * 60), (20 * 60, 7 * 60))
 TEKS_JENDELA = "07.00-12.00 atau 20.00-07.00"
@@ -452,25 +453,134 @@ def selesai_tulis(lama: dict[Path, str], baru: list[Path]) -> int:
     return print_spesial.lupakan_sudah_dicetak([f for f in lama if f not in sama])
 
 
+def rantai_label(label: str) -> list[str]:
+    """"1-2+3+4" -> ["1-2", "1-2+3", "1-2+3+4"]: label hasil pilah tiap putaran (pilah lanjutan bertingkat)."""
+    bagian = label.split("+")
+    return ["+".join(bagian[:i + 1]) for i in range(len(bagian))]
+
+
+def periksa_lanjutan(folder_tanggal: Path, lama: str, sesi: list[str] | None) -> list[str]:
+    """Validasi pilah LANJUTAN (satuan sesi baru `sesi` digabung dengan SISA hasil pilah `lama`, mis. "1-2").
+    Mengembalikan kode sesi lama. SesiTidakValid kalau hasil lama tidak ada, sesi baru kosong/tumpang
+    tindih, atau SISA-SATUAN lama sudah (sebagian) dicetak - dicetak lagi lewat putaran ini = label dobel."""
+    if not sesi:
+        raise SesiTidakValid("Pilah lanjutan butuh sesi baru (mis. --sesi 3)")
+    try:
+        sesi_lama = parse_sesi(lama.replace("+", "-"))
+    except ValueError as e:
+        raise SesiTidakValid(str(e)) from None
+    if not sesi_lama:
+        raise SesiTidakValid("Label hasil pilah sebelumnya kosong")
+    if not any(kurasi_satuan.folder_hasil(folder_tanggal, a, lama).is_dir() for a in kurasi_satuan.AWALAN_HASIL):
+        raise SesiTidakValid(f"Hasil pilah {lama} tidak ditemukan di {folder_tanggal.name} "
+                             f"(SPESIAL-SATUAN-{lama} / SISA-SATUAN-{lama})")
+    tumpang = sorted(set(sesi) & set(sesi_lama), key=pola_sesi.urutan_kode)
+    if tumpang:
+        raise SesiTidakValid(f"Sesi {', '.join(tumpang)} sudah termasuk hasil pilah {lama}")
+    folder_sisa = kurasi_satuan.folder_hasil(folder_tanggal, NAMA_FOLDER_SISA, lama)
+    if folder_sisa.is_dir():
+        import print_spesial
+        sudah = print_spesial.baca_sudah_dicetak()
+        tercetak = [f.name for f in folder_sisa.glob("*.pdf") if str(f.resolve()) in sudah]
+        if tercetak:
+            raise SesiTidakValid(f"{len(tercetak)} PDF di SISA-SATUAN-{lama} sudah dicetak - pilah lanjutan hanya "
+                                 "untuk sisa yang belum dicetak (resi yang sama akan tercetak dobel)")
+    return sesi_lama
+
+
+def resi_spesial_sebelumnya(folder_tanggal: Path, lama: str) -> set[str]:
+    """No resi + No pesanan yang SUDAH masuk SPESIAL-SATUAN pada putaran-putaran sebelumnya (rantai `lama`):
+    dari detail-resi-spesial-satuan-*.xlsx, atau - bila tak ada - dari teks halaman PDF-nya. Resi itu
+    sudah dicetak sebagai spesial, jadi tidak boleh ikut dikelompokkan lagi di putaran lanjutan."""
+    from openpyxl import load_workbook
+    hasil: set[str] = set()
+    for label in rantai_label(lama):
+        folder = kurasi_satuan.folder_hasil(folder_tanggal, NAMA_FOLDER_HASIL, label)
+        if not folder.is_dir():
+            continue
+        excel = sorted(folder.glob("detail-resi-spesial-satuan-*.xlsx"))
+        for f in excel:
+            wb = load_workbook(f, read_only=True, data_only=True)
+            try:
+                baris = list(wb.active.iter_rows(values_only=True))
+            finally:
+                wb.close()
+            if not baris:
+                continue
+            kolom = [i for i, h in enumerate(baris[0]) if h in ("No Resi", "No Pesanan")]
+            for r in baris[1:]:
+                hasil.update(str(r[i]).strip() for i in kolom if i < len(r) and r[i])
+        if not excel:
+            for f in folder.glob("*.pdf"):
+                for halaman in PdfReader(str(f)).pages:
+                    hasil.update(x for x in kunci_halaman(halaman.extract_text() or "") if x)
+    return hasil
+
+
+def pdf_untuk_pilah(folder_tanggal: Path, sesi: list[str] | None, abaikan_jendela: bool = False,
+                    lanjutan_dari: str | None = None) -> tuple[list[Path], list[Path], list[str]]:
+    """(semua PDF yang dianalisis, PDF sesi BARU, kode sesi baru). Pilah biasa: keduanya sama. Pilah
+    lanjutan: semua = satuan sesi lama (rantai `lanjutan_dari`) + satuan sesi baru, urut nomor PICK."""
+    if not lanjutan_dari:
+        pdfs, sesi_ok = pdf_terpilih(folder_tanggal, sesi, abaikan_jendela)
+        return pdfs, pdfs, sesi or sesi_ok
+    sesi_lama = periksa_lanjutan(folder_tanggal, lanjutan_dari, sesi)
+    pdfs_baru, sesi_ok = pdf_terpilih(folder_tanggal, sesi, abaikan_jendela)   # sesi baru: syarat jam tetap berlaku
+    pdfs_lama = cari_pdf_satuan(folder_tanggal, sesi_lama)
+    if not pdfs_lama:
+        raise SesiTidakValid(f"Tidak ada PDF satuan asal sesi {'-'.join(sesi_lama)} (hasil pilah {lanjutan_dari})")
+    semua = sorted(pdfs_lama + pdfs_baru, key=lambda f: int(POLA_PICK.match(f.name).group(1)))
+    return semua, pdfs_baru, sesi_ok
+
+
+def pindahkan_sisa_terpakai(folder_tanggal: Path, lama: str) -> int:
+    """PDF SISA-SATUAN-<lama> sudah digantikan hasil putaran lanjutan: dipindah ke subfolder (bukan dihapus -
+    jejak masih ada, folder tetap ada supaya penanda "dikurasi" sesi lama tetap berlaku) agar tidak ikut
+    tercetak bulk. Mengembalikan jumlah file yang dipindah."""
+    folder = kurasi_satuan.folder_hasil(folder_tanggal, NAMA_FOLDER_SISA, lama)
+    if not folder.is_dir():
+        return 0
+    pdfs = sorted(folder.glob("*.pdf"))
+    if pdfs:
+        tujuan = folder / FOLDER_SISA_TERPAKAI
+        tujuan.mkdir(exist_ok=True)
+        for f in pdfs:
+            f.replace(tujuan / f.name)
+    return len(pdfs)
+
+
 def pilah(k, folder_tanggal: Path, min_resi: int = MIN_RESI, buat_pdf: bool = True,
           sesi: list[str] | None = None, tulis: bool = True, cache: Path | None = None,
-          abaikan_jendela: bool = False) -> dict:
+          abaikan_jendela: bool = False, lanjutan_dari: str | None = None) -> dict:
     """`tulis=False`: hanya analisis (tidak ada folder/file dibuat). Sesi yang tidak memenuhi
-    syarat (satuan gabungan, diproses 07.00-12.00 / 20.00-07.00) ditolak: SesiTidakValid."""
-    pdfs, sesi_ok = pdf_terpilih(folder_tanggal, sesi, abaikan_jendela)
-    sesi = sesi or sesi_ok
+    syarat (satuan gabungan, diproses 07.00-12.00 / 20.00-07.00) ditolak: SesiTidakValid.
+
+    `lanjutan_dari` ("1-2"): pilah LANJUTAN - `sesi` adalah sesi BARU; satuan sesi lama digabung lagi
+    TANPA resi yang sudah jadi SPESIAL-SATUAN-<lama> (sudah dicetak), lalu SKU yang kini >= min_resi jadi
+    SPESIAL-SATUAN-<lama>+<sesi>, sisanya SISA-SATUAN-<lama>+<sesi>. Folder lama tidak dihapus; PDF
+    SISA-SATUAN-<lama> dipindah ke subfolder `sudah-dipilah-lagi` (digantikan sisa baru)."""
+    pdfs, pdfs_baru, sesi = pdf_untuk_pilah(folder_tanggal, sesi, abaikan_jendela, lanjutan_dari)
     if not pdfs:
         raise SesiTidakValid(f"Tidak ada PDF satuan gabungan di {folder_tanggal} untuk sesi {'-'.join(sesi)}")
     semua, tak_cocok_total = kumpulkan(k, folder_tanggal, pdfs, cache)
+    dikecualikan = 0
+    if lanjutan_dari:
+        sebelumnya = resi_spesial_sebelumnya(folder_tanggal, lanjutan_dari)
+        sisa_baris = [b for b in semua if b["resi"] not in sebelumnya and b["pesanan"] not in sebelumnya]
+        dikecualikan, semua = len(semua) - len(sisa_baris), sisa_baris
     layak, sisa = kelompokkan(semua, min_resi)
-    label_sesi = "-".join(sesi)
+    label_sesi = f"{lanjutan_dari}+{'-'.join(sesi)}" if lanjutan_dari else "-".join(sesi)
     hasil = {"pdf": len(pdfs), "halaman": len(semua), "tak_cocok": tak_cocok_total,
              "kurir_lain": sum(1 for b in semua if not kurir_diizinkan(b.get("kurir"))),
-             "layak": layak, "sisa_sku": len(sisa), "file": [], "sesi": label_sesi}
+             "layak": layak, "sisa_sku": len(sisa), "file": [], "sesi": label_sesi,
+             "lanjutan_dari": lanjutan_dari, "sudah_spesial": dikecualikan}
     sisa_halaman = kelompok_sisa(semua, layak)
     hasil["sisa"] = sisa_halaman
     hasil["terlompat"] = nomor_terlompat_satuan(pdfs)
     hasil["bentrok"] = kurasi_satuan.bentrok(pdfs, label_sesi)
+    if lanjutan_dari:   # PDF sesi lama memang bertanda dikurasi ke hasil putaran sebelumnya: itu disengaja
+        rantai = set(rantai_label(lanjutan_dari))
+        hasil["bentrok"] = {s: n for s, n in hasil["bentrok"].items() if s not in rantai}
     if not tulis:
         return hasil
     if hasil["bentrok"] and buat_pdf:   # mode hanya-Excel tidak menandai dikurasi, jadi tidak bentrok
@@ -500,11 +610,14 @@ def pilah(k, folder_tanggal: Path, min_resi: int = MIN_RESI, buat_pdf: bool = Tr
             f.rmdir()
     if lama:
         selesai_tulis(lama, hasil["file"])
+    # Lanjutan: hanya PDF sesi BARU yang ditandai; PDF sesi lama tetap bertanda hasil putaran sebelumnya.
     if buat_pdf and (layak or sisa_halaman):
-        kurasi_satuan.catat(pdfs, label_sesi)   # PDF satuan asal ditandai "dikurasi" (jangan dicetak lagi)
-        hasil["dikurasi"] = len(pdfs)
+        kurasi_satuan.catat(pdfs_baru, label_sesi)   # PDF satuan asal ditandai "dikurasi" (jangan dicetak lagi)
+        hasil["dikurasi"] = len(pdfs_baru)
+        if lanjutan_dari:
+            hasil["sisa_lama_dipindah"] = pindahkan_sisa_terpakai(folder_tanggal, lanjutan_dari)
     elif not buat_pdf:
-        kurasi_satuan.hapus(pdfs, label_sesi)   # hanya Excel: tak ada PDF pengganti -> asal tidak dikurasi
+        kurasi_satuan.hapus(pdfs_baru, label_sesi)   # hanya Excel: tak ada PDF pengganti -> asal tidak dikurasi
     return hasil
 
 
@@ -515,7 +628,8 @@ def ringkasan_json(h: dict) -> dict:
     for sku, baris in urutan_spesial(h["layak"]):   # urutan = urutan cetak (rak -> SKU)
         per_sesi = Counter(b["pdf"].parent.parent.name for b in baris)
         spesial.append({"sku": sku, "n": len(baris), "rak": rak_dominan(baris), "sesi": dict(per_sesi)})
-    return {"sesi": h["sesi"], "pdf": h["pdf"], "halaman": h["halaman"], "tak_cocok": h["tak_cocok"],
+    return {"sesi": h["sesi"], "lanjutan_dari": h.get("lanjutan_dari"), "sudah_spesial": h.get("sudah_spesial", 0),
+            "pdf": h["pdf"], "halaman": h["halaman"], "tak_cocok": h["tak_cocok"],
             "kurir_lain": h["kurir_lain"],
             "terlompat": [f"PICK-{n:09d}" for n in h["terlompat"]],
             "bentrok": {s: len(n) for s, n in h["bentrok"].items()},
@@ -530,6 +644,9 @@ def main() -> int:
     ap.add_argument("--tanggal", help="YYYY-MM-DD (folder label-pengiriman/<tanggal>); default hari ini")
     ap.add_argument("--sesi", metavar="1-2-3", help="sesi yang dipilah, mis. 1-2-3 atau 1,3 (default semua)")
     ap.add_argument("--folder", type=Path, help="folder tanggal langsung (menggantikan --tanggal)")
+    ap.add_argument("--lanjutan-dari", metavar="1-2",
+                    help="pilah LANJUTAN: --sesi = sesi BARU (mis. 3); digabung dengan satuan sesi lama (hasil pilah "
+                         "1-2) TANPA resi yang sudah jadi SPESIAL-SATUAN-1-2 -> SPESIAL/SISA-SATUAN-1-2+3")
     ap.add_argument("--min-resi", type=int, default=MIN_RESI)
     ap.add_argument("--tanpa-pdf", action="store_true", help="hanya Excel, tanpa PDF per SKU")
     ap.add_argument("--analisis-saja", action="store_true", help="hitung & tampilkan saja, tidak membuat file/folder")
@@ -553,7 +670,7 @@ def main() -> int:
         print(e)
         return 1
     try:
-        pdfs, sesi = pdf_terpilih(folder, sesi, args.abaikan_jendela)
+        pdfs, _, sesi = pdf_untuk_pilah(folder, sesi, args.abaikan_jendela, args.lanjutan_dari)
     except SesiTidakValid as e:
         print(f"DITOLAK: {e}")
         return 1
@@ -561,12 +678,15 @@ def main() -> int:
     k = None if baca_cache(args.cache, folder, pdfs) else proses_label.Klien(modul_main.login(log))
     try:
         h = pilah(k, folder, args.min_resi, not args.tanpa_pdf, sesi, not args.analisis_saja, args.cache,
-                  args.abaikan_jendela)
+                  args.abaikan_jendela, args.lanjutan_dari)
     except KurasiBentrok as e:
         print(f"DITOLAK: {e}")
         return 1
     print(f"\n{h['pdf']} PDF satuan, {h['halaman']} halaman dipetakan ke SKU"
           f" ({h['tak_cocok']} halaman tak cocok)")
+    if h.get("lanjutan_dari"):
+        print(f"LANJUTAN dari {h['lanjutan_dari']} + sesi {'-'.join(sesi)}: {h['sudah_spesial']} halaman sudah jadi "
+              f"SPESIAL-SATUAN sebelumnya (dikecualikan) -> hasil {h['sesi']}")
     print(f"SKU yang bisa dikelompokkan (>= {args.min_resi} resi): {len(h['layak'])} SKU, "
           f"{sum(len(b) for b in h['layak'].values())} resi; SKU lain di bawah ambang: {h['sisa_sku']}")
     for sku, baris in sorted(h["layak"].items(), key=lambda kv: (-len(kv[1]), kv[0])):

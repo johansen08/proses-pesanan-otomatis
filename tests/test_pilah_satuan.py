@@ -495,6 +495,103 @@ def uji_bundle_multi_item_dan_qty_bukan_1_tidak_spesial():
     print("  bundle, multi-item per pesanan, qty bukan 1 -> tidak spesial (tetap sisa)")
 
 
+def _siapkan_sesi3(tmp: Path, k: KlienPalsu) -> KlienPalsu:
+    """Sesi 3: picklist 30 berisi Y (O7/R7) -> Y gabungan sesi 1-2-3 = 3 resi (R3, R6, R7)."""
+    (tmp / "3" / "SATUAN").mkdir(parents=True)
+    _pdf_label(tmp / "3" / "SATUAN" / "PICK-000000030_1QTY-REGULER-2A_2026-10-13_083000.pdf", [("O7", "R7")])
+    return KlienPalsu({**k.data, 30: [("Y", "O7", "R7", "FINISH_PICK")]})
+
+
+def uji_pilah_lanjutan_sisa_lama_digabung_sesi_baru():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        k = _siapkan(tmp)
+        ps.pilah(k, tmp)                                    # putaran 1: X spesial (3), Y sisa (2)
+        spesial_lama = sorted((tmp / "SPESIAL-SATUAN-1-2").glob("*.pdf"))
+        isi_lama = [f.read_bytes() for f in spesial_lama]
+        k2 = _siapkan_sesi3(tmp, k)
+        h = ps.pilah(k2, tmp, sesi=["3"], lanjutan_dari="1-2")
+        assert h["sesi"] == "1-2+3" and h["sudah_spesial"] == 3, h["sesi"]   # R1, R2, R5 sudah jadi spesial
+        assert set(h["layak"]) == {"Y"} and sorted(b["resi"] for b in h["layak"]["Y"]) == ["R3", "R6", "R7"], h["layak"]
+        assert not h["sisa"] and not (tmp / "SISA-SATUAN-1-2+3").exists()
+        pdf_y = tmp / "SPESIAL-SATUAN-1-2+3" / "SPESIAL-SATUAN_2A_Y_3resi.pdf"
+        assert pdf_y.exists() and len(PdfReader(str(pdf_y)).pages) == 3
+        assert (tmp / "SPESIAL-SATUAN-1-2+3" / "detail-resi-spesial-satuan-1-2+3.xlsx").exists()
+        # hasil putaran 1 (yang sudah dicetak) tidak disentuh; X tidak muncul lagi di putaran 2
+        assert [f.read_bytes() for f in sorted((tmp / "SPESIAL-SATUAN-1-2").glob("*.pdf"))] == isi_lama
+        assert not list((tmp / "SPESIAL-SATUAN-1-2+3").glob("*_X_*"))
+        # SISA-SATUAN-1-2 digantikan: tidak ada PDF di tingkat atas (tidak ikut tercetak bulk), jejak di subfolder
+        sisa_lama = tmp / "SISA-SATUAN-1-2"
+        assert sisa_lama.is_dir() and not list(sisa_lama.glob("*.pdf")), "folder tetap ada, PDF dipindah"
+        assert len(list((sisa_lama / ps.FOLDER_SISA_TERPAKAI).glob("*.pdf"))) == 1 and h["sisa_lama_dipindah"] == 1
+        assert kurasi_satuan.daftar_hasil(tmp / "3", kurasi_satuan.AWALAN_SISA) == []
+        # penanda dikurasi: satuan sesi 3 -> hasil baru; satuan 1-2 tetap -> hasil putaran 1 (masih berlaku)
+        aktif = kurasi_satuan.baca()
+        asal = {f.parent.parent.name: aktif.get(str(f.resolve())) for f in ps.cari_pdf_satuan(tmp)}
+        assert asal == {"1": "1-2", "2": "1-2", "3": "1-2+3"}, asal
+        # dijalankan ulang (mis. ambang diubah) menghasilkan hal yang sama, tanpa bentrok
+        h2 = ps.pilah(k2, tmp, sesi=["3"], lanjutan_dari="1-2")
+        assert set(h2["layak"]) == {"Y"} and h2["sudah_spesial"] == 3
+    print("  lanjutan: sisa 1-2 + satuan sesi 3 -> SPESIAL-SATUAN-1-2+3; spesial 1-2 (tercetak) tidak ikut & tidak disentuh")
+
+
+def uji_pilah_lanjutan_bertingkat_dan_sisa_baru():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        k = _siapkan(tmp)
+        ps.pilah(k, tmp)
+        k2 = _siapkan_sesi3(tmp, k)
+        h = ps.pilah(k2, tmp, sesi=["3"], lanjutan_dari="1-2", min_resi=4)   # Y = 3 < 4 -> tetap sisa
+        assert not h["layak"] and {kel: len(bs) for kel, bs in h["sisa"].items()} == {"1QTY-REGULER-2A": 3}, h["sisa"]
+        assert (tmp / "SISA-SATUAN-1-2+3" / "SISA-SATUAN_1QTY-REGULER-2A_3resi.pdf").exists()
+        assert not list((tmp / "SISA-SATUAN-1-2").glob("*.pdf"))
+        assert not (tmp / "SPESIAL-SATUAN-1-2+3").exists()
+        # sesi 4 berisi Y lagi -> putaran 3 menggabung sisa "1-2+3" (rantai) tanpa X; Y = 4 resi
+        (tmp / "4" / "SATUAN").mkdir(parents=True)
+        _pdf_label(tmp / "4" / "SATUAN" / "PICK-000000040_1QTY-REGULER-2A_2026-10-13_090000.pdf", [("O8", "R8")])
+        k3 = KlienPalsu({**k2.data, 40: [("Y", "O8", "R8", "FINISH_PICK")]})
+        h3 = ps.pilah(k3, tmp, sesi=["4"], lanjutan_dari="1-2+3", min_resi=4)
+        assert h3["sesi"] == "1-2+3+4" and h3["sudah_spesial"] == 3, (h3["sesi"], h3["sudah_spesial"])
+        assert set(h3["layak"]) == {"Y"} and len(h3["layak"]["Y"]) == 4
+        assert (tmp / "SPESIAL-SATUAN-1-2+3+4" / "SPESIAL-SATUAN_2A_Y_4resi.pdf").exists()
+        assert not list((tmp / "SISA-SATUAN-1-2+3").glob("*.pdf"))
+    print("  lanjutan bertingkat (1-2 -> 1-2+3 -> 1-2+3+4) & sisa baru jika masih di bawah ambang")
+
+
+def uji_pilah_lanjutan_penolakan():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        k = _siapkan(tmp)
+        k2 = _siapkan_sesi3(tmp, k)
+        for kwargs, kata in (({"sesi": ["3"], "lanjutan_dari": "1-2"}, "tidak ditemukan"),   # hasil lama belum ada
+                             ({"sesi": None, "lanjutan_dari": "1-2"}, "butuh sesi baru")):
+            try:
+                ps.pilah(k2, tmp, **kwargs)
+                assert False, kwargs
+            except ps.SesiTidakValid as e:
+                assert kata in str(e), e
+        ps.pilah(k2, tmp, sesi=["1", "2"])
+        try:   # sesi 2 sudah termasuk hasil pilah 1-2
+            ps.pilah(k2, tmp, sesi=["2", "3"], lanjutan_dari="1-2")
+            assert False
+        except ps.SesiTidakValid as e:
+            assert "sudah termasuk" in str(e), e
+        # SISA lama sudah (sebagian) dicetak -> ditolak, tidak ada yang ditulis/dipindah
+        sisa = next((tmp / "SISA-SATUAN-1-2").glob("*.pdf"))
+        print_spesial.catat_sudah_dicetak(sisa)
+        try:
+            ps.pilah(k2, tmp, sesi=["3"], lanjutan_dari="1-2")
+            assert False
+        except ps.SesiTidakValid as e:
+            assert "sudah dicetak" in str(e), e
+        assert sisa.exists() and not (tmp / "SPESIAL-SATUAN-1-2+3").exists()
+        # mode analisis tidak menulis apa pun
+        print_spesial.lupakan_sudah_dicetak([sisa])
+        h = ps.pilah(k2, tmp, sesi=["3"], lanjutan_dari="1-2", tulis=False)
+        assert set(h["layak"]) == {"Y"} and sisa.exists() and not (tmp / "SPESIAL-SATUAN-1-2+3").exists()
+    print("  lanjutan ditolak: hasil lama tak ada, tanpa sesi baru, sesi tumpang tindih, SISA lama sudah dicetak")
+
+
 if __name__ == "__main__":
     for nama, f in list(globals().items()):
         if nama.startswith("uji_"):

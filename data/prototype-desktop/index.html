@@ -808,7 +808,7 @@ const PSKU=[['TL001','1B'],['MX-5054-4','2A'],['T01-PTAA-5','2B'],['GL-FND-1','3
   ['BM-AKS28-11','1B'],['T01-PTAD-4','2B'],['ZQ-8','3A'],['MX1010-2','LAINNYA'],['ZL-5','2A'],['C225-UB11-2','1B'],['T01-PTAH-3','3B'],['GL-FNA-1','2B'],['M2-KCM19-4','3A'],['ZC7','1B'],['TPJ2','2A'],['MX-5015-34','3B']];
 const PLANTAI={'1B':'l1','2A':'l2','2B':'l2','3A':'l3','3B':'l3','LAINNYA':''};
 const PKEL=['2A','3A','1B','2B','3B','LAINNYA'];
-const PDATA={},PAPI={};
+const PDATA={},PAPI={},PLANJ={};   // PLANJ[tanggal] = label hasil pilah yang SISA-nya bisa dilanjutkan (mis. ["1-2"])
 function pilahHari(t){   // mode server: dari /api/pilah/sesi; tanpa server: sesi contoh deterministik
   if(TERSAMBUNG)return PAPI[t]||[];
   if(PDATA[t])return PDATA[t];
@@ -822,10 +822,14 @@ function pilahHari(t){   // mode server: dari /api/pilah/sesi; tanpa server: ses
   return PDATA[t]=out;
 }
 const rakSku=k=>(PSKU.find(x=>x[0]===k)||[k,PKEL[(k.length*7+k.charCodeAt(k.length-1))%5]])[1];
-const P={tgl:iso(HARI0),sesi:null,min:3,hasil:null,tab:'spesial',cari:'',buka:new Set(),dibuat:false,sibuk:false,mode:'',prog:null,err:'',nBuat:null,tanpaPdf:false};
+const P={tgl:iso(HARI0),sesi:null,min:3,hasil:null,tab:'spesial',cari:'',buka:new Set(),dibuat:false,sibuk:false,mode:'',prog:null,err:'',nBuat:null,tanpaPdf:false,lanjut:''};
 const sk=s=>String(s.kode||s.no);   // kunci sesi: "10" atau "11P" (= 11-PEMULIHAN)
 const urutKode=(a,b)=>parseInt(a)-parseInt(b)||(a.endsWith('P')-b.endsWith('P'));
 const pNama=()=>[...P.sesi].sort(urutKode).join('-');
+const pLabel=()=>P.lanjut?P.lanjut+'+'+pNama():pNama();   // label folder hasil: "1-2-3" atau (lanjutan) "1-2+3"
+const sesiLama=()=>P.lanjut?P.lanjut.replace(/\+/g,'-').split('-'):[];   // sesi yang sudah termasuk hasil yang dilanjutkan
+const lanjutHari=t=>TERSAMBUNG?(PLANJ[t]||[]):[];
+const bolehSesi=()=>layakSesi(P.tgl).filter(k=>!sesiLama().includes(k));
 function pilahReset(){P.hasil=null;P.dibuat=false;P.err='';P.nBuat=null;P.buka.clear()}
 function hitungPilah(){
   const ses=pilahHari(P.tgl).filter(s=>P.sesi.has(sk(s))),tot={},sesiSku={};let batal=0;
@@ -840,9 +844,10 @@ function hitungPilah(){
 async function muatPilah(){
   if(!TERSAMBUNG)return;
   try{
-    const d=await api('/api/pilah/sesi');Object.keys(PAPI).forEach(k=>delete PAPI[k]);d.hari.forEach(h=>PAPI[h.tanggal]=h.sesi);
+    const d=await api('/api/pilah/sesi');Object.keys(PAPI).forEach(k=>delete PAPI[k]);d.hari.forEach(h=>{PAPI[h.tanggal]=h.sesi;PLANJ[h.tanggal]=h.lanjutan||[]});
+    if(P.lanjut&&!lanjutHari(P.tgl).includes(P.lanjut))P.lanjut='';   // hasil itu sudah dilanjutkan/dihapus
     const j=await api('/api/pilah/job');
-    if(j.status==='jalan'&&!P.sibuk){P.tgl=j.tanggal;P.sesi=new Set(j.sesi.map(String));P.sibuk=true;P.mode=j.mode;pilahPoll()}
+    if(j.status==='jalan'&&!P.sibuk){P.tgl=j.tanggal;P.lanjut=j.lanjutan_dari||'';P.sesi=new Set(j.sesi.map(String));P.sibuk=true;P.mode=j.mode;pilahPoll()}
     else if(!P.sibuk&&!P.hasil&&!P.dibuat){if(!layakSesi(P.tgl).length){const t=Object.keys(PAPI).filter(k=>layakSesi(k).length).sort().pop()||Object.keys(PAPI).filter(k=>PAPI[k].length).sort().pop();if(t)P.tgl=t}
       const ada=layakSesi(P.tgl);if(!P.sesi||![...P.sesi].every(n=>ada.includes(n))||!P.sesi.size)P.sesi=new Set(ada)}
   }catch(e){toast('Pilah: '+e.message)}
@@ -850,7 +855,7 @@ async function muatPilah(){
 }
 async function pilahJalankan(mode){
   P.err='';P.sibuk=true;P.mode=mode;P.prog={maju:0,total:0};gambarPilah();
-  try{await postJ('/api/pilah/'+mode,{tanggal:P.tgl,sesi:[...P.sesi].sort(urutKode),min_resi:P.min,tanpa_pdf:P.tanpaPdf})}
+  try{await postJ('/api/pilah/'+mode,{tanggal:P.tgl,sesi:[...P.sesi].sort(urutKode),min_resi:P.min,tanpa_pdf:P.tanpaPdf,lanjutan_dari:P.lanjut||undefined})}
   catch(e){P.sibuk=false;P.err=e.message;gambarPilah();return}
   pilahPoll();
 }
@@ -858,7 +863,7 @@ let pilahT=null;
 const pilahPoll=()=>{clearInterval(pilahT);pilahT=setInterval(tickPilah,1000);tickPilah()};
 function petaHasil(h){
   const sisa={};PKEL.forEach(k=>sisa[k]=0);Object.entries(h.sisa).forEach(([k,n])=>sisa[k]=(sisa[k]||0)+n);
-  return {spesial:h.spesial,sisa,batal:h.tak_cocok,bentrok:h.bentrok||{},terlompat:h.terlompat||[],resiSpesial:h.spesial.reduce((a,x)=>a+x.n,0),resiSisa:Object.values(sisa).reduce((a,b)=>a+b,0)};
+  return {spesial:h.spesial,sisa,batal:h.tak_cocok,sudahSpesial:h.sudah_spesial||0,bentrok:h.bentrok||{},terlompat:h.terlompat||[],resiSpesial:h.spesial.reduce((a,x)=>a+x.n,0),resiSisa:Object.values(sisa).reduce((a,b)=>a+b,0)};
 }
 async function tickPilah(){
   try{
@@ -876,7 +881,7 @@ async function bukaDiCetak(){
   if(TERSAMBUNG){
     try{await muatData()}catch(e){toast('Cetak: '+e.message)}
     tgl=P.tgl;pil.clear();bukaS.clear();bukaJ.clear();
-    const nm=pNama();[`${P.tgl}/SPESIAL-SATUAN-${nm}`,`${P.tgl}/SISA-SATUAN-${nm}`].forEach(id=>bukaS.add(id));
+    const nm=pLabel();[`${P.tgl}/SPESIAL-SATUAN-${nm}`,`${P.tgl}/SISA-SATUAN-${nm}`].forEach(id=>bukaS.add(id));
   }else toast('Prototype: folder hasil nanti muncul sebagai sesi/jenis baru di Cetak');
   asal='cetak';go('cetak');gambarCetak();
 }
@@ -886,13 +891,13 @@ const bentrokAda=h=>!P.tanpaPdf&&h.bentrok&&Object.keys(h.bentrok).length>0;
 const kelH=h=>[...new Set([...PKEL,...Object.keys(h.sisa)])];
 function gambarPilah(){
   if(!P.sesi)P.sesi=new Set(layakSesi(P.tgl));
-  const el=$('#v-pilah'),ses=pilahHari(P.tgl),h=P.hasil,nm=pNama(),boleh=ses.filter(s=>s.layak!==false);
+  const el=$('#v-pilah'),ses=pilahHari(P.tgl),h=P.hasil,nm=pLabel(),lama=sesiLama(),boleh=ses.filter(s=>s.layak!==false&&!lama.includes(sk(s))),lanj=lanjutHari(P.tgl);
   const hariHtml=[0,1,2].map(i=>{const d=new Date(HARI0);d.setDate(d.getDate()-i);const t=iso(d);
     return `<button class="dchip ${t===P.tgl?'on':''}" data-t="${t}">${['Hari ini','Kemarin','2 hari lalu'][i]} · ${d.getDate()} ${BLN[d.getMonth()]}<small style="color:var(--mut)">${pilahHari(t).length} sesi</small></button>`}).join('');
   const sesHtml=ses.map(s=>{const n=s.label;
-    const off=s.layak===false;
-    return `<div class="psesi ${off?'off':''} ${P.sesi.has(sk(s))?'sel':''}" data-s="${sk(s)}" ${off?'aria-disabled="true" title="'+esc(s.alasan||'')+'"':''}><span class="cb ${P.sesi.has(sk(s))?'on':''}" ${off?'style="visibility:hidden"':''}>${ic('check')}</span>
-      <span class="tx"><b>${s.judul||'Sesi '+s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.picklist} picklist satuan &middot; ${n} label</small>${off?`<small class="why">Tidak bisa dipilah &mdash; ${esc(s.alasan||'')}</small>`:''}</span></div>`}).join('')||'<div class="empty">Belum ada label satuan di hari ini</div>';
+    const terpakai=lama.includes(sk(s)),off=s.layak===false||terpakai,alasan=terpakai?'Sudah termasuk hasil pilah '+P.lanjut:s.alasan;
+    return `<div class="psesi ${off?'off':''} ${P.sesi.has(sk(s))?'sel':''}" data-s="${sk(s)}" ${off?'aria-disabled="true" title="'+esc(alasan||'')+'"':''}><span class="cb ${P.sesi.has(sk(s))?'on':''}" ${off?'style="visibility:hidden"':''}>${ic('check')}</span>
+      <span class="tx"><b>${s.judul||'Sesi '+s.no}</b> <span style="color:var(--mut)">&middot; ${s.jam}</span><small>${s.picklist} picklist satuan &middot; ${n} label</small>${off?`<small class="why">Tidak bisa dipilah &mdash; ${esc(alasan||'')}</small>`:''}</span></div>`}).join('')||'<div class="empty">Belum ada label satuan di hari ini</div>';
   let hasilHtml='';
   if(h){
     const q=P.cari.toLowerCase(),sp=h.spesial.filter(x=>!q||x.sku.toLowerCase().includes(q));
@@ -913,10 +918,13 @@ function gambarPilah(){
   const nPdf=P.nBuat!=null?P.nBuat:h?h.spesial.length+kelH(h).filter(k=>h.sisa[k]).length:0;
   el.innerHTML=`<div class="col">
     <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
-    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===layakSesi(P.tgl).length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
+    <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===bolehSesi().length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
     <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Hanya satuan gabungan J&amp;T + SPX dari sesi yang diproses 07.00&ndash;12.00 atau 20.00&ndash;07.00.</div>${sesHtml}
     <div class="stp-h" style="margin-top:14px"><span class="no">3</span><b>Minimal resi per SKU</b></div>
     <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMin">${[2,3,4,5].map(n=>`<button data-n="${n}" class="${P.min===n?'on':''}">${n}</button>`).join('')}</div><span style="color:var(--mut)">3 = sama dengan aturan SKU spesial</span></div>
+    ${lanj.length?`<div class="stp-h" style="margin-top:14px"><span class="no">&bull;</span><b>Lanjutkan hasil sebelumnya</b></div>
+    <div class="bar" style="margin-bottom:6px"><div class="seg" id="pLanj"><button data-l="" class="${P.lanjut?'':'on'}">Pilah baru</button>${lanj.map(l=>`<button data-l="${esc(l)}" class="${P.lanjut===l?'on':''}">Sisa ${esc(l)}</button>`).join('')}</div></div>
+    <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">${P.lanjut?`Pilih sesi <b>baru</b> di atas: sisa satuan sesi ${esc(sesiLama().join('-'))} digabung dengan satuan sesi baru. Resi yang sudah jadi SPESIAL-SATUAN-${esc(P.lanjut)} (sudah dicetak) tidak ikut dihitung dan foldernya tidak diubah; PDF SISA-SATUAN-${esc(P.lanjut)} diganti sisa yang baru.`:'Sisa satuan yang belum dicetak dari pilah sebelumnya bisa digabung dengan sesi baru.'}</div>`:''}
     <div class="stp-h" style="margin-top:14px"><span class="no">&bull;</span><b>Isi folder hasil</b></div>
     <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMode"><button data-m="0" class="${P.tanpaPdf?'':'on'}">PDF label + Excel</button><button data-m="1" class="${P.tanpaPdf?'on':''}">Hanya Excel</button></div>
       <span style="color:var(--mut)">${P.tanpaPdf?'Label satuan sudah dicetak: cukup daftar resi per SKU untuk memilah fisik.':'Buat PDF label baru per SKU & per rak untuk dicetak.'}</span></div>
@@ -930,6 +938,7 @@ function gambarPilah(){
         <div class="fold">${ic('folder')}<span><b>SPESIAL-SATUAN-${nm||'…'}</b><small>${P.tanpaPdf?'':'PDF per SKU (urut rak) + '}detail-resi-spesial-satuan-${nm||'…'}.xlsx</small></span></div>
         ${P.tanpaPdf?'':`<div class="fold">${ic('folder')}<span><b>SISA-SATUAN-${nm||'…'}</b><small>PDF per kelompok rak (2A, 3A, 1B, 2B, 3B)</small></span></div>`}
       </div>
+      ${h&&h.sudahSpesial?`<div class="note" style="margin-top:6px">${h.sudahSpesial} label sudah jadi spesial di SPESIAL-SATUAN-${esc(P.lanjut)} &mdash; tidak ikut dihitung lagi.</div>`:''}
       ${h&&h.batal?`<div class="note" style="margin-top:6px">${h.batal} label dilewati &mdash; pesanannya sudah dibatalkan di Jubelio.</div>`:''}
       ${h&&bentrokAda(h)?`<div class="note" style="margin-top:6px;background:var(--badbg);color:var(--bad)">${Object.entries(h.bentrok).map(([k,n])=>n+' PDF sudah dikurasi ke SPESIAL-SATUAN-'+esc(k)+' / SISA-SATUAN-'+esc(k)).join('; ')}. Hapus folder hasil itu dulu atau pilih sesi yang persis sama &mdash; atau pakai &ldquo;Hanya Excel&rdquo;.</div>`:''}
       ${h&&h.terlompat&&h.terlompat.length?`<div class="note" style="margin-top:6px">Nomor PICK terlompat di antara picklist satuan (${h.terlompat.map(esc).join(', ')}): ada picklist gagal/terhenti, pesanannya tidak ikut terhitung.</div>`:''}
@@ -948,9 +957,12 @@ function gambarPilah(){
     <div class="card"><b>Cara kerja</b><ul class="facts" style="margin-bottom:0">
       <li>Label satuan<b>gabungan J&amp;T + SPX</b></li><li>Sesi diproses<b>07.00&ndash;12.00 / 20.00&ndash;07.00</b></li><li>Label dari<b>PDF yang ada</b></li><li>SKU &amp; resi<b>dari Jubelio</b></li><li>Gabung lintas sesi<b>ya</b></li><li>Pesanan batal<b>dilewati</b></li></ul></div>
    </aside>`;
-  el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tgl=b.dataset.t;P.sesi=new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
+  el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tgl=b.dataset.t;P.lanjut='';P.sesi=new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
   el.querySelectorAll('.psesi:not(.off)').forEach(b=>b.onclick=()=>{if(P.sibuk)return;const n=b.dataset.s;if(P.sesi.has(n))P.sesi.delete(n);else{P.sesi.add(n);P.sesi.delete(n.endsWith('P')?n.slice(0,-1):n+'P')}   /* sesi N & N-PEMULIHAN berisi resi sama: pilih salah satu */pilahReset();gambarPilah()});
-  el.querySelector('#pAll').onclick=()=>{P.sesi=P.sesi.size===layakSesi(P.tgl).length?new Set():new Set(layakSesi(P.tgl));pilahReset();gambarPilah()};
+  el.querySelector('#pAll').onclick=()=>{P.sesi=P.sesi.size===bolehSesi().length?new Set():new Set(bolehSesi());pilahReset();gambarPilah()};
+  el.querySelectorAll('#pLanj button').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.lanjut=b.dataset.l;
+    /* lanjutan: hanya sesi baru; pilah baru: semua sesi yang boleh. Sesi lama dibuang dari pilihan */
+    P.sesi=P.lanjut?new Set([...P.sesi].filter(k=>!sesiLama().includes(k))):new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
   el.querySelectorAll('#pMin button').forEach(b=>b.onclick=()=>{P.min=+b.dataset.n;pilahReset();gambarPilah()});
   el.querySelectorAll('#pMode button').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tanpaPdf=b.dataset.m==='1';pilahReset();gambarPilah()});
   el.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{P.tab=b.dataset.tab;gambarPilah()});
