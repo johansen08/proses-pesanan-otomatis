@@ -2437,6 +2437,119 @@ def uji_jurnal_picklist_dibuat_terlihat_sebagai_yatim_kalau_proses_mati():
     print("  jurnal 'dibuat': picklist yatim muncul setelah UMUR_YATIM_S; selesai/gagal menggantikan")
 
 
+def uji_urgent_gtl_sicepat_spesial_minimal_3_sku_lalu_sisa_per_lantai():
+    class JubelioPalsuGtlSpesial(JubelioPalsuUrgent):
+        """250 pesanan GTL/SiCepat (id 200-449), semuanya total_qty 1; SKU diatur lewat items-to-pick."""
+
+        def __init__(self):
+            super().__init__()
+            for o in self.pesanan_gtl_sicepat:
+                o["total_qty"] = "1.0000"
+            self.sku = {}
+            for i in range(200, 205):                       # 5 pesanan SKU-A -> spesial
+                self.sku[i] = ("SKU-A", 0, "1.0000")
+            for i in range(205, 208):                       # 3 pesanan SKU-B -> pas MIN_RESI, spesial
+                self.sku[i] = ("SKU-B", 0, "1.0000")
+            for i in range(208, 210):                       # 2 pesanan SKU-C -> di bawah ambang
+                self.sku[i] = ("SKU-C", 0, "1.0000")
+            for i in range(210, 214):                       # SKU dikecualikan (C225-UB)
+                self.sku[i] = ("C225-UB11-1", 0, "1.0000")
+            for i in range(214, 218):                       # bundle
+                self.sku[i] = ("SKU-D", 77, "1.0000")
+            for i in range(218, 222):                       # qty item 2
+                self.sku[i] = ("SKU-E", 0, "2.0000")
+            self.items_dipanggil = []
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                self.items_dipanggil.append(list(json["ids"]))
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": self.sku.get(i, ("X", 0, "1.0000"))[2],
+                                   "salesorder_id": i, "end_qty": "999.0000",
+                                   "bundle_item_id": self.sku.get(i, ("X", 0, ""))[1],
+                                   "package_detail_id": None, "package_id": None,
+                                   "item_full_name": f"{self.sku.get(i, (f'UNIK-{i}',))[0]} - Baju",
+                                   "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            return super().post(url, json, headers, timeout, cookies)
+
+    j = JubelioPalsuGtlSpesial()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    pesanan = pl.ambil_pesanan_channel(k, couriers=pl.KURIR_FILTER_URGENT_GTL_SICEPAT)
+
+    spesial, sisa = pl.pisah_spesial_gtl(k, pesanan)
+    assert {s: len(v) for s, v in spesial.items()} == {"SKU-A": 5, "SKU-B": 3}, spesial
+    assert len(sisa) == 250 - 8 and not {o["salesorder_id"] for o in sisa} & set(range(200, 208))
+    print("  pisah_spesial_gtl: SKU-A (5) & SKU-B (3 = MIN_RESI) spesial; SKU-C (2), C225-UB, bundle, "
+          "qty item 2 tetap di sisa")
+
+    # pesanan dengan total_qty != 1 atau nilai 0 tidak pernah jadi kandidat; items-to-pick gagal -> semua sisa
+    kecil = [dict(o, total_qty="2.0000") for o in pesanan[:5]]
+    assert pl.pisah_spesial_gtl(k, kecil) == ({}, kecil)
+    asli_post = k.post
+    k.post = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("API mati"))
+    try:
+        assert pl.pisah_spesial_gtl(k, pesanan) == ({}, pesanan)
+    finally:
+        k.post = asli_post
+    print("  total_qty != 1 bukan kandidat; items-to-pick gagal -> tidak ada spesial, semua ke lantai")
+
+    panggilan = []
+    asli = pl.lanjutkan_picklist
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((pno, jumlah, sku, nama_file, subfolder))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": "", "Catatan": ""}
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            skenario = [s for s in pl.SKENARIO_URGENT if s[0] == "GTL-SiCepat"]
+            hasil = pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label", skenario)
+    finally:
+        pl.lanjutkan_picklist = asli
+    label = [h["SKU"] for h in hasil]
+    assert label[:2] == ["GTL-SICEPAT-SPESIAL-SKU-A", "GTL-SICEPAT-SPESIAL-SKU-B"], label
+    assert {h["SKU"]: h["Total Pesanan"] for h in hasil} == {
+        "GTL-SICEPAT-SPESIAL-SKU-A": 5, "GTL-SICEPAT-SPESIAL-SKU-B": 3, "GTL-SICEPAT-LANTAI1": 100 - 8,
+        "GTL-SICEPAT-LANTAI2": 70, "GTL-SICEPAT-LANTAI3": 50, "GTL-SICEPAT-LAINNYA": 30}, hasil
+    assert all(p[4] == pl.SUBFOLDER_URGENT for p in panggilan)
+    assert panggilan[0][3] == "GTL-SICEPAT-SPESIAL-SKU-A"
+    print("  proses_urgent GTL-SiCepat: picklist SPESIAL-<SKU> dibuat dulu (subfolder URGENT), sisanya per lantai")
+
+    # lanjutkan_picklist ASLI: picklist spesial GTL menulis detail-resi-spesial-gtl-sicepat.xlsx
+    baris_resi = [{"salesorder_id": 200 + i, "salesorder_no": f"SO{200 + i}", "tracking_no": f"JY{i}"}
+                  for i in range(5)]
+    tiruan = {n: getattr(pl, n) for n in ("selesaikan_picking", "pesanan_selesai_pick", "info_slot_pickup",
+                                          "minta_resi", "unduh_label")}
+    pl.selesaikan_picking = lambda k, pid: None
+    pl.pesanan_selesai_pick = lambda k, no, n: [{"salesorder_id": r["salesorder_id"], "source": 128}
+                                                for r in baris_resi]
+    pl.info_slot_pickup = lambda k, p: None
+    pl.minta_resi = lambda k, ids: baris_resi
+    pl.unduh_label = lambda k, ids, tujuan, lazada=False: tujuan
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "label"
+            folder.mkdir()
+            pl.lanjutkan_picklist(k, 1, "PICK-000900001", 5, "GTL-SICEPAT-SPESIAL-SKU-A", folder,
+                                  nama_file="GTL-SICEPAT-SPESIAL-SKU-A", subfolder=pl.SUBFOLDER_URGENT)
+            # picklist lantai biasa TIDAK menulis detail
+            pl.lanjutkan_picklist(k, 2, "PICK-000900002", 5, "GTL-SICEPAT-LANTAI1", folder,
+                                  nama_file="GTL-SICEPAT-LANTAI1", subfolder=pl.SUBFOLDER_URGENT)
+            pl.tutup_riwayat()
+            from openpyxl import load_workbook
+            detail = list(load_workbook(folder / "detail-resi-spesial-gtl-sicepat.xlsx").active.values)
+            assert detail[0] == tuple(pl.KOLOM_DETAIL_SPESIAL), detail
+            assert len(detail) == 1 + 5 and all(b[:2] == ("PICK-000900001", "SKU-A") for b in detail[1:]), detail
+            assert sorted(b[3] for b in detail[1:]) == [f"JY{i}" for i in range(5)]
+            assert not (folder / pl.NAMA_DETAIL_SPESIAL).exists()
+    finally:
+        for n, f in tiruan.items():
+            setattr(pl, n, f)
+    print("  lanjutkan_picklist: detail-resi-spesial-gtl-sicepat.xlsx (No Picklist, SKU asli, No Pesanan, "
+          "No Resi) hanya untuk picklist spesial GTL; picklist lantai tidak menulis detail")
+
+
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.WARNING)

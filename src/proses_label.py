@@ -103,7 +103,8 @@ import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 import rekap_master_excel
-from sku_spesial import AWALAN_JNT_NDD, AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI
+from sku_spesial import (AWALAN_JNT_NDD, AWALAN_KOMPONEN_DIABAIKAN, AWALAN_SKU_DIKECUALIKAN_SPESIAL,
+                         KURIR_DIIZINKAN, MIN_RESI)
 
 # Host server report (Telerik) Jubelio, urut dari yang dicoba PERTAMA. report.jubelio.com lebih
 # stabil; report-prod.jubelio.com (host bawaan URL dari API Jubelio) sering bermasalah (410/504/
@@ -320,6 +321,25 @@ KOLOM_RIWAYAT = ["Waktu", "SKU", "No Picklist", "Total Pesanan", "Resi Keluar",
 NAMA_DETAIL_SPESIAL = "detail-resi-spesial.xlsx"
 NAMA_DETAIL_BUKAN_SPESIAL = "detail-resi-bukan-spesial.xlsx"
 KOLOM_DETAIL_SPESIAL = ["No Picklist", "SKU", "No Pesanan", "No Resi"]
+
+# SKU spesial urgent GTL-SiCepat (lihat pisah_spesial_gtl()): label/nama file picklistnya
+# "GTL-SICEPAT-SPESIAL-<SKU>" (tetap cocok pola cetak jenis gtl-sicepat), detail resinya ke file
+# tersendiri di folder sesi (SKU di kolom "SKU" = SKU asli, bukan label).
+AWALAN_LABEL_GTL_SPESIAL = "GTL-SICEPAT-SPESIAL-"
+NAMA_DETAIL_SPESIAL_GTL = "detail-resi-spesial-gtl-sicepat.xlsx"
+
+
+def detail_gtl_spesial(nama_file: str | None, picklist_no: str,
+                       baris_ada_resi: list[dict]) -> tuple[str, list[dict]] | None:
+    """(nama file detail, baris) untuk picklist SKU spesial GTL-SiCepat (nama file label diawali
+    AWALAN_LABEL_GTL_SPESIAL), None untuk picklist lain atau kalau tak ada resi keluar. Dipakai
+    lanjutkan_picklist() & pulihkan_picklist() supaya jalur lanjut/pemulihan ikut menulis detail."""
+    if not baris_ada_resi or not nama_file or not nama_file.upper().startswith(AWALAN_LABEL_GTL_SPESIAL):
+        return None
+    sku = nama_file[len(AWALAN_LABEL_GTL_SPESIAL):]
+    return NAMA_DETAIL_SPESIAL_GTL, [
+        {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
+         "No Resi": r.get("tracking_no")} for r in baris_ada_resi]
 
 
 def nama_detail_per_kurir(nama_dasar: str, tag: str | None) -> str:
@@ -756,6 +776,56 @@ def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int | None,
     return pakai, ditahan
 
 
+def _sku_item(x: dict) -> str:
+    """SKU 1 item items-to-pick: item_code kalau ada, kalau tidak bagian sebelum " - " di
+    item_full_name (format "<SKU> - <nama>", lihat _cek_item())."""
+    kode = str(x.get("item_code") or "").strip()
+    return kode or str(x.get("item_full_name") or "").split(" - ", 1)[0].strip()
+
+
+def pisah_spesial_gtl(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list[dict]], list[dict]]:
+    """Dari pesanan urgent GTL-SiCepat: SKU yang bisa dibuat spesial = minimal MIN_RESI pesanan
+    dengan SKU sama, tiap pesanan hanya 1 baris item, qty 1, bukan bundle, nilai bukan 0, SKU
+    tidak berawalan AWALAN_SKU_DIKECUALIKAN_SPESIAL (aturan sama dengan spesial biasa/pilah
+    satuan). Return ({SKU: pesanan}, pesanan sisa untuk dipecah per lantai). Hanya MEMBACA
+    (items-to-pick); kalau gagal, semua pesanan jadi sisa (tidak ada spesial) - jangan
+    menghentikan alur urgent."""
+    kandidat = [o for o in pesanan
+                if _angka(o.get("total_qty")) == 1 and _angka(o.get("grand_total")) != 0]
+    per_so: dict[int, list[dict]] = {}
+    try:
+        for ids in bagi_batch([o["salesorder_id"] for o in kandidat]):
+            for x in k.post("sales/picklists/items-to-pick/", {"ids": ids}):
+                per_so.setdefault(x["salesorder_id"], []).append(x)
+    except Exception as e:      # noqa: BLE001 - spesial hanya tambahan, lantai tetap jalan
+        log.warning("  Gagal cek SKU spesial GTL-SiCepat (%s) - semua pesanan dipecah per lantai", e)
+        return {}, pesanan
+    awalan = tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL)
+    per_sku: dict[str, list[dict]] = {}
+    for o in kandidat:
+        xs = per_so.get(o["salesorder_id"], [])
+        if len(xs) != 1 or xs[0].get("bundle_item_id") or _angka(xs[0].get("qty_ordered")) != 1:
+            continue
+        sku = _sku_item(xs[0])
+        if sku and not sku.upper().startswith(awalan):
+            per_sku.setdefault(sku, []).append(o)
+    spesial = {s: per_sku[s] for s in sorted(per_sku) if len(per_sku[s]) >= MIN_RESI}
+    id_spesial = {o["salesorder_id"] for v in spesial.values() for o in v}
+    return spesial, [o for o in pesanan if o["salesorder_id"] not in id_spesial]
+
+
+def _subkelompok_gtl(k: Klien, pesanan: list[dict], channel_ids, couriers) -> dict[str, list[dict]]:
+    """Sub-kelompok urgent GTL-SiCepat: SKU spesial dulu (key "SPESIAL-<SKU>", lihat
+    pisah_spesial_gtl()), baru sisanya per lantai (LANTAI1/2/3/LAINNYA)."""
+    spesial, sisa = pisah_spesial_gtl(k, pesanan)
+    if spesial:
+        log.info("  %d SKU spesial GTL-SiCepat (>= %d pesanan/SKU, %d pesanan); sisa %d pesanan "
+                 "per lantai", len(spesial), MIN_RESI, sum(map(len, spesial.values())), len(sisa))
+    hasil = {f"SPESIAL-{sku}": v for sku, v in spesial.items()}   # label: AWALAN_LABEL_GTL_SPESIAL
+    hasil.update(_kelompok_per_lantai_berlabel(k, sisa, channel_ids=channel_ids, couriers=couriers))
+    return hasil
+
+
 def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
                    sekarang: datetime | None = None) -> None:
     """Mode uji picklist urgent: hanya membaca data, tidak mengubah apa pun di Jubelio.
@@ -773,8 +843,7 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
             continue
         log.info("[UJI] Urgent %-10s pesanan siap proses %3d, dipecah per lantai%s",
                  nama, len(pesanan), tunda)
-        _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
-            k, pesanan, channel_ids=channel_ids, couriers=couriers))
+        _log_rencana_subkelompok(_subkelompok_gtl(k, pesanan, channel_ids, couriers))
 
 
 class Gelombang:
@@ -925,7 +994,10 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. Skenario
     `per_lantai` (GTL-SiCepat) dipecah jadi picklist per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
-    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. Kedua skenario (Lazada DAN
+    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. SEBELUM dipecah per lantai, SKU yang
+    punya >= MIN_RESI pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_gtl()) dibuat
+    picklist spesial sendiri "GTL-SICEPAT-SPESIAL-<SKU>" + detail-resi-spesial-gtl-sicepat.xlsx
+    di folder sesi (lihat detail_gtl_spesial()). Kedua skenario (Lazada DAN
     GTL-SiCepat) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
     lihat lanjutkan_picklist(). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan yang lain."""
@@ -940,8 +1012,7 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
                          "otomatis setelah jam %02d.00", ditahan, nama, jam_cutoff,
                          JAM_LANJUT_URGENT)
             if per_lantai:
-                subkelompok = _kelompok_per_lantai_berlabel(
-                    k, pesanan, channel_ids=channel_ids, couriers=couriers)
+                subkelompok = _subkelompok_gtl(k, pesanan, channel_ids, couriers)
                 hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat,
                                              folder_label, kurir=None, prefix="Urgent",
                                              subfolder=SUBFOLDER_URGENT)
@@ -2208,6 +2279,9 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
         catat_detail_spesial(folder_label, nama_detail, [
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
+    detail_gtl = detail_gtl_spesial(nama_file or sku, picklist_no, baris_ada_resi)
+    if detail_gtl:
+        catat_detail_spesial(folder_label, *detail_gtl)
 
     peringatan_gagal.tandai_selesai(picklist_no)
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
@@ -2463,6 +2537,8 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
             NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI else NAMA_DETAIL_BUKAN_SPESIAL, tag), [
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
+    elif detail_gtl := detail_gtl_spesial(nama_file, picklist_no, baris_ada_resi):
+        baris["_detail"] = detail_gtl
     if tulis:
         tulis_hasil_pulihan(folder_label, baris, file_riwayat)
     return baris
