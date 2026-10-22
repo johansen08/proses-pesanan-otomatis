@@ -4,8 +4,8 @@ berurutan (bukan memanggil fungsi langsung), lalu rekap waktu (`rekap_waktu.py`)
 SUNGGUHAN: langkah ini mengubah data di Jubelio.
 
 Aturan yang SAMA dengan .bat:
-  - Folder sesi label dihitung SEKALI (env LABEL_SESI_DIR) dan dipakai semua langkah; dipakai
-    ulang antar job selama masih hari yang sama, hari baru -> sesi baru (lihat _sesi_label()).
+  - Folder sesi label dihitung SEKALI per job (env LABEL_SESI_DIR) dan dipakai semua langkah job
+    itu; job berikutnya (TIPE lain/ulang) selalu sesi baru (lihat _sesi_label()).
   - Langkah yang gagal TIDAK menghentikan langkah berikutnya (seperti .bat); statusnya dicatat
     per langkah dan peringatan dari logs/ ikut tampil di rekap.
   - Urgent memakai `--lewati-malam` hanya untuk judul "TIPE 1" (dan "KUSTOM"), tidak untuk
@@ -44,7 +44,6 @@ BARIS_MAKS = 50000
 _kunci = threading.Lock()
 _job: dict | None = None
 _proses: subprocess.Popen | None = None
-_sesi: tuple[str, str] | None = None     # (tanggal, "YYYY-MM-DD/N")
 
 
 class HarianError(Exception):
@@ -52,14 +51,11 @@ class HarianError(Exception):
 
 
 def _sesi_label() -> str:
-    """Folder sesi label untuk job ini: pakai ulang yang sama selama masih hari yang sama
-    (seperti proses-harian.bat yang menghitungnya sekali), hari baru -> buat sesi baru."""
-    global _sesi
-    hari = datetime.now().strftime("%Y-%m-%d")
-    if _sesi is None or _sesi[0] != hari:
-        import main
-        _sesi = (hari, main.sesi_label_baru())
-    return _sesi[1]
+    """Folder sesi label untuk job ini: SELALU sesi baru - tiap job (TIPE) = satu sesi sendiri,
+    walau masih hari yang sama (insiden 2026-10-22: TIPE 1 jam 07.00 lalu TIPE 1 jam 08.15
+    menyatu di sesi 1 karena sesi dipakai ulang)."""
+    import main
+    return main.sesi_label_baru()
 
 
 def _luncurkan(argumen: list[str], env: dict) -> subprocess.Popen:

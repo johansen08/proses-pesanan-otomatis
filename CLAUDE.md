@@ -165,7 +165,7 @@ project secara umum, root tidak boleh berisi file `.py`):
 - `src/menu_konsol.py` — menu konsol (`menu_konsol.py harian|event|malam [--uji]`) yang dipanggil SEMUA
   `bat\proses-harian/event/malam[-uji].bat` (kini peluncur tipis 1 baris, tanpa label/goto/daftar langkah).
   Tiap langkah = SATU proses `main.py` berurutan, langkah gagal tidak menghentikan berikutnya, rekap waktu di
-  akhir TIPE, `LABEL_SESI_DIR` dihitung sekali per peluncuran. Nama langkah memakai `<=` (bukan `≤`) di konsol.
+  akhir TIPE, `LABEL_SESI_DIR` dihitung per TIPE yang dijalankan (TIPE pertama memakai sesi saat peluncuran, TIPE berikutnya di cmd yang sama sesi BARU). Nama langkah memakai `<=` (bukan `≤`) di konsol.
   Cek jam memakai `MENU_JAM` (EVENT - TIPE 2 memakai kunci "2", bukan "E2" — perilaku .bat lama dipertahankan).
 - `src/coba_ulang.py` — percobaan ulang OTOMATIS di akhir tiap TIPE (konsol `menu_konsol.py` & UI
   `jalankan_harian.py`): setelah semua langkah, SEBELUM `rekap_waktu.py`, tiap picklist TERHENTI/gagal unduh PDF
@@ -175,7 +175,7 @@ project secara umum, root tidak boleh berisi file `.py`):
 - `src/jalankan_harian.py` — menjalankan langkah menu Harian dari UI (SUNGGUHAN, mengubah data di
   Jubelio): tiap langkah di `KATALOG` (dari `alur.py`) = satu proses `main.py <flag> --jalankan` berurutan
   (BUKAN memanggil fungsi langsung), lalu `rekap_waktu.py`. Perilaku sama dengan `menu_konsol.py` (satu
-  `susun_argumen()`): `LABEL_SESI_DIR` dihitung sekali per hari, langkah gagal tidak menghentikan berikutnya.
+  `susun_argumen()`): `LABEL_SESI_DIR` dihitung sekali per job (job berikutnya selalu sesi baru), langkah gagal tidak menghentikan berikutnya.
   Jangan pernah menjalankan job ini di tes tanpa meniru `_luncurkan` (akan menyentuh Jubelio sungguhan).
   Menu Event di UI memakai judul `EVENT - TIPE 1..4`/`EVENT - MALAM`/`EVENT - KUSTOM` dan `KATALOG_EVENT`
   (flag `--event`; MALAM menolak IRESIS).

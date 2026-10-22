@@ -93,9 +93,17 @@ def cek_jam(judul: str, teks_jam: str, masukan=_input, cetak=print, dalam_jam=No
     return _ya(masukan("Apakah anda tidak salah memilih menu? (Y/N): "))
 
 
+def _sesi_baru() -> str:
+    from main import sesi_label_baru
+    return sesi_label_baru()
+
+
 def menu(mode: str, uji: bool, sesi: str, masukan=_input, cetak=print, bersihkan_layar=None,
-         dalam_jam=None, **kw) -> None:
-    """Loop menu `harian` atau `event` sampai pengguna memilih 0."""
+         dalam_jam=None, sesi_baru=_sesi_baru, **kw) -> None:
+    """Loop menu `harian` atau `event` sampai pengguna memilih 0. `sesi` dipakai untuk TIPE
+    pertama yang dijalankan; tiap TIPE berikutnya (cmd tidak ditutup) mendapat sesi baru lewat
+    `sesi_baru()` - jangan memakai ulang sesi (TIPE 1 jam 07.00 + TIPE 1 jam 08.15 harus 2 sesi)."""
+    sesi_terpakai = False
     butir = alur.MENU_HARIAN if mode == "harian" else alur.MENU_EVENT
     judul_menu = ("PROSES PESANAN OTOMATIS (NON EVENT)" if mode == "harian"
                   else "PROSES PESANAN OTOMATIS (EVENT: 10.10 / 11.11 / 12.12 DST)")
@@ -124,6 +132,10 @@ def menu(mode: str, uji: bool, sesi: str, masukan=_input, cetak=print, bersihkan
             continue
         if not konfirmasi(judul, catatan, uji, masukan, cetak):
             continue
+        if sesi_terpakai:
+            sesi = sesi_baru()
+            cetak(f"Sesi label: {sesi}")
+        sesi_terpakai = True
         jalankan_tipe(judul, uji, sesi, cetak=cetak, **kw)
         masukan("Tekan Enter untuk kembali ke menu...")
 

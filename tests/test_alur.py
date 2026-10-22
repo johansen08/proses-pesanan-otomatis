@@ -220,6 +220,21 @@ def uji_menu_tiap_tipe_menjalankan_tepat_langkah_alur_sekali():
           "lalu rekap; LABEL_SESI_DIR & WAKTU_MENU_MULAI terisi")
 
 
+def uji_menu_tipe_kedua_di_cmd_yang_sama_mendapat_sesi_baru():
+    """Insiden 2026-10-22: TIPE 1 jam 07.00, cmd tidak ditutup, TIPE 1 jam 08.15 -> harus sesi 2."""
+    baru = iter(["2026-10-12/4", "2026-10-12/5"])
+    papan = Papan("1", "Y", "", "1", "Y", "", "2", "N", "1", "N", "0")   # run, run, batal, batal
+    mk.menu("harian", False, "2026-10-12/3", masukan=papan.masukan, cetak=papan.cetak,
+            dalam_jam=lambda kunci: True, jalankan=papan.jalankan,
+            sekarang=iter(range(1000, 9999)).__next__, sesi_baru=lambda: next(baru))
+    per_run = [env["LABEL_SESI_DIR"] for a, env in papan.panggilan if Path(a[1]).name == "rekap_waktu.py"]
+    assert per_run == ["2026-10-12/3", "2026-10-12/4"], per_run
+    sesi_main = {env["LABEL_SESI_DIR"] for a, env in papan.panggilan if Path(a[1]).name == "main.py"}
+    assert sesi_main == {"2026-10-12/3", "2026-10-12/4"} and next(baru) == "2026-10-12/5", \
+        "run yang dibatalkan (N) tidak boleh menghabiskan nomor sesi"
+    print("  menu: TIPE kedua di cmd yang sama = sesi baru; batal (N) tidak membuat sesi")
+
+
 def uji_menu_keluar_batal_dan_pilihan_salah_tidak_menjalankan_apa_pun():
     papan = Papan("0")
     _menu(papan)
@@ -295,7 +310,7 @@ def uji_main_argumen_dan_sesi_dihitung_sekali():
         assert e.code == 2
     else:
         raise AssertionError("mode tak dikenal harus ditolak argparse")
-    print("  main(): sesi label dihitung sekali per peluncuran, mode tak dikenal ditolak")
+    print("  main(): sesi label dihitung sekali per peluncuran (TIPE pertama), mode tak dikenal ditolak")
 
 
 if __name__ == "__main__":
