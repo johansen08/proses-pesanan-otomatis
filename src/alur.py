@@ -25,6 +25,7 @@ _LANGKAH_DASAR: list[tuple[str, list[str]]] = [
 # (nama langkah di UI/konsol, flag main.py tanpa --jalankan). Urutan = urutan eksekusi.
 KATALOG: list[tuple[str, list[str]]] = [
     *_LANGKAH_DASAR,
+    ("Spesial SPX ≤ 12.00 (Resi Pagi)", ["--shopee-pagi", "--spesial-saja"]),
     ("SPX ≤ 12.00 (Resi Pagi)", ["--shopee-pagi"]),
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
     ("SPX-J&T Spesial", ["--label", "--tanpa-reguler"]),
@@ -111,7 +112,7 @@ _IRESIS = [LANGKAH_IRESIS]
 # Isi preset tiap judul (himpunan; urutan eksekusi selalu mengikuti KATALOG/KATALOG_EVENT).
 PRESET: dict[str, list[str]] = {
     "TIPE 1": [*_PERSIAPAN, *_URGENT, *_GABUNG, *_IRESIS],
-    "TIPE 2": [*_PERSIAPAN, *_URGENT, "SPX ≤ 12.00 (Resi Pagi)", *_JNT, *_SPX, *_IRESIS],
+    "TIPE 2": [*_PERSIAPAN, *_URGENT, "Spesial SPX ≤ 12.00 (Resi Pagi)", "SPX ≤ 12.00 (Resi Pagi)", *_JNT, *_SPX, *_IRESIS],
     "TIPE 3": [*_PERSIAPAN, *_URGENT, *_JNT, *_SPX, *_IRESIS],
     "TIPE 4": [*_PERSIAPAN, *_URGENT, _SIANG, *_GABUNG, *_IRESIS],
     "MALAM": [*_URGENT, *_GABUNG],

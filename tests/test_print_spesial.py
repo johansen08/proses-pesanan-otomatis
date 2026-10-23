@@ -409,6 +409,7 @@ def uji_spx_pagi_spesial_folder_sendiri_terpisah_dari_spx_pagi():
         (folder / "SPX-PAGI-SPESIAL").mkdir()
         (folder / "SPX_PAGI").mkdir()
         _buat(folder / "SPX-PAGI-SPESIAL", "PICK-000000001_SHOPEE-PAGI-SPESIAL-SKU-A_2026-10-23_100000.pdf")
+        (folder / "SPX-PAGI-SPESIAL" / "detail-resi-spesial-spx-pagi.xlsx").write_bytes(b"x")   # Excel ikut di folder, bukan label
         _buat(folder / "SPX_PAGI", "PICK-000000002_SHOPEE-PAGI-LANTAI1_2026-10-23_100000.pdf")
         assert ps.JENIS_LABEL["spx-pagi-spesial"] == ["SPX-PAGI-SPESIAL"]
         assert [p.name[:14] for p in ps.daftar_label(folder, "spx-pagi-spesial")] == ["PICK-000000001"]

@@ -340,12 +340,13 @@ NAMA_DETAIL_SPESIAL_GTL = "detail-resi-spesial-gtl-sicepat.xlsx"
 # SKU spesial Shopee Pagi (SPX <= 12.00, --shopee-pagi): label "SHOPEE-PAGI-SPESIAL-<SKU>", folder
 # SUBFOLDER_SPX_PAGI_SPESIAL, detail resi detail-resi-spesial-spx-pagi.xlsx.
 AWALAN_LABEL_SPX_PAGI_SPESIAL = "SHOPEE-PAGI-SPESIAL-"
-NAMA_DETAIL_SPESIAL_SPX_PAGI = "detail-resi-spesial-spx-pagi.xlsx"
+NAMA_DETAIL_SPESIAL_SPX_PAGI = "detail-resi-spesial-spx-pagi.xlsx"   # DI DALAM folder SUBFOLDER_SPX_PAGI_SPESIAL
 
-# awalan label picklist SPESIAL bersubfolder sendiri -> (subfolder, nama file detail resi)
+# awalan label picklist SPESIAL bersubfolder sendiri -> (subfolder, path detail resi relatif folder sesi)
 SPESIAL_TERPISAH = {
     AWALAN_LABEL_GTL_SPESIAL: (SUBFOLDER_GTL_SPESIAL, NAMA_DETAIL_SPESIAL_GTL),
-    AWALAN_LABEL_SPX_PAGI_SPESIAL: (SUBFOLDER_SPX_PAGI_SPESIAL, NAMA_DETAIL_SPESIAL_SPX_PAGI),
+    AWALAN_LABEL_SPX_PAGI_SPESIAL: (SUBFOLDER_SPX_PAGI_SPESIAL,
+                                    f"{SUBFOLDER_SPX_PAGI_SPESIAL}/{NAMA_DETAIL_SPESIAL_SPX_PAGI}"),
 }
 
 
@@ -859,17 +860,18 @@ def _subkelompok_gtl(k: Klien, pesanan: list[dict], channel_ids, couriers,
     return _kelompok_per_lantai_berlabel(k, pesanan, channel_ids=channel_ids, couriers=couriers)
 
 
-def _subkelompok_spesial_lalu_lantai(k: Klien, pesanan: list[dict], channel_ids,
-                                     couriers) -> dict[str, list[dict]]:
-    """Sub-kelompok Shopee Pagi: SKU spesial dulu (key "SPESIAL-<SKU>" -> label
-    SHOPEE-PAGI-SPESIAL-<SKU>, lihat pisah_spesial_per_sku()), baru sisanya per lantai."""
-    spesial, sisa = pisah_spesial_per_sku(k, pesanan)
-    if spesial:
-        log.info("  %d SKU spesial Shopee Pagi (>= %d pesanan/SKU, %d pesanan); sisa %d pesanan "
-                 "per lantai", len(spesial), MIN_RESI, sum(map(len, spesial.values())), len(sisa))
-    hasil = {f"SPESIAL-{sku}": v for sku, v in spesial.items()}
-    hasil.update(_kelompok_per_lantai_berlabel(k, sisa, channel_ids=channel_ids, couriers=couriers))
-    return hasil
+def _subkelompok_shopee_pagi(k: Klien, pesanan: list[dict], spesial_saja: bool) -> dict[str, list[dict]]:
+    """Sub-kelompok Shopee Pagi. `spesial_saja`: hanya SKU spesial (key "SPESIAL-<SKU>" -> label
+    SHOPEE-PAGI-SPESIAL-<SKU>, lihat pisah_spesial_per_sku()); selain itu per lantai
+    (LANTAI1/2/3/LAINNYA) untuk semua pesanan yang masih Siap Proses (langkah spesial berjalan
+    SEBELUMNYA, jadi pesanan SKU spesial sudah masuk picklist sendiri)."""
+    if spesial_saja:
+        spesial, _ = pisah_spesial_per_sku(k, pesanan)
+        log.info("  %d SKU spesial Shopee Pagi (>= %d pesanan/SKU, %d pesanan)",
+                 len(spesial), MIN_RESI, sum(map(len, spesial.values())))
+        return {f"SPESIAL-{sku}": v for sku, v in spesial.items()}
+    return _kelompok_per_lantai_berlabel(k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE],
+                                         couriers=KURIR_FILTER_SHOPEE_PAGI)
 
 
 def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
@@ -1596,29 +1598,30 @@ def ambil_pesanan_shopee_pagi(k: Klien, jam: int = JAM_CUTOFF_SHOPEE_PAGI,
     return saring_sampai_batas(pesanan, batas_jam_hari_ini(jam, sekarang))
 
 
-def rencana_shopee_pagi(k: Klien) -> None:
+def rencana_shopee_pagi(k: Klien, spesial_saja: bool = False) -> None:
     """Mode uji picklist Shopee Pagi: hanya membaca data, tidak mengubah apa pun di Jubelio.
     Dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat _kelompok_kombinasi_per_lantai()), sama
     pola dengan bagian kombinasi picklist sisa reguler/urgent GTL-SiCepat."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, SKU spesial dulu "
-             "lalu per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
-    _log_rencana_subkelompok(_subkelompok_spesial_lalu_lantai(
-        k, pesanan, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI))
+    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, %s",
+             JAM_CUTOFF_SHOPEE_PAGI, len(pesanan),
+             "hanya SKU spesial" if spesial_saja else "dipecah per lantai")
+    _log_rencana_subkelompok(_subkelompok_shopee_pagi(k, pesanan, spesial_saja))
 
 
-def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
+def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path,
+                       spesial_saja: bool = False) -> list[dict]:
     """Picklist Shopee Pagi: semua pesanan Shopee yang jam pesannya (WIB) maksimal jam 12
-    siang hari ini. SKU yang punya >= MIN_RESI pesanan (lihat pisah_spesial_per_sku()) DULU dibuat
-    picklist spesial "SHOPEE-PAGI-SPESIAL-<SKU>" di subfolder SUBFOLDER_SPX_PAGI_SPESIAL
-    ("SPX-PAGI-SPESIAL") + detail-resi-spesial-spx-pagi.xlsx; sisanya dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
+    siang hari ini. Dua langkah TERPISAH (alur.py, spesial dulu): `spesial_saja` True = HANYA SKU yang
+    punya >= MIN_RESI pesanan (lihat pisah_spesial_per_sku()), picklist "SHOPEE-PAGI-SPESIAL-<SKU>" di
+    subfolder SUBFOLDER_SPX_PAGI_SPESIAL ("SPX-PAGI-SPESIAL") + detail-resi-spesial-spx-pagi.xlsx;
+    False = sisanya dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), masing-masing dipecah lagi kalau
     > MAKS_PESANAN_PICKLIST. Label/nama file jadi "SHOPEE-PAGI-LANTAI1" dst, bukan
     "SHOPEE-PAGI" polos. Dipanggil MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    subkelompok = _subkelompok_spesial_lalu_lantai(
-        k, pesanan, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI)
+    subkelompok = _subkelompok_shopee_pagi(k, pesanan, spesial_saja)
     return _proses_subkelompok(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, subkelompok,
                                file_riwayat, folder_label, kurir=None, prefix="",
                                subfolder=SUBFOLDER_SPX_PAGI)

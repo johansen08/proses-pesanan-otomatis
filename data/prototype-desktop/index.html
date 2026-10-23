@@ -343,11 +343,11 @@ const GAB=['SPX-J&T Spesial','SPX-J&T 1 qty reguler','SPX-J&T Kombinasi'];
 const A=['Recheck stok','Sampel TikTok (nilai 0)','Urgent Lazada','Spesial GTL & SiCepat','Urgent GTL & SiCepat','Urgent JNE & LEX'],Z=['Upload faktur & pesanan ke IRESIS'];
 const CFG={
  harian:{
-  grup:[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Spesial GTL & SiCepat','Urgent GTL & SiCepat','Urgent JNE & LEX']],['Batas waktu',['SPX ≤ 12.00 (Resi Pagi)','J&T ≤ 15.00 (Resi Siang)']],
+  grup:[['Persiapan',['Recheck stok','Sampel TikTok (nilai 0)']],['Urgent',['Urgent Lazada','Spesial GTL & SiCepat','Urgent GTL & SiCepat','Urgent JNE & LEX']],['Batas waktu',['Spesial SPX ≤ 12.00 (Resi Pagi)','SPX ≤ 12.00 (Resi Pagi)','J&T ≤ 15.00 (Resi Siang)']],
    ['Gabung J&T + SPX',GAB],['Dipisah — J&T',['J&T Spesial','J&T 1 qty reguler','J&T Kombinasi']],['Dipisah — SPX',['SPX Spesial','SPX 1 qty reguler','SPX Kombinasi']],['Penutup',Z]],
   preset:[
    {id:1,nama:'TIPE 1',jam:'07.00–12.00 · 16.00–17.00',dari:7,sampai:12,steps:[...A,...GAB,...Z]},
-   {id:2,nama:'TIPE 2',jam:'Tepat 13.00',dari:12.9,sampai:13.5,steps:[...A,'SPX ≤ 12.00 (Resi Pagi)','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi',...Z]},
+   {id:2,nama:'TIPE 2',jam:'Tepat 13.00',dari:12.9,sampai:13.5,steps:[...A,'Spesial SPX ≤ 12.00 (Resi Pagi)','SPX ≤ 12.00 (Resi Pagi)','J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi',...Z]},
    {id:3,nama:'TIPE 3',jam:'13.00–15.00',dari:13.5,sampai:15,steps:[...A,'J&T Spesial','J&T 1 qty reguler','J&T Kombinasi','SPX Spesial','SPX 1 qty reguler','SPX Kombinasi',...Z]},
    {id:4,nama:'TIPE 4',jam:'Tepat 15.00',dari:15,sampai:16,steps:[...A,'J&T ≤ 15.00 (Resi Siang)',...GAB,...Z]},
    {id:5,nama:'MALAM',jam:'Malam hari',dari:17,sampai:31,steps:['Urgent Lazada','Spesial GTL & SiCepat','Urgent GTL & SiCepat','Urgent JNE & LEX',...GAB]},

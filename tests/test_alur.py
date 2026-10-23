@@ -24,7 +24,7 @@ import menu_konsol as mk  # noqa: E402
 
 coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
-JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 14, "TIPE 3": 13, "TIPE 4": 11, "MALAM": 7,
+JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 15, "TIPE 3": 13, "TIPE 4": 11, "MALAM": 7,
                   "EVENT - TIPE 1": 17, "EVENT - TIPE 2": 21, "EVENT - TIPE 3": 17,
                   "EVENT - TIPE 4": 18, "EVENT - MALAM": 14}
 
@@ -111,6 +111,11 @@ def uji_aturan_bisnis_harian():
         assert urut[-1] == alur.LANGKAH_IRESIS, judul
         pagi, siang = "SPX ≤ 12.00 (Resi Pagi)" in urut, "J&T ≤ 15.00 (Resi Siang)" in urut
         assert (pagi, siang) == (judul == "TIPE 2", judul == "TIPE 4"), judul
+        if pagi:   # spesial dulu, tepat sebelum langkah per lantai
+            assert urut.index("Spesial SPX ≤ 12.00 (Resi Pagi)") + 1 == urut.index("SPX ≤ 12.00 (Resi Pagi)"), judul
+            assert alur.susun_argumen(judul, "Spesial SPX ≤ 12.00 (Resi Pagi)")[:2] == ["--shopee-pagi", "--spesial-saja"]
+        else:
+            assert "Spesial SPX ≤ 12.00 (Resi Pagi)" not in urut, judul
         gabung = [n for n in urut if n in alur.NON_WAJIB_SPX_GABUNG]
         dipisah = [n for n in urut if n in alur.NON_WAJIB_SPX_DIPISAH]
         assert (len(gabung), len(dipisah)) == ((3, 0) if judul in ("TIPE 1", "TIPE 4") else (0, 3)), judul

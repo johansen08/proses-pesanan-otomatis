@@ -1514,7 +1514,11 @@ def uji_shopee_pagi_spesial_dulu_folder_dan_detail_sendiri_lalu_per_lantai():
     pl.lanjutkan_picklist = stub
     try:
         with tempfile.TemporaryDirectory() as d:
-            hasil = pl.proses_shopee_pagi(k, Path(d) / "riwayat.xlsx", Path(d) / "label")
+            # langkah 1: hanya spesial; langkah 2 (pesanan SKU-A sudah keluar dari Siap Proses): per lantai
+            hasil = pl.proses_shopee_pagi(k, Path(d) / "riwayat.xlsx", Path(d) / "label", spesial_saja=True)
+            assert [h["SKU"] for h in hasil] == ["SHOPEE-PAGI-SPESIAL-SKU-A"], hasil
+            j.pesanan = [o for o in j.pesanan if o["salesorder_id"] > 4]
+            hasil += pl.proses_shopee_pagi(k, Path(d) / "riwayat.xlsx", Path(d) / "label")
     finally:
         pl.ambil_pesanan_shopee_pagi, pl.lanjutkan_picklist = asli_ambil, asli_lanjut
     assert pl.SUBFOLDER_SPX_PAGI_SPESIAL == "SPX-PAGI-SPESIAL"
@@ -1546,7 +1550,8 @@ def uji_shopee_pagi_spesial_dulu_folder_dan_detail_sendiri_lalu_per_lantai():
                                   nama_file="SHOPEE-PAGI-LANTAI1", subfolder="SPX_PAGI")
             pl.tutup_riwayat()
             from openpyxl import load_workbook
-            detail = list(load_workbook(folder / "detail-resi-spesial-spx-pagi.xlsx").active.values)
+            detail = list(load_workbook(folder / "SPX-PAGI-SPESIAL" / "detail-resi-spesial-spx-pagi.xlsx").active.values)
+            assert not (folder / "detail-resi-spesial-spx-pagi.xlsx").exists(), "detail harus di dalam folder SPX-PAGI-SPESIAL"
             assert len(detail) == 1 + 4 and all(b[:2] == ("PICK-000920001", "SKU-A") for b in detail[1:]), detail
             assert not (folder / "detail-resi-spesial-gtl-sicepat.xlsx").exists()
     finally:

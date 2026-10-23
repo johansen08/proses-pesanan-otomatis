@@ -58,7 +58,8 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 | SPX & J&T spesial (digabung) | `--label --tanpa-reguler --jalankan` |
 | SPX & J&T 1 SKU 1 qty reguler (digabung) | `--reguler --bagian 1qty --jalankan` |
 | SPX & J&T kombinasi reguler (digabung) | `--reguler --bagian kombinasi --jalankan` |
-| SPX ≤ 12.00 (SPX Resi Pagi, habiskan wajib keluar Shopee) | `--shopee-pagi --jalankan` |
+| Spesial SPX ≤ 12.00 (SKU >= 3 pesanan, folder `SPX-PAGI-SPESIAL`, hanya TIPE 2; sebelum langkah di bawah) | `--shopee-pagi --spesial-saja --jalankan` |
+| SPX ≤ 12.00 (SPX Resi Pagi, habiskan wajib keluar Shopee; per lantai) | `--shopee-pagi --jalankan` |
 | J&T ≤ 15.00, channel TikTok Shop (J&T Resi Siang, habiskan wajib keluar TikTok) | `--jnt-siang --jalankan` |
 | J&T spesial (dipisah) | `--label --kurir jnt --tanpa-reguler --jalankan` |
 | J&T 1 SKU 1 qty reguler (dipisah) | `--reguler --bagian 1qty --kurir jnt --jalankan` |
