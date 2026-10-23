@@ -132,7 +132,7 @@ import serah_terima
 import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
                            SUBFOLDER_GTL_SPESIAL, SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
-                           SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
+                           SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_PAGI_SPESIAL, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
                            TAG_SPESIAL)
 
 ROOT = Path(__file__).resolve().parent.parent   # root project, bukan folder src/ ini
@@ -210,6 +210,7 @@ JENIS_LABEL: dict[str, list[str]] = {
                           ("kombinasi", SUBFOLDER_KOMBINASI))
        for kode in ("jnt-ndd", "spx-hemat", "spx-hemat-pagi")},
     "spx-standard": [SUBFOLDER_SPX_STANDARD],   # SPX Standard seharian (--spx-standard)
+    "spx-pagi-spesial": [SUBFOLDER_SPX_PAGI_SPESIAL],   # SKU spesial Shopee Pagi (SEMUA PDF ikut)
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
     "lazada": [SUBFOLDER_URGENT],          # Urgent Lazada, dicetak skala 68% (SKALA_LAZADA)
@@ -260,7 +261,8 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
         ("KOMBINASI (semua kurir)", ["kombinasi"]),
         ("GTL & SICEPAT SPESIAL (per SKU)", ["gtl-spesial"]),
         ("GTL & SICEPAT (per lantai)", ["gtl-sicepat"]),
-        ("SHOPEE PAGI (SPX s.d. 12.00)", ["spx-pagi"]),
+        ("SHOPEE PAGI SPESIAL (SPX s.d. 12.00, per SKU)", ["spx-pagi-spesial"]),
+        ("SHOPEE PAGI (SPX s.d. 12.00, per lantai)", ["spx-pagi"]),
         ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
         _paket("pilah-satuan"),
     ]),

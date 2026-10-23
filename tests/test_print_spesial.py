@@ -403,6 +403,19 @@ def uji_gtl_sicepat_spesial_folder_sendiri_terpisah_dari_urgent():
         print("  gtl-spesial: subfolder GTL_SICEPAT_SPESIAL sendiri; gtl-sicepat (URGENT) tidak memuatnya")
 
 
+def uji_spx_pagi_spesial_folder_sendiri_terpisah_dari_spx_pagi():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "SPX-PAGI-SPESIAL").mkdir()
+        (folder / "SPX_PAGI").mkdir()
+        _buat(folder / "SPX-PAGI-SPESIAL", "PICK-000000001_SHOPEE-PAGI-SPESIAL-SKU-A_2026-10-23_100000.pdf")
+        _buat(folder / "SPX_PAGI", "PICK-000000002_SHOPEE-PAGI-LANTAI1_2026-10-23_100000.pdf")
+        assert ps.JENIS_LABEL["spx-pagi-spesial"] == ["SPX-PAGI-SPESIAL"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "spx-pagi-spesial")] == ["PICK-000000001"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "spx-pagi")] == ["PICK-000000002"]
+        print("  spx-pagi-spesial: subfolder SPX-PAGI-SPESIAL sendiri; spx-pagi (SPX_PAGI) tidak memuatnya")
+
+
 def uji_cari_nomor_terlompat_jenis_gtl_sicepat_hitung_dari_semua_urgent():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)

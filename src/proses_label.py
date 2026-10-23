@@ -159,6 +159,8 @@ TAG_SPESIAL = "SPESIAL"
 # print-out Lazada/GTL-SiCepat (urgent), 1 qty reguler (satuan), dan kombinasi/multi-qty
 # reguler (kombinasi) tanpa harus baca nama file satu-satu.
 SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada, GTL-SiCepat & JNE-LEX (semua skenario)
+SUBFOLDER_SPX_PAGI_SPESIAL = "SPX-PAGI-SPESIAL"   # Alur 4: SKU spesial Shopee Pagi (SPX <= 12.00), dipisah dari SPX_PAGI
+SUBFOLDER_SPX_PAGI_SPESIAL = "SPX-PAGI-SPESIAL"   # Alur 4: SKU spesial Shopee Pagi (SPX <= 12.00), dipisah dari SPX_PAGI
 SUBFOLDER_GTL_SPESIAL = "GTL_SICEPAT_SPESIAL"   # Alur 2: SKU spesial GTL-SiCepat (dipisah dari URGENT supaya mudah dicetak bulk)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
@@ -210,7 +212,7 @@ JAM_LANJUT_URGENT = 16
 MODE_GTL_SPESIAL = "spesial"   # nilai `per_lantai` skenario: hanya SKU spesial, tanpa pecah lantai
 SKENARIO_URGENT = [
     ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA, False),
-    # SKU spesial GTL-SiCepat (>= MIN_RESI pesanan/SKU, lihat pisah_spesial_gtl()) DULU, di langkah
+    # SKU spesial GTL-SiCepat (>= MIN_RESI pesanan/SKU, lihat pisah_spesial_per_sku()) DULU, di langkah
     # tersendiri sebelum "GTL-SiCepat" per lantai; mode "spesial" hanya membuat picklist per SKU.
     ("GTL-SiCepat-Spesial", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT,
      MODE_GTL_SPESIAL),
@@ -328,22 +330,45 @@ NAMA_DETAIL_SPESIAL = "detail-resi-spesial.xlsx"
 NAMA_DETAIL_BUKAN_SPESIAL = "detail-resi-bukan-spesial.xlsx"
 KOLOM_DETAIL_SPESIAL = ["No Picklist", "SKU", "No Pesanan", "No Resi"]
 
-# SKU spesial urgent GTL-SiCepat (lihat pisah_spesial_gtl()): label/nama file picklistnya
+# SKU spesial urgent GTL-SiCepat (lihat pisah_spesial_per_sku()): label/nama file picklistnya
 # "GTL-SICEPAT-SPESIAL-<SKU>" (tetap cocok pola cetak jenis gtl-sicepat), detail resinya ke file
 # tersendiri di folder sesi (SKU di kolom "SKU" = SKU asli, bukan label).
 AWALAN_LABEL_GTL_SPESIAL = "GTL-SICEPAT-SPESIAL-"
 NAMA_DETAIL_SPESIAL_GTL = "detail-resi-spesial-gtl-sicepat.xlsx"
 
 
-def detail_gtl_spesial(nama_file: str | None, picklist_no: str,
-                       baris_ada_resi: list[dict]) -> tuple[str, list[dict]] | None:
-    """(nama file detail, baris) untuk picklist SKU spesial GTL-SiCepat (nama file label diawali
-    AWALAN_LABEL_GTL_SPESIAL), None untuk picklist lain atau kalau tak ada resi keluar. Dipakai
-    lanjutkan_picklist() & pulihkan_picklist() supaya jalur lanjut/pemulihan ikut menulis detail."""
-    if not baris_ada_resi or not nama_file or not nama_file.upper().startswith(AWALAN_LABEL_GTL_SPESIAL):
+# SKU spesial Shopee Pagi (SPX <= 12.00, --shopee-pagi): label "SHOPEE-PAGI-SPESIAL-<SKU>", folder
+# SUBFOLDER_SPX_PAGI_SPESIAL, detail resi detail-resi-spesial-spx-pagi.xlsx.
+AWALAN_LABEL_SPX_PAGI_SPESIAL = "SHOPEE-PAGI-SPESIAL-"
+NAMA_DETAIL_SPESIAL_SPX_PAGI = "detail-resi-spesial-spx-pagi.xlsx"
+
+# awalan label picklist SPESIAL bersubfolder sendiri -> (subfolder, nama file detail resi)
+SPESIAL_TERPISAH = {
+    AWALAN_LABEL_GTL_SPESIAL: (SUBFOLDER_GTL_SPESIAL, NAMA_DETAIL_SPESIAL_GTL),
+    AWALAN_LABEL_SPX_PAGI_SPESIAL: (SUBFOLDER_SPX_PAGI_SPESIAL, NAMA_DETAIL_SPESIAL_SPX_PAGI),
+}
+
+
+def _spesial_terpisah(label: str | None) -> tuple[str, str, str] | None:
+    """(awalan, subfolder, nama file detail) kalau `label` picklist SPESIAL bersubfolder sendiri
+    (lihat SPESIAL_TERPISAH), selain itu None."""
+    for awalan, (subfolder, detail) in SPESIAL_TERPISAH.items():
+        if label and label.upper().startswith(awalan):
+            return awalan, subfolder, detail
+    return None
+
+
+def detail_spesial_terpisah(nama_file: str | None, picklist_no: str,
+                            baris_ada_resi: list[dict]) -> tuple[str, list[dict]] | None:
+    """(nama file detail, baris) untuk picklist SKU spesial bersubfolder sendiri (GTL-SiCepat /
+    Shopee Pagi - nama file label diawali salah satu awalan SPESIAL_TERPISAH), None untuk
+    picklist lain atau kalau tak ada resi keluar. Dipakai lanjutkan_picklist() &
+    pulihkan_picklist() supaya jalur lanjut/pemulihan ikut menulis detail."""
+    info = _spesial_terpisah(nama_file)
+    if not baris_ada_resi or not info:
         return None
-    sku = nama_file[len(AWALAN_LABEL_GTL_SPESIAL):]
-    return NAMA_DETAIL_SPESIAL_GTL, [
+    sku = nama_file[len(info[0]):]
+    return info[2], [
         {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
          "No Resi": r.get("tracking_no")} for r in baris_ada_resi]
 
@@ -789,8 +814,8 @@ def _sku_item(x: dict) -> str:
     return kode or str(x.get("item_full_name") or "").split(" - ", 1)[0].strip()
 
 
-def pisah_spesial_gtl(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list[dict]], list[dict]]:
-    """Dari pesanan urgent GTL-SiCepat: SKU yang bisa dibuat spesial = minimal MIN_RESI pesanan
+def pisah_spesial_per_sku(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list[dict]], list[dict]]:
+    """Dari pesanan urgent GTL-SiCepat/Shopee Pagi: SKU yang bisa dibuat spesial = minimal MIN_RESI pesanan
     dengan SKU sama, tiap pesanan hanya 1 baris item, qty 1, bukan bundle, nilai bukan 0, SKU
     tidak berawalan AWALAN_SKU_DIKECUALIKAN_SPESIAL (aturan sama dengan spesial biasa/pilah
     satuan). Return ({SKU: pesanan}, pesanan sisa untuk dipecah per lantai). Hanya MEMBACA
@@ -823,15 +848,28 @@ def pisah_spesial_gtl(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list[dic
 def _subkelompok_gtl(k: Klien, pesanan: list[dict], channel_ids, couriers,
                      mode=True) -> dict[str, list[dict]]:
     """Sub-kelompok urgent GTL-SiCepat. `mode` MODE_GTL_SPESIAL: hanya SKU spesial (key = SKU, label
-    skenario "GTL-SICEPAT-SPESIAL" + SKU = AWALAN_LABEL_GTL_SPESIAL, lihat pisah_spesial_gtl());
+    skenario "GTL-SICEPAT-SPESIAL" + SKU = AWALAN_LABEL_GTL_SPESIAL, lihat pisah_spesial_per_sku());
     selain itu per lantai (LANTAI1/2/3/LAINNYA) - pesanan SKU spesial yang masih tersisa di sini
     (langkah spesial tidak dijalankan/gagal) ikut lantai seperti biasa."""
     if mode == MODE_GTL_SPESIAL:
-        spesial, _ = pisah_spesial_gtl(k, pesanan)
+        spesial, _ = pisah_spesial_per_sku(k, pesanan)
         log.info("  %d SKU spesial GTL-SiCepat (>= %d pesanan/SKU, %d pesanan)",
                  len(spesial), MIN_RESI, sum(map(len, spesial.values())))
         return spesial
     return _kelompok_per_lantai_berlabel(k, pesanan, channel_ids=channel_ids, couriers=couriers)
+
+
+def _subkelompok_spesial_lalu_lantai(k: Klien, pesanan: list[dict], channel_ids,
+                                     couriers) -> dict[str, list[dict]]:
+    """Sub-kelompok Shopee Pagi: SKU spesial dulu (key "SPESIAL-<SKU>" -> label
+    SHOPEE-PAGI-SPESIAL-<SKU>, lihat pisah_spesial_per_sku()), baru sisanya per lantai."""
+    spesial, sisa = pisah_spesial_per_sku(k, pesanan)
+    if spesial:
+        log.info("  %d SKU spesial Shopee Pagi (>= %d pesanan/SKU, %d pesanan); sisa %d pesanan "
+                 "per lantai", len(spesial), MIN_RESI, sum(map(len, spesial.values())), len(sisa))
+    hasil = {f"SPESIAL-{sku}": v for sku, v in spesial.items()}
+    hasil.update(_kelompok_per_lantai_berlabel(k, sisa, channel_ids=channel_ids, couriers=couriers))
+    return hasil
 
 
 def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
@@ -1004,9 +1042,9 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
     "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. Skenario "GTL-SiCepat-Spesial"
     (langkah tersendiri SEBELUM "GTL-SiCepat", mode MODE_GTL_SPESIAL): SKU yang punya >= MIN_RESI
-    pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_gtl()) dibuat picklist
+    pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_per_sku()) dibuat picklist
     "GTL-SICEPAT-SPESIAL-<SKU>" di subfolder SUBFOLDER_GTL_SPESIAL (BUKAN URGENT) +
-    detail-resi-spesial-gtl-sicepat.xlsx di folder sesi (lihat detail_gtl_spesial()). Skenario
+    detail-resi-spesial-gtl-sicepat.xlsx di folder sesi (lihat detail_spesial_terpisah()). Skenario
     Lazada & GTL-SiCepat (per lantai) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
     lihat lanjutkan_picklist(). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan yang lain."""
@@ -1471,8 +1509,7 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
         tampil = _nama_kurir(nama_x, kurir)
         # SKU spesial GTL-SiCepat punya subfolder sendiri (bukan subfolder kelompok lain)
-        subfolder_x = (SUBFOLDER_GTL_SPESIAL if label_x.upper().startswith(AWALAN_LABEL_GTL_SPESIAL)
-                       else subfolder)
+        subfolder_x = info[1] if (info := _spesial_terpisah(label_x)) else subfolder
         try:
             tugas = _antre_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
                                          _label_kurir(label_x, kurir), pesanan,
@@ -1564,22 +1601,24 @@ def rencana_shopee_pagi(k: Klien) -> None:
     Dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat _kelompok_kombinasi_per_lantai()), sama
     pola dengan bagian kombinasi picklist sisa reguler/urgent GTL-SiCepat."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
-             "per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
-    _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
-        k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE], couriers=KURIR_FILTER_SHOPEE_PAGI))
+    log.info("[UJI] Shopee Pagi (s.d. jam %02d:00 WIB) pesanan siap proses %3d, SKU spesial dulu "
+             "lalu per lantai", JAM_CUTOFF_SHOPEE_PAGI, len(pesanan))
+    _log_rencana_subkelompok(_subkelompok_spesial_lalu_lantai(
+        k, pesanan, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI))
 
 
 def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
     """Picklist Shopee Pagi: semua pesanan Shopee yang jam pesannya (WIB) maksimal jam 12
-    siang hari ini, dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
+    siang hari ini. SKU yang punya >= MIN_RESI pesanan (lihat pisah_spesial_per_sku()) DULU dibuat
+    picklist spesial "SHOPEE-PAGI-SPESIAL-<SKU>" di subfolder SUBFOLDER_SPX_PAGI_SPESIAL
+    ("SPX-PAGI-SPESIAL") + detail-resi-spesial-spx-pagi.xlsx; sisanya dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), masing-masing dipecah lagi kalau
     > MAKS_PESANAN_PICKLIST. Label/nama file jadi "SHOPEE-PAGI-LANTAI1" dst, bukan
     "SHOPEE-PAGI" polos. Dipanggil MANUAL 1x sehari (mis. jam 13:00), bukan bagian alur
     otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_shopee_pagi(k)
-    subkelompok = _kelompok_per_lantai_berlabel(
-        k, pesanan, channel_ids=[CHANNEL_ID_SHOPEE], couriers=KURIR_FILTER_SHOPEE_PAGI)
+    subkelompok = _subkelompok_spesial_lalu_lantai(
+        k, pesanan, [CHANNEL_ID_SHOPEE], KURIR_FILTER_SHOPEE_PAGI)
     return _proses_subkelompok(k, "Shopee Pagi", LABEL_SHOPEE_PAGI, subkelompok,
                                file_riwayat, folder_label, kurir=None, prefix="",
                                subfolder=SUBFOLDER_SPX_PAGI)
@@ -2291,9 +2330,9 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
         catat_detail_spesial(folder_label, nama_detail, [
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
-    detail_gtl = detail_gtl_spesial(nama_file or sku, picklist_no, baris_ada_resi)
-    if detail_gtl:
-        catat_detail_spesial(folder_label, *detail_gtl)
+    detail_terpisah = detail_spesial_terpisah(nama_file or sku, picklist_no, baris_ada_resi)
+    if detail_terpisah:
+        catat_detail_spesial(folder_label, *detail_terpisah)
 
     peringatan_gagal.tandai_selesai(picklist_no)
     return {"Waktu": datetime.now().strftime("%d-%m-%Y %H:%M"), "SKU": sku,
@@ -2549,8 +2588,8 @@ def pulihkan_picklist(k: Klien, picklist_no: str, folder_label: Path, file_riway
             NAMA_DETAIL_SPESIAL if len(baris_ada_resi) >= MIN_RESI else NAMA_DETAIL_BUKAN_SPESIAL, tag), [
             {"No Picklist": picklist_no, "SKU": sku, "No Pesanan": r.get("salesorder_no"),
              "No Resi": r.get("tracking_no")} for r in baris_ada_resi])
-    elif detail_gtl := detail_gtl_spesial(nama_file, picklist_no, baris_ada_resi):
-        baris["_detail"] = detail_gtl
+    elif detail_terpisah := detail_spesial_terpisah(nama_file, picklist_no, baris_ada_resi):
+        baris["_detail"] = detail_terpisah
     if tulis:
         tulis_hasil_pulihan(folder_label, baris, file_riwayat)
     return baris

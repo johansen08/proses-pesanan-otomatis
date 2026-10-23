@@ -79,14 +79,15 @@ project secara umum, root tidak boleh berisi file `.py`):
   2026-10-07). Di kertas 100x150 mm label Lazada harus dicetak skala 68% - dilakukan otomatis
   oleh `print_spesial.py` (lihat di bawah).
   **GTL-SiCepat spesial** (2026-10-23): langkah TERSENDIRI "Spesial GTL & SiCepat" (`main.py --urgent --channel gtl-sicepat-spesial`, ada di SEMUA TIPE/EVENT/MALAM, tepat SEBELUM "Urgent GTL & SiCepat") mengecek SKU yang punya
-  >= `MIN_RESI` (3) pesanan (1 item, qty 1, bukan bundle, bukan `C225-UB`, nilai != 0; `pisah_spesial_gtl()` via `items-to-pick`,
+  >= `MIN_RESI` (3) pesanan (1 item, qty 1, bukan bundle, bukan `C225-UB`, nilai != 0; `pisah_spesial_per_sku()` via `items-to-pick`,
   read-only, gagal = semua ke lantai) -> picklist `GTL-SICEPAT-SPESIAL-<SKU>` di subfolder SENDIRI `GTL_SICEPAT_SPESIAL`
   (bukan URGENT; jenis cetak `gtl-spesial`, tampil "GTL-SiCepat Spesial" di UI Cetak & menu `cetak-label.bat`) dibuat DULU, sisanya baru
   dipecah LANTAI1/2/3/LAINNYA (tetap URGENT, jenis `gtl-sicepat`; pemulihan sesi mengenali keduanya lewat `kelas_jenis()`). Detail resi: `detail-resi-spesial-gtl-sicepat.xlsx` di folder sesi
-  (`detail_gtl_spesial()`, ikut ditulis jalur `--lanjut`/pemulihan selama nama label dipertahankan). Tes: `tests/test_proses_label.py`.
+  (`detail_spesial_terpisah()`, ikut ditulis jalur `--lanjut`/pemulihan selama nama label dipertahankan). Tes: `tests/test_proses_label.py`.
+  **SPX Pagi spesial** (TIPE 2, `main.py --shopee-pagi`, `proses_shopee_pagi`): sebelum dipecah per lantai, SKU dengan >= `MIN_RESI` pesanan (aturan sama, `pisah_spesial_per_sku()`) dibuat picklist `SHOPEE-PAGI-SPESIAL-<SKU>` di folder `SPX-PAGI-SPESIAL` + `detail-resi-spesial-spx-pagi.xlsx` (sisa tetap `SHOPEE-PAGI-LANTAI*` di `SPX_PAGI`); jenis cetak `spx-pagi-spesial` (UI: "Shopee Pagi Spesial", menu `cetak-label.bat`). Peta awalan label -> subfolder/detail ada di `SPESIAL_TERPISAH` (`proses_label.py`), dipakai juga GTL-SiCepat.
 - `src/print_spesial.py` — program terpisah untuk mencetak ulang (bulk, lewat SumatraPDF,
   parameter `--jenis`) label SPESIAL/GTL-SICEPAT/SATUAN/KOMBINASI yang sudah ada; tidak
-  membuat picklist/label baru. Punya 25 jenis (termasuk `spesial-satuan`/`sisa-satuan` = hasil `pilah_satuan.py`, folder tingkat tanggal dilampirkan ke sesi TERAKHIR tanggal itu; paket `pilah-satuan`); `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
+  membuat picklist/label baru. Punya 27 jenis (termasuk `spesial-satuan`/`sisa-satuan` = hasil `pilah_satuan.py`, folder tingkat tanggal dilampirkan ke sesi TERAKHIR tanggal itu; paket `pilah-satuan`); `bat\cetak-label.bat` = MENU (grup HARIAN/EVENT/
   PER KURIR/satu jenis; `PAKET` = beberapa jenis berurutan dalam 1 sesi, printer dipilih sekali).
   Default hanya mengambil folder sesi TERBARU; `--semua-sesi [--hari N]` (dan pertanyaan di menu)
   mencetak semua sesi N hari terakhir terlama→terbaru, dedupe lewat `logs/sudah_dicetak.txt`,

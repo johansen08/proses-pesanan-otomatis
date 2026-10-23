@@ -1477,6 +1477,84 @@ def uji_shopee_pagi_filter_channel_dan_jam_cutoff():
           "(SHOPEE-PAGI-LANTAI1/SHOPEE-PAGI-LAINNYA)")
 
 
+def uji_shopee_pagi_spesial_dulu_folder_dan_detail_sendiri_lalu_per_lantai():
+    import datetime as dt
+
+    class JubelioPalsuPagiSpesial(JubelioPalsuShopeePagi):
+        """6 pesanan Shopee <= 12:00 (id 1-6): SKU-A x4 (spesial), SKU-B x2 (di bawah ambang)."""
+
+        def __init__(self):
+            super().__init__()
+            self.pesanan = [dict(o, salesorder_id=i, salesorder_no=f"SO-SP-{i}", total_qty="1.0000",
+                                 transaction_date="2026-09-29T02:00:00.000Z") for i, o in
+                            enumerate([self.pesanan[0]] * 6, 1)]
+            self.rak = {i: "1A-X%d-1" % i for i in range(1, 7)}
+            self.kombinasi_rak = list(self.rak.values())
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                                   "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                                   "item_full_name": ("SKU-A" if i <= 4 else "SKU-B") + " - Baju",
+                                   "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            return super().post(url, json, headers, timeout, cookies)
+
+    j = JubelioPalsuPagiSpesial()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    sekarang = dt.datetime(2026, 9, 29, 13, 0, 0, tzinfo=pl.WIB)
+    asli_ambil, asli_lanjut = pl.ambil_pesanan_shopee_pagi, pl.lanjutkan_picklist
+    panggilan = []
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((pno, jumlah, sku, nama_file, subfolder))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": "", "Catatan": ""}
+    pl.ambil_pesanan_shopee_pagi = lambda k: asli_ambil(k, sekarang=sekarang)
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            hasil = pl.proses_shopee_pagi(k, Path(d) / "riwayat.xlsx", Path(d) / "label")
+    finally:
+        pl.ambil_pesanan_shopee_pagi, pl.lanjutkan_picklist = asli_ambil, asli_lanjut
+    assert pl.SUBFOLDER_SPX_PAGI_SPESIAL == "SPX-PAGI-SPESIAL"
+    assert [h["SKU"] for h in hasil][0] == "SHOPEE-PAGI-SPESIAL-SKU-A", hasil
+    assert {h["SKU"]: h["Total Pesanan"] for h in hasil} == {
+        "SHOPEE-PAGI-SPESIAL-SKU-A": 4, "SHOPEE-PAGI-LANTAI1": 2}, hasil
+    for p_ in panggilan:
+        assert p_[4] == ("SPX-PAGI-SPESIAL" if p_[2].startswith("SHOPEE-PAGI-SPESIAL-") else "SPX_PAGI"), p_
+    print("  Shopee Pagi: SKU-A (4 pesanan) spesial dulu -> subfolder SPX-PAGI-SPESIAL; SKU-B (2) "
+          "ikut LANTAI1 di SPX_PAGI")
+
+    # detail resi: lanjutkan_picklist ASLI menulis detail-resi-spesial-spx-pagi.xlsx
+    baris_resi = [{"salesorder_id": i, "salesorder_no": f"SO{i}", "tracking_no": f"SPX{i}"} for i in range(1, 5)]
+    tiruan = {n: getattr(pl, n) for n in ("selesaikan_picking", "pesanan_selesai_pick", "info_slot_pickup",
+                                          "minta_resi", "unduh_label")}
+    pl.selesaikan_picking = lambda k, pid: None
+    pl.pesanan_selesai_pick = lambda k, no, n: [{"salesorder_id": r["salesorder_id"], "source": 64}
+                                                for r in baris_resi]
+    pl.info_slot_pickup = lambda k, p: None
+    pl.minta_resi = lambda k, ids: baris_resi
+    pl.unduh_label = lambda k, ids, tujuan, lazada=False: tujuan
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            folder = Path(d) / "label"
+            folder.mkdir()
+            pl.lanjutkan_picklist(k, 1, "PICK-000920001", 4, "SHOPEE-PAGI-SPESIAL-SKU-A", folder,
+                                  nama_file="SHOPEE-PAGI-SPESIAL-SKU-A", subfolder="SPX-PAGI-SPESIAL")
+            pl.lanjutkan_picklist(k, 2, "PICK-000920002", 4, "SHOPEE-PAGI-LANTAI1", folder,
+                                  nama_file="SHOPEE-PAGI-LANTAI1", subfolder="SPX_PAGI")
+            pl.tutup_riwayat()
+            from openpyxl import load_workbook
+            detail = list(load_workbook(folder / "detail-resi-spesial-spx-pagi.xlsx").active.values)
+            assert len(detail) == 1 + 4 and all(b[:2] == ("PICK-000920001", "SKU-A") for b in detail[1:]), detail
+            assert not (folder / "detail-resi-spesial-gtl-sicepat.xlsx").exists()
+    finally:
+        for n, f in tiruan.items():
+            setattr(pl, n, f)
+    print("  detail-resi-spesial-spx-pagi.xlsx hanya untuk picklist SHOPEE-PAGI-SPESIAL-*")
+
+
 class JubelioPalsuJntSiang:
     """Server tiruan khusus skenario picklist J&T Resi Siang (filter channel + kurir +
     jam pesan), juga meniru endpoint rak (zones-racks-combination +
@@ -2476,19 +2554,19 @@ def uji_urgent_gtl_sicepat_spesial_minimal_3_sku_lalu_sisa_per_lantai():
     k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
     pesanan = pl.ambil_pesanan_channel(k, couriers=pl.KURIR_FILTER_URGENT_GTL_SICEPAT)
 
-    spesial, sisa = pl.pisah_spesial_gtl(k, pesanan)
+    spesial, sisa = pl.pisah_spesial_per_sku(k, pesanan)
     assert {s: len(v) for s, v in spesial.items()} == {"SKU-A": 5, "SKU-B": 3}, spesial
     assert len(sisa) == 250 - 8 and not {o["salesorder_id"] for o in sisa} & set(range(200, 208))
-    print("  pisah_spesial_gtl: SKU-A (5) & SKU-B (3 = MIN_RESI) spesial; SKU-C (2), C225-UB, bundle, "
+    print("  pisah_spesial_per_sku: SKU-A (5) & SKU-B (3 = MIN_RESI) spesial; SKU-C (2), C225-UB, bundle, "
           "qty item 2 tetap di sisa")
 
     # pesanan dengan total_qty != 1 atau nilai 0 tidak pernah jadi kandidat; items-to-pick gagal -> semua sisa
     kecil = [dict(o, total_qty="2.0000") for o in pesanan[:5]]
-    assert pl.pisah_spesial_gtl(k, kecil) == ({}, kecil)
+    assert pl.pisah_spesial_per_sku(k, kecil) == ({}, kecil)
     asli_post = k.post
     k.post = lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("API mati"))
     try:
-        assert pl.pisah_spesial_gtl(k, pesanan) == ({}, pesanan)
+        assert pl.pisah_spesial_per_sku(k, pesanan) == ({}, pesanan)
     finally:
         k.post = asli_post
     print("  total_qty != 1 bukan kandidat; items-to-pick gagal -> tidak ada spesial, semua ke lantai")

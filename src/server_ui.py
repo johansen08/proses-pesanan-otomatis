@@ -86,7 +86,7 @@ JENIS_UI = [(f"{dasar} {kurir}", f"{kode}-{kk}")
                               ("SPX Hemat", "spx-hemat"), ("SPX Hemat Pagi", "spx-hemat-pagi"))]
 JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
              ("GTL-SiCepat Spesial", "gtl-spesial"), ("GTL-SiCepat", "gtl-sicepat"), ("Urgent Lazada · skala 68%", "lazada"),
-             ("Shopee Pagi", "spx-pagi"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
+             ("Shopee Pagi Spesial", "spx-pagi-spesial"), ("Shopee Pagi", "spx-pagi"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
 BARIS_LOG_MAKS = 400
 HASIL_PILAH = ("SPESIAL-SATUAN", "SISA-SATUAN")   # awalan folder hasil pilah_satuan.py
 
