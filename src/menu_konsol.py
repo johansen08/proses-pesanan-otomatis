@@ -144,8 +144,8 @@ def malam(uji: bool, sesi: str, masukan=_input, cetak=print, **kw) -> None:
     """Proses MALAM (harian): urgent + SPX-J&T gabungan, tanpa menu dan tanpa IRESIS."""
     cetak("=" * 66)
     cetak(f"  PROSES MALAM ({'MODE UJI - tidak mengubah data' if uji else 'SUNGGUHAN'})")
-    cetak("  1. Urgent Lazada  2. Urgent GTL & SiCepat  3. Urgent JNE & LEX  "
-          "4. SPX - J&T (spesial, 1 qty, kombinasi)")
+    cetak("  1. Urgent Lazada  2. Spesial GTL & SiCepat  3. Urgent GTL & SiCepat  "
+          "4. Urgent JNE & LEX  5. SPX - J&T (spesial, 1 qty, kombinasi)")
     cetak("=" * 66)
     if uji:
         cetak("MODE UJI: hanya menampilkan rencana, tidak mengubah data di Jubelio.")

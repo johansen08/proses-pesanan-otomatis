@@ -434,7 +434,7 @@ def _main() -> int:
                         "channel - GTL/SiCepat dipecah per lantai rak gudang; kurir JNE/LEX 1 "
                         "picklist gabungan) sampai label "
                         "PDF, tanpa proses SKU spesial (tanpa --jalankan = mode uji)")
-    ap.add_argument("--channel", choices=["lazada", "gtl-sicepat", "jne-lex"],
+    ap.add_argument("--channel", choices=["lazada", "gtl-sicepat-spesial", "gtl-sicepat", "jne-lex"],
                     help="dipakai bersama --urgent: batasi ke 1 skenario saja")
     ap.add_argument("--lewati-malam", action="store_true",
                     help="dipakai bersama --urgent: lewati (tidak memproses apa pun) kalau "

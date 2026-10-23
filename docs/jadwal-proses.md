@@ -52,6 +52,7 @@ membatasi resi kurir mana yang benar-benar dipicklist saat itu.
 | Recheck stok | `--recheck-stok --jalankan` |
 | Sampel TikTok (nilai 0/kosong) | `--sampel --jalankan` |
 | Urgent Lazada | `--urgent --channel lazada --jalankan` |
+| Spesial GTL & SiCepat | `--urgent --channel gtl-sicepat-spesial --jalankan` |
 | Urgent GTL & SiCepat | `--urgent --channel gtl-sicepat --jalankan` |
 | Urgent JNE & LEX | `--urgent --channel jne-lex --jalankan` (kurir di luar J&T/SPX/GTL/SiCepat: 1 picklist gabungan lintas channel, tanpa jam tunda) |
 | SPX & J&T spesial (digabung) | `--label --tanpa-reguler --jalankan` |

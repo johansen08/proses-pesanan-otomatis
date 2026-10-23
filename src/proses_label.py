@@ -207,8 +207,13 @@ JAM_LANJUT_URGENT = 16
 # live API ready-to-process dibatasi channel_ids/couriers skenario ini, bukan
 # CHANNEL_IDS_REGULER/KURIR_FILTER_REGULER). Lazada (volume kecil) TETAP 1 picklist gabungan
 # seperti semula - elemen ke-5 tuple ini (`per_lantai`) yang membedakan.
+MODE_GTL_SPESIAL = "spesial"   # nilai `per_lantai` skenario: hanya SKU spesial, tanpa pecah lantai
 SKENARIO_URGENT = [
     ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA, False),
+    # SKU spesial GTL-SiCepat (>= MIN_RESI pesanan/SKU, lihat pisah_spesial_gtl()) DULU, di langkah
+    # tersendiri sebelum "GTL-SiCepat" per lantai; mode "spesial" hanya membuat picklist per SKU.
+    ("GTL-SiCepat-Spesial", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT,
+     MODE_GTL_SPESIAL),
     ("GTL-SiCepat", None, KURIR_FILTER_URGENT_GTL_SICEPAT, JAM_CUTOFF_URGENT_GTL_SICEPAT, True),
     # Kurir di luar J&T/SPX/GTL/SiCepat (JNE-MP, LEX ID) tidak punya alur lain -> 1 picklist
     # gabungan lintas channel, TANPA jam tunda (jam_cutoff None). Lazada jalan duluan, jadi LEX ID
@@ -815,16 +820,18 @@ def pisah_spesial_gtl(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list[dic
     return spesial, [o for o in pesanan if o["salesorder_id"] not in id_spesial]
 
 
-def _subkelompok_gtl(k: Klien, pesanan: list[dict], channel_ids, couriers) -> dict[str, list[dict]]:
-    """Sub-kelompok urgent GTL-SiCepat: SKU spesial dulu (key "SPESIAL-<SKU>", lihat
-    pisah_spesial_gtl()), baru sisanya per lantai (LANTAI1/2/3/LAINNYA)."""
-    spesial, sisa = pisah_spesial_gtl(k, pesanan)
-    if spesial:
-        log.info("  %d SKU spesial GTL-SiCepat (>= %d pesanan/SKU, %d pesanan); sisa %d pesanan "
-                 "per lantai", len(spesial), MIN_RESI, sum(map(len, spesial.values())), len(sisa))
-    hasil = {f"SPESIAL-{sku}": v for sku, v in spesial.items()}   # label: AWALAN_LABEL_GTL_SPESIAL
-    hasil.update(_kelompok_per_lantai_berlabel(k, sisa, channel_ids=channel_ids, couriers=couriers))
-    return hasil
+def _subkelompok_gtl(k: Klien, pesanan: list[dict], channel_ids, couriers,
+                     mode=True) -> dict[str, list[dict]]:
+    """Sub-kelompok urgent GTL-SiCepat. `mode` MODE_GTL_SPESIAL: hanya SKU spesial (key = SKU, label
+    skenario "GTL-SICEPAT-SPESIAL" + SKU = AWALAN_LABEL_GTL_SPESIAL, lihat pisah_spesial_gtl());
+    selain itu per lantai (LANTAI1/2/3/LAINNYA) - pesanan SKU spesial yang masih tersisa di sini
+    (langkah spesial tidak dijalankan/gagal) ikut lantai seperti biasa."""
+    if mode == MODE_GTL_SPESIAL:
+        spesial, _ = pisah_spesial_gtl(k, pesanan)
+        log.info("  %d SKU spesial GTL-SiCepat (>= %d pesanan/SKU, %d pesanan)",
+                 len(spesial), MIN_RESI, sum(map(len, spesial.values())))
+        return spesial
+    return _kelompok_per_lantai_berlabel(k, pesanan, channel_ids=channel_ids, couriers=couriers)
 
 
 def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
@@ -844,7 +851,7 @@ def rencana_urgent(k: Klien, skenario: list[tuple] | None = None,
             continue
         log.info("[UJI] Urgent %-10s pesanan siap proses %3d, dipecah per lantai%s",
                  nama, len(pesanan), tunda)
-        _log_rencana_subkelompok(_subkelompok_gtl(k, pesanan, channel_ids, couriers))
+        _log_rencana_subkelompok(_subkelompok_gtl(k, pesanan, channel_ids, couriers, per_lantai))
 
 
 class Gelombang:
@@ -995,11 +1002,12 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     diproses saat proses_urgent() dipanggil lagi setelah jam JAM_LANJUT_URGENT. Skenario
     `per_lantai` (GTL-SiCepat) dipecah jadi picklist per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
-    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. SEBELUM dipecah per lantai, SKU yang
-    punya >= MIN_RESI pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_gtl()) dibuat
-    picklist spesial sendiri "GTL-SICEPAT-SPESIAL-<SKU>" di subfolder SUBFOLDER_GTL_SPESIAL (BUKAN
-    URGENT) + detail-resi-spesial-gtl-sicepat.xlsx di folder sesi (lihat detail_gtl_spesial()). Kedua skenario (Lazada DAN
-    GTL-SiCepat) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
+    "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. Skenario "GTL-SiCepat-Spesial"
+    (langkah tersendiri SEBELUM "GTL-SiCepat", mode MODE_GTL_SPESIAL): SKU yang punya >= MIN_RESI
+    pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_gtl()) dibuat picklist
+    "GTL-SICEPAT-SPESIAL-<SKU>" di subfolder SUBFOLDER_GTL_SPESIAL (BUKAN URGENT) +
+    detail-resi-spesial-gtl-sicepat.xlsx di folder sesi (lihat detail_gtl_spesial()). Skenario
+    Lazada & GTL-SiCepat (per lantai) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
     lihat lanjutkan_picklist(). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan yang lain."""
     hasil = []
@@ -1013,7 +1021,7 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
                          "otomatis setelah jam %02d.00", ditahan, nama, jam_cutoff,
                          JAM_LANJUT_URGENT)
             if per_lantai:
-                subkelompok = _subkelompok_gtl(k, pesanan, channel_ids, couriers)
+                subkelompok = _subkelompok_gtl(k, pesanan, channel_ids, couriers, per_lantai)
                 hasil += _proses_subkelompok(k, nama, label, subkelompok, file_riwayat,
                                              folder_label, kurir=None, prefix="Urgent",
                                              subfolder=SUBFOLDER_URGENT)

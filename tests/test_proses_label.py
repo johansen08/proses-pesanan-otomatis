@@ -743,7 +743,7 @@ def uji_urgent_menyaring_channel_bocor_dan_membagi_batch():
     assert per_channel["GTL-SICEPAT-LAINNYA"][0]["Total Pesanan"] == 30, \
         "id 420-449 (rak 4C, di luar LANTAI_RAK) -> LAINNYA"
     assert len(per_channel["JNE-LEX"]) == 1 and per_channel["JNE-LEX"][0]["Total Pesanan"] == 2,         "JNE (Tokopedia asli) + LEX (Shopee) lintas channel -> 1 picklist gabungan JNE-LEX"
-    assert [s[0] for s in pl.SKENARIO_URGENT] == ["Lazada", "GTL-SiCepat", "JNE-LEX"],         "JNE-LEX harus SETELAH Lazada & GTL-SiCepat"
+    assert [s[0] for s in pl.SKENARIO_URGENT] == ["Lazada", "GTL-SiCepat-Spesial", "GTL-SiCepat", "JNE-LEX"],         "Spesial GTL-SiCepat SEBELUM GTL-SiCepat per lantai, JNE-LEX paling akhir"
     assert len(baris) == 1 + 5 + 1,         "1 Lazada + 4 picklist GTL/SiCepat (per lantai) + 1 JNE-LEX tercatat di riwayat"
     print("  proses_urgent: 3 pesanan Lazada -> 1 picklist, 250 GTL/SiCepat -> 4 picklist "
           "per LANTAI (100+70+50+30), nama file pakai label skenario+lantai (mis. "
@@ -2503,8 +2503,15 @@ def uji_urgent_gtl_sicepat_spesial_minimal_3_sku_lalu_sisa_per_lantai():
     pl.lanjutkan_picklist = stub
     try:
         with tempfile.TemporaryDirectory() as d:
+            # langkah 1: hanya spesial (tidak ada picklist lantai)
+            skenario = [s for s in pl.SKENARIO_URGENT if s[0] == "GTL-SiCepat-Spesial"]
+            hasil_spesial = pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label", skenario)
+            assert [h["SKU"] for h in hasil_spesial] == ["GTL-SICEPAT-SPESIAL-SKU-A",
+                                                         "GTL-SICEPAT-SPESIAL-SKU-B"], hasil_spesial
+            # langkah 2 (pesanan spesial sudah keluar dari Siap Proses): hanya per lantai, tanpa spesial
+            j.pesanan_gtl_sicepat = [o for o in j.pesanan_gtl_sicepat if o["salesorder_id"] >= 208]
             skenario = [s for s in pl.SKENARIO_URGENT if s[0] == "GTL-SiCepat"]
-            hasil = pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label", skenario)
+            hasil = hasil_spesial + pl.proses_urgent(k, Path(d) / "riwayat.xlsx", Path(d) / "label", skenario)
     finally:
         pl.lanjutkan_picklist = asli
     label = [h["SKU"] for h in hasil]

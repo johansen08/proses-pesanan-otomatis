@@ -24,9 +24,9 @@ import menu_konsol as mk  # noqa: E402
 
 coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
-JUMLAH_LANGKAH = {"TIPE 1": 9, "TIPE 2": 13, "TIPE 3": 12, "TIPE 4": 10, "MALAM": 6,
-                  "EVENT - TIPE 1": 16, "EVENT - TIPE 2": 20, "EVENT - TIPE 3": 16,
-                  "EVENT - TIPE 4": 17, "EVENT - MALAM": 13}
+JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 14, "TIPE 3": 13, "TIPE 4": 11, "MALAM": 7,
+                  "EVENT - TIPE 1": 17, "EVENT - TIPE 2": 21, "EVENT - TIPE 3": 17,
+                  "EVENT - TIPE 4": 18, "EVENT - MALAM": 14}
 
 
 def _katalog(judul):
@@ -122,7 +122,7 @@ def uji_aturan_bisnis_harian():
           "gabung/dipisah sesuai TIPE, MALAM tanpa IRESIS, non wajib 3 langkah per TIPE")
 
 
-LANGKAH_MALAM_HARIAN = ["Urgent Lazada", "Urgent GTL & SiCepat", "Urgent JNE & LEX",
+LANGKAH_MALAM_HARIAN = ["Urgent Lazada", "Spesial GTL & SiCepat", "Urgent GTL & SiCepat", "Urgent JNE & LEX",
                         "SPX-J&T Spesial", "SPX-J&T 1 qty reguler", "SPX-J&T Kombinasi"]
 
 
@@ -138,7 +138,7 @@ def uji_aturan_bisnis_event():
                 assert "--event" in flag and flag[flag.index("--kurir") + 1] in (
                     "jnt", "jnt-ndd", "spx-hemat", "spx-hemat-pagi"), (judul, nama)
         urgent = [n for n in urut if alur.FLAG_EVENT[n][:1] == ["--urgent"]]
-        assert len(urgent) == 3, (judul, urgent)
+        assert len(urgent) == 4, (judul, urgent)
         lewati = {judul in alur.JUDUL_LEWATI_MALAM}
         assert all(("--lewati-malam" in alur.susun_argumen(judul, n)) in lewati for n in urgent), judul
         assert (urut[-1] == alur.LANGKAH_IRESIS) == (not malam), judul

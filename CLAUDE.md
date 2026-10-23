@@ -78,7 +78,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   disimpan apa adanya (A5) — tanpa `isFromLz` PDF-nya beda dari unduhan manual (sniff
   2026-10-07). Di kertas 100x150 mm label Lazada harus dicetak skala 68% - dilakukan otomatis
   oleh `print_spesial.py` (lihat di bawah).
-  **GTL-SiCepat spesial** (2026-10-23): urgent GTL-SiCepat (`proses_urgent`/`rencana_urgent`) lebih dulu mengecek SKU yang punya
+  **GTL-SiCepat spesial** (2026-10-23): langkah TERSENDIRI "Spesial GTL & SiCepat" (`main.py --urgent --channel gtl-sicepat-spesial`, ada di SEMUA TIPE/EVENT/MALAM, tepat SEBELUM "Urgent GTL & SiCepat") mengecek SKU yang punya
   >= `MIN_RESI` (3) pesanan (1 item, qty 1, bukan bundle, bukan `C225-UB`, nilai != 0; `pisah_spesial_gtl()` via `items-to-pick`,
   read-only, gagal = semua ke lantai) -> picklist `GTL-SICEPAT-SPESIAL-<SKU>` di subfolder SENDIRI `GTL_SICEPAT_SPESIAL`
   (bukan URGENT; jenis cetak `gtl-spesial`, tampil "GTL-SiCepat Spesial" di UI Cetak & menu `cetak-label.bat`) dibuat DULU, sisanya baru

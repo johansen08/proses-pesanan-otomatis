@@ -17,6 +17,7 @@ _LANGKAH_DASAR: list[tuple[str, list[str]]] = [
     ("Recheck stok", ["--recheck-stok"]),
     ("Sampel TikTok (nilai 0)", ["--sampel"]),
     ("Urgent Lazada", ["--urgent", "--channel", "lazada"]),
+    ("Spesial GTL & SiCepat", ["--urgent", "--channel", "gtl-sicepat-spesial"]),
     ("Urgent GTL & SiCepat", ["--urgent", "--channel", "gtl-sicepat"]),
     ("Urgent JNE & LEX", ["--urgent", "--channel", "jne-lex"]),
 ]
@@ -95,7 +96,7 @@ def flag_non_wajib(judul: str, nama_langkah: str) -> str | None:
 
 # ----------------------------------------------------------------------------- isi tiap TIPE
 _PERSIAPAN = ["Recheck stok", "Sampel TikTok (nilai 0)"]
-_URGENT = ["Urgent Lazada", "Urgent GTL & SiCepat", "Urgent JNE & LEX"]
+_URGENT = ["Urgent Lazada", "Spesial GTL & SiCepat", "Urgent GTL & SiCepat", "Urgent JNE & LEX"]
 _GABUNG = ["SPX-J&T Spesial", "SPX-J&T 1 qty reguler", "SPX-J&T Kombinasi"]
 _JNT = ["J&T Spesial", "J&T 1 qty reguler", "J&T Kombinasi"]
 _SPX = ["SPX Spesial", "SPX 1 qty reguler", "SPX Kombinasi"]
