@@ -817,7 +817,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Server lokal UI desktop (menu Harian & Cetak).")
-    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--port", type=int, default=48765)
     ap.add_argument("--buka", action="store_true", help="Buka UI di browser setelah server jalan")
     ap.add_argument("--menu", choices=["harian", "event", "cetak"], default="harian",
                     help="Menu yang dibuka pertama oleh --buka (default harian)")

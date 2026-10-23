@@ -568,7 +568,7 @@ Pilihan (berlaku sama untuk keempat `.bat`, contoh pakai `bat\cetak-label-gtl-si
   sudah tercatat tercetak dilewati (`--cetak-ulang-semua` untuk memaksa). Tidak bisa digabung
   `--jenis`/`--paket`/`--folder`/`--semua-sesi`/`--ulang`.
 - **UI desktop (prototype)**: `.venv\Scripts\python src\server_ui.py --buka` membuka
-  `data/prototype-desktop/index.html` di `http://127.0.0.1:8765/` (hanya komputer ini). Menu **Cetak**-nya
+  `data/prototype-desktop/index.html` di `http://127.0.0.1:48765/` (hanya komputer ini). Menu **Cetak**-nya
   memilih tanggal (hari ini, kemarin, 2 hari lalu) → sesi → jenis → file PDF dari `label-pengiriman`
   sungguhan, lalu mencetak pilihan lewat `print_spesial.py --file-dari ... --printer ...` (aturan
   cetak, dedupe `sudah_dicetak.txt`, dan pantau printer sama dengan CLI). Hanya jenis spesial/satuan/
