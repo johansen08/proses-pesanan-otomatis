@@ -29,7 +29,7 @@ API (JSON):
   POST /api/terhenti/jalankan    {"picklist": ["PICK-...", ...]} -> `main.py --lanjut` berurutan
                                  (SUNGGUHAN; 409 kalau download ulang/proses harian masih berjalan)
   GET  /api/pilah/sesi           sesi 3 hari terakhir yang punya PDF SATUAN (jumlah picklist & label, `layak`:
-                                 hanya satuan gabungan J&T + SPX dari sesi yang diproses 07.00-12.00 / 20.00-07.00 boleh dipilah)
+                                 semua jenis satuan boleh; sesi satuan gabungan J&T + SPX harus diproses 07.00-12.00 / 20.00-07.00)
   POST /api/pilah/analisis       {"tanggal": "YYYY-MM-DD", "sesi": ["1","2"], "min_resi": 3} -> {"job": id}
                                  (`pilah_satuan.py --analisis-saja`: READ-ONLY ke Jubelio, tidak menulis file;
                                  "tanpa_pdf": true = hanya Excel, label fisik sudah dicetak)
@@ -405,16 +405,14 @@ def _jumlah_halaman(f: Path) -> int:
 
 
 def _pdf_satuan_sesi(folder: Path) -> list[Path]:
-    """PDF satuan gabungan (subfolder SATUAN); kalau sesi hanya punya satuan per kurir, PDF itu
-    (cuma untuk ditampilkan - sesinya ditandai tidak boleh dipilah)."""
+    """PDF SEMUA jenis satuan sebuah sesi (gabungan SATUAN + per kurir JNT_SATUAN dst)."""
     import pilah_satuan as pl
-    gabungan = sorted(pl.pdf_satuan_gabungan(folder))
-    return gabungan or [f for f in sorted(folder.glob("*SATUAN/*.pdf")) if pl.POLA_PICK.match(f.name)]
+    return pl.pdf_satuan_sesi(folder)
 
 
 def data_pilah(hari_ini: date | None = None) -> dict:
     """Sesi HARI_UI hari terakhir yang punya PDF SATUAN: nomor, jam, jumlah picklist & label, dan
-    `layak` (+ `alasan` kalau tidak): hanya satuan gabungan J&T + SPX dari sesi yang diproses
+    `layak` (+ `alasan` kalau tidak): semua jenis satuan boleh; sesi dengan satuan gabungan J&T + SPX harus diproses
     07.00-12.00 / 20.00-07.00 yang boleh dipilah (pilah_satuan.periksa_sesi)."""
     import pilah_satuan as pl
     hari_ini = hari_ini or date.today()
@@ -481,7 +479,7 @@ def mulai_pilah(data: dict, mode: str) -> None:
         raise ValueError("lanjutan_dari harus label hasil pilah sebelumnya (mis. \"1-2\" atau \"1-2+3\")")
     ditolak = [f"Sesi {x}: {alasan}" for x in sesi
                for ok, alasan in [pl.periksa_sesi(folder / nama_sesi.folder_dari_kode(x))] if not ok]
-    if ditolak:   # satuan gabungan J&T + SPX dari sesi 07.00-12.00 / 20.00-07.00 saja (lihat pilah_satuan.periksa_sesi)
+    if ditolak:   # sesi satuan gabungan hanya 07.00-12.00 / 20.00-07.00 (lihat pilah_satuan.periksa_sesi)
         raise ValueError("; ".join(ditolak))
     if lanjutan:   # pilah lanjutan: hasil lama harus ada, sesi tidak tumpang tindih, SISA lama belum dicetak
         pl.periksa_lanjutan(folder, lanjutan, sesi)
@@ -507,7 +505,7 @@ def mulai_pilah(data: dict, mode: str) -> None:
                                "label sesi belum lengkap")
         _pilah = {"id": uuid.uuid4().hex[:8], "mode": mode, "status": "jalan", "tanggal": tanggal,
                   "tanpa_pdf": tanpa_pdf, "lanjutan_dari": lanjutan,
-                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_gabungan(folder / nama_sesi.folder_dari_kode(x)))
+                  "sesi": sesi, "lines": [], "total": sum(len(pl.pdf_satuan_sesi(folder / nama_sesi.folder_dari_kode(x)))
                               for x in sesi + (pl.parse_sesi(lanjutan.replace("+", "-")) if lanjutan else [])),
                   "maju": 0, "hasil": None, "kode": None}
         threading.Thread(target=_kerjakan_pilah, args=(_pilah, perintah), daemon=True).start()

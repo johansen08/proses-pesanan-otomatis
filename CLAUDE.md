@@ -123,7 +123,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   kelompok "Urgent Lazada · skala 68%", `--ulang`, lanjut sebagian). Jumlah halaman sama; `sudah_dicetak` tetap
   path asli. SumatraPDF tidak punya opsi skala persen - jangan diganti `-print-settings fit/shrink`.
 - `src/pilah_satuan.py` — pilah ulang label SATUAN yang sudah dicetak (`python src/pilah_satuan.py --tanggal YYYY-MM-DD`):
-  READ-ONLY ke Jubelio (GET `sales/picklists/{id}`), HANYA satuan gabungan J&T + SPX (subfolder `SATUAN` persis) dari sesi yang mulai diproses 07.00-12.00 atau 20.00-07.00 (cap waktu terawal di nama file PDF sesi; `periksa_sesi()`), resi kurir selain J&T/SPX tidak dihitung; `--abaikan-jendela` (CLI, uji) hanya melewati syarat jam, memetakan tiap halaman PDF SATUAN semua sesi ke SKU lewat "No Resi"
+  READ-ONLY ke Jubelio (GET `sales/picklists/{id}`), SEMUA jenis satuan (2026-10-23: gabungan `SATUAN` + per kurir `JNT_/SPX_/SPXHEMAT_/SPXHEMATPAGI_/JNTNDD_SATUAN`, `pdf_satuan_sesi()`) DIGABUNG lintas kurir; syarat jam 07.00-12.00 atau 20.00-07.00 (cap waktu terawal di nama file PDF sesi; `periksa_sesi()`) HANYA untuk sesi yang punya satuan gabungan, sesi satuan per kurir bebas jam; resi kurir selain J&T/SPX tidak dihitung; `--abaikan-jendela` (CLI, uji) hanya melewati syarat jam, memetakan tiap halaman PDF SATUAN semua sesi ke SKU lewat "No Resi"
   di teks label, lalu SKU dengan >= `MIN_RESI` resi (gabungan lintas sesi) dibuatkan PDF per SKU + `ringkasan-pilah-satuan.xlsx`
   di `label-pengiriman/<tanggal>/pilah-satuan/`. Tidak membuat picklist/resi baru. Halaman tak cocok = umumnya pesanan batal
   setelah dicetak. Hasil: `SPESIAL-SATUAN-<sesi>/` (PDF per SKU + `detail-resi-spesial-satuan-<sesi>.xlsx`) dan

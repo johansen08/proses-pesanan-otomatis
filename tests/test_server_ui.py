@@ -654,15 +654,14 @@ def uji_server_ui_pilah_satuan():
                 sesi = d["hari"][0]["sesi"]
                 assert kode == 200 and [(s["no"], s["picklist"], s["label"], s["layak"], s["jam"]) for s in sesi] == [
                     (1, 1, 3, True, "08.15"), (2, 1, 2, True, "10.40"), (4, 1, 1, False, "14.05"),
-                    (5, 1, 1, False, "09.00")], d
-                assert "di luar 07.00-12.00" in sesi[2]["alasan"] and "dipisah per kurir" in sesi[3]["alasan"], sesi
+                    (5, 1, 1, True, "09.00")], d
+                assert "di luar 07.00-12.00" in sesi[2]["alasan"] and sesi[3]["alasan"] is None, sesi
                 # validasi: tidak ada proses dijalankan
                 for bad in ({"tanggal": "x", "sesi": ["1"]}, {"tanggal": hari_ini, "sesi": []},
                             {"tanggal": hari_ini, "sesi": ["3"]}, {"tanggal": hari_ini, "sesi": ["1"], "min_resi": 0},
                             {"tanggal": hari_ini, "sesi": ["1"], "min_resi": "3"},
                             {"tanggal": "2020-01-01", "sesi": ["1"]},
-                            {"tanggal": hari_ini, "sesi": ["1", "4"]},      # sesi di luar jam 07.00-12.00
-                            {"tanggal": hari_ini, "sesi": ["5"]}):          # satuan per kurir
+                            {"tanggal": hari_ini, "sesi": ["1", "4"]}):     # sesi gabungan di luar jam 07.00-12.00
                     kode, isi = _panggil(port, "/api/pilah/analisis", bad)
                     assert kode == 400, bad
                 kode, isi = _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1", "4"]})

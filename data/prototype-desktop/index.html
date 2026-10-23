@@ -919,7 +919,7 @@ function gambarPilah(){
   el.innerHTML=`<div class="col">
     <div class="stp-h"><span class="no">1</span><b>Hari</b></div><div class="bar" style="margin-bottom:14px">${hariHtml}</div>
     <div class="stp-h"><span class="no">2</span><b>Sesi yang dipilah</b><div class="sp"></div><button class="btn line sm auto" id="pAll" ${boleh.length?'':'disabled'}>${P.sesi.size===bolehSesi().length&&boleh.length?'Kosongkan':'Pilih semua'}</button></div>
-    <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Hanya satuan gabungan J&amp;T + SPX dari sesi yang diproses 07.00&ndash;12.00 atau 20.00&ndash;07.00.</div>${sesHtml}
+    <div style="color:var(--mut);font-size:12.5px;margin:-2px 0 8px">Semua jenis satuan (gabungan &amp; per kurir) ikut. Sesi satuan gabungan hanya yang diproses 07.00&ndash;12.00 atau 20.00&ndash;07.00; satuan per kurir bebas jam.</div>${sesHtml}
     <div class="stp-h" style="margin-top:14px"><span class="no">3</span><b>Minimal resi per SKU</b></div>
     <div class="bar" style="margin-bottom:6px"><div class="seg" id="pMin">${[2,3,4,5].map(n=>`<button data-n="${n}" class="${P.min===n?'on':''}">${n}</button>`).join('')}</div><span style="color:var(--mut)">3 = sama dengan aturan SKU spesial</span></div>
     ${lanj.length?`<div class="stp-h" style="margin-top:14px"><span class="no">&bull;</span><b>Lanjutkan hasil sebelumnya</b></div>
@@ -955,7 +955,7 @@ function gambarPilah(){
       <div class="terakhir">Hanya membaca Jubelio &mdash; tidak membuat picklist atau resi baru.</div>
     </div>
     <div class="card"><b>Cara kerja</b><ul class="facts" style="margin-bottom:0">
-      <li>Label satuan<b>gabungan J&amp;T + SPX</b></li><li>Sesi diproses<b>07.00&ndash;12.00 / 20.00&ndash;07.00</b></li><li>Label dari<b>PDF yang ada</b></li><li>SKU &amp; resi<b>dari Jubelio</b></li><li>Gabung lintas sesi<b>ya</b></li><li>Pesanan batal<b>dilewati</b></li></ul></div>
+      <li>Label satuan<b>semua jenis (gabungan &amp; per kurir)</b></li><li>Sesi gabungan diproses<b>07.00&ndash;12.00 / 20.00&ndash;07.00</b></li><li>Label dari<b>PDF yang ada</b></li><li>SKU &amp; resi<b>dari Jubelio</b></li><li>Gabung lintas sesi<b>ya</b></li><li>Pesanan batal<b>dilewati</b></li></ul></div>
    </aside>`;
   el.querySelectorAll('.dchip').forEach(b=>b.onclick=()=>{if(P.sibuk)return;P.tgl=b.dataset.t;P.lanjut='';P.sesi=new Set(layakSesi(P.tgl));pilahReset();gambarPilah()});
   el.querySelectorAll('.psesi:not(.off)').forEach(b=>b.onclick=()=>{if(P.sibuk)return;const n=b.dataset.s;if(P.sesi.has(n))P.sesi.delete(n);else{P.sesi.add(n);P.sesi.delete(n.endsWith('P')?n.slice(0,-1):n+'P')}   /* sesi N & N-PEMULIHAN berisi resi sama: pilih salah satu */pilahReset();gambarPilah()});

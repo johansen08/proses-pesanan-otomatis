@@ -62,7 +62,7 @@ def _siapkan(tmp: Path):
         20: [("X", "O5", "R5", "FINISH_PICK"), ("Y", "O6", "R6", "FINISH_PICK")]})
 
 
-def uji_hanya_satuan_gabungan_jnt_spx():
+def uji_semua_jenis_satuan_gabungan_dan_per_kurir_ikut():
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         _siapkan(tmp)
@@ -70,20 +70,27 @@ def uji_hanya_satuan_gabungan_jnt_spx():
         (tmp / "1" / "SPXHEMAT_SATUAN").mkdir()
         _pdf_label(tmp / "1" / "JNT_SATUAN" / "PICK-000000030_1QTY-REGULER-2A_2026-10-13_082000.pdf", [("O7", "R7")])
         _pdf_label(tmp / "1" / "SPXHEMAT_SATUAN" / "PICK-000000031_1QTY-REGULER-2A_2026-10-13_082100.pdf", [("O8", "R8")])
-        assert [f.name[:14] for f in ps.cari_pdf_satuan(tmp)] == ["PICK-000000010", "PICK-000000020"]
-        # sesi yang HANYA punya satuan per kurir: ditolak dengan alasan jelas
+        assert [f.name[:14] for f in ps.cari_pdf_satuan(tmp)] == [
+            "PICK-000000010", "PICK-000000020", "PICK-000000030", "PICK-000000031"]
+        assert [f.name[:14] for f in ps.cari_pdf_satuan(tmp, ["1"])] == [
+            "PICK-000000010", "PICK-000000030", "PICK-000000031"]
+        # sesi yang HANYA punya satuan per kurir: boleh dipilah, jam berapa pun (tidak kena syarat jam)
         (tmp / "3" / "JNT_SATUAN").mkdir(parents=True)
-        _pdf_label(tmp / "3" / "JNT_SATUAN" / "PICK-000000040_1QTY-REGULER-2A_2026-10-13_090000.pdf", [("O9", "R9")])
-        ok, alasan = ps.periksa_sesi(tmp / "3")
-        assert not ok and "dipisah per kurir" in alasan, alasan
-        try:
-            ps.pdf_terpilih(tmp, ["1", "3"])
-            assert False, "sesi 3 harus ditolak"
-        except ps.SesiTidakValid as e:
-            assert "Sesi 3" in str(e) and "Sesi 1" not in str(e), e
-        # tanpa --sesi: hanya sesi yang boleh (1, 2); sesi 3 diabaikan tanpa error
-        assert ps.pdf_terpilih(tmp)[1] == ["1", "2"]
-    print("  hanya subfolder SATUAN (gabungan); JNT_/SPXHEMAT_SATUAN tidak ikut; sesi per-kurir ditolak")
+        _pdf_label(tmp / "3" / "JNT_SATUAN" / "PICK-000000040_JNT-1QTY-REGULER-2A_2026-10-13_153000.pdf", [("O9", "R9")])
+        assert ps.periksa_sesi(tmp / "3") == (True, None)
+        assert ps.pdf_terpilih(tmp, ["1", "3"])[1] == ["1", "3"]
+        assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3"]
+        # sesi gabungan di luar jam tetap ditolak
+        (tmp / "4" / "SATUAN").mkdir(parents=True)
+        _pdf_label(tmp / "4" / "SATUAN" / "PICK-000000050_1QTY-REGULER-2A_2026-10-13_153000.pdf", [("O10", "R10")])
+        ok, alasan = ps.periksa_sesi(tmp / "4")
+        assert not ok and "di luar" in alasan, alasan
+        assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3"]
+        # kelompok rak satuan per kurir dinormalkan ke kelompok yang sama dengan gabungan
+        assert ps.nama_kelompok(Path("PICK-000000040_JNT-1QTY-REGULER-2A_2026-10-13_153000.pdf")) == "1QTY-REGULER-2A"
+        assert ps.nama_kelompok(Path("PICK-000000040_SPXHEMAT-1QTY-REGULER-LAINNYA_2026-10-13_153000.pdf")) == "1QTY-REGULER-LAINNYA"
+        assert ps.nama_kelompok(Path("PICK-000000010_1QTY-REGULER-3B_2026-10-13_081500.pdf")) == "1QTY-REGULER-3B"
+    print("  semua jenis satuan ikut (SATUAN, JNT_/SPXHEMAT_SATUAN); sesi per-kurir bebas jam, gabungan tetap kena jam")
 
 
 def uji_hanya_sesi_diproses_0700_1200_dan_2000_0700():
