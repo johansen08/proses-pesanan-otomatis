@@ -386,6 +386,23 @@ def uji_cari_nomor_terlompat_kurang_dari_2_file():
         print("  cari_nomor_terlompat: list kosong kalau <2 file (tidak ada rentang untuk dicek)")
 
 
+def uji_gtl_sicepat_spesial_folder_sendiri_terpisah_dari_urgent():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        (folder / "GTL_SICEPAT_SPESIAL").mkdir()
+        (folder / "URGENT").mkdir()
+        _buat(folder / "GTL_SICEPAT_SPESIAL",
+              "PICK-000000001_GTL-SICEPAT-SPESIAL-SKU-A_2026-10-23_100000.pdf",
+              "PICK-000000002_GTL-SICEPAT-SPESIAL-SKU-B_2026-10-23_100000.pdf")
+        _buat(folder / "URGENT",
+              "PICK-000000003_GTL-SICEPAT-LANTAI1_2026-10-23_100000.pdf",
+              "PICK-000000004_LAZADA_2026-10-23_100000.pdf")
+        assert ps.JENIS_LABEL["gtl-spesial"] == ["GTL_SICEPAT_SPESIAL"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "gtl-spesial")] == ["PICK-000000001", "PICK-000000002"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "gtl-sicepat")] == ["PICK-000000003"]
+        print("  gtl-spesial: subfolder GTL_SICEPAT_SPESIAL sendiri; gtl-sicepat (URGENT) tidak memuatnya")
+
+
 def uji_cari_nomor_terlompat_jenis_gtl_sicepat_hitung_dari_semua_urgent():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
@@ -622,8 +639,9 @@ def _menu(masukan):
 
 
 def uji_menu_memilih_jenis_paket_keluar_dan_salah_ketik():
-    # grup 1 (HARIAN) pilihan 4 = GTL & SiCepat
-    assert _menu(["1", "4"])[0] == ["gtl-sicepat"]
+    # grup 1 (HARIAN) pilihan 4 = GTL & SiCepat spesial, pilihan 5 = GTL & SiCepat per lantai
+    assert _menu(["1", "4"])[0] == ["gtl-spesial"]
+    assert _menu(["1", "5"])[0] == ["gtl-sicepat"]
     # grup 2 (EVENT) pilihan 1 = SEMUA EVENT
     hasil, layar = _menu(["2", "1"])
     assert hasil == ps.PAKET["event-semua"][1]

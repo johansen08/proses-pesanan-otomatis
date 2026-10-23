@@ -131,7 +131,7 @@ import nama_sesi
 import serah_terima
 import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
-                           SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
+                           SUBFOLDER_GTL_SPESIAL, SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
                            SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
                            TAG_SPESIAL)
 
@@ -191,6 +191,7 @@ KERTAS_LABEL_PT = (100 / 25.4 * 72, 150 / 25.4 * 72)   # 100 x 150 mm dalam poin
 JENIS_LABEL: dict[str, list[str]] = {
     "spesial": SUBFOLDER_SPESIAL,
     "gtl-sicepat": [SUBFOLDER_URGENT],
+    "gtl-spesial": [SUBFOLDER_GTL_SPESIAL],   # SKU spesial GTL-SiCepat (SEMUA PDF ikut)
     "satuan": [SUBFOLDER_SATUAN] + [f"{v}_{SUBFOLDER_SATUAN}"
                                      for v in KURIR_LABEL_FILE.values()],
     "kombinasi": [SUBFOLDER_KOMBINASI] + [f"{v}_{SUBFOLDER_KOMBINASI}"
@@ -257,7 +258,8 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
         ("SPESIAL (semua kurir)", ["spesial"]),
         ("SATUAN / 1 QTY REGULER (semua kurir)", ["satuan"]),
         ("KOMBINASI (semua kurir)", ["kombinasi"]),
-        ("GTL & SICEPAT", ["gtl-sicepat"]),
+        ("GTL & SICEPAT SPESIAL (per SKU)", ["gtl-spesial"]),
+        ("GTL & SICEPAT (per lantai)", ["gtl-sicepat"]),
         ("SHOPEE PAGI (SPX s.d. 12.00)", ["spx-pagi"]),
         ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
         _paket("pilah-satuan"),

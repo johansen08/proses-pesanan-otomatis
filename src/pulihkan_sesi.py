@@ -60,6 +60,8 @@ def kelas_jenis(nama: str) -> str:
         return "satuan"
     if n.startswith("KOMBINASI-REGULER"):
         return "kombinasi"
+    if n.startswith("GTL-SICEPAT-SPESIAL-"):
+        return "gtl-spesial"
     if n.startswith(("GTL-SICEPAT", "LAZADA", "JNE-LEX", "URGENT")):
         return "urgent"
     if n.startswith("SHOPEE-PAGI"):
@@ -73,6 +75,7 @@ def kelas_jenis(nama: str) -> str:
 
 # (tag, subfolder) bawaan per jenis kalau tidak ada contoh lain di sesi yang sama
 BAWAAN_JENIS = {"satuan": (None, "SATUAN"), "kombinasi": (None, "KOMBINASI"), "urgent": (None, "URGENT"),
+                "gtl-spesial": (None, "GTL_SICEPAT_SPESIAL"),
                 "spx-pagi": (None, "SPX_PAGI"), "jnt-siang": (None, "JNT_SIANG"), "sampel": (None, None),
                 "spesial": ("SPESIAL", None)}
 

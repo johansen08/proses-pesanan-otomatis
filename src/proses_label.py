@@ -159,6 +159,7 @@ TAG_SPESIAL = "SPESIAL"
 # print-out Lazada/GTL-SiCepat (urgent), 1 qty reguler (satuan), dan kombinasi/multi-qty
 # reguler (kombinasi) tanpa harus baca nama file satu-satu.
 SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada, GTL-SiCepat & JNE-LEX (semua skenario)
+SUBFOLDER_GTL_SPESIAL = "GTL_SICEPAT_SPESIAL"   # Alur 2: SKU spesial GTL-SiCepat (dipisah dari URGENT supaya mudah dicetak bulk)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
 SUBFOLDER_SPX_PAGI = "SPX_PAGI"        # Shopee Pagi (SPX <= 12.00), nama file tetap SHOPEE-PAGI-*
@@ -996,8 +997,8 @@ def proses_urgent(k: Klien, file_riwayat: Path, folder_label: Path,
     _kelompok_kombinasi_per_lantai()/_proses_subkelompok()) - label/nama file jadi
     "GTL-SICEPAT-LANTAI1" dst, bukan "GTL-SICEPAT" polos. SEBELUM dipecah per lantai, SKU yang
     punya >= MIN_RESI pesanan (1 item, qty 1, bukan bundle - lihat pisah_spesial_gtl()) dibuat
-    picklist spesial sendiri "GTL-SICEPAT-SPESIAL-<SKU>" + detail-resi-spesial-gtl-sicepat.xlsx
-    di folder sesi (lihat detail_gtl_spesial()). Kedua skenario (Lazada DAN
+    picklist spesial sendiri "GTL-SICEPAT-SPESIAL-<SKU>" di subfolder SUBFOLDER_GTL_SPESIAL (BUKAN
+    URGENT) + detail-resi-spesial-gtl-sicepat.xlsx di folder sesi (lihat detail_gtl_spesial()). Kedua skenario (Lazada DAN
     GTL-SiCepat) disimpan di subfolder SUBFOLDER_URGENT ("URGENT") di dalam folder sesi -
     lihat lanjutkan_picklist(). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
     dipanggil. Kegagalan 1 skenario/sub-kelompok tidak menghentikan yang lain."""
@@ -1461,11 +1462,14 @@ def _proses_subkelompok(k: Klien, nama: str, label: str, subkelompok: dict[str, 
     for sub, pesanan in subkelompok.items():
         nama_x, label_x = f"{nama} {sub}", f"{label}-{sub}"
         tampil = _nama_kurir(nama_x, kurir)
+        # SKU spesial GTL-SiCepat punya subfolder sendiri (bukan subfolder kelompok lain)
+        subfolder_x = (SUBFOLDER_GTL_SPESIAL if label_x.upper().startswith(AWALAN_LABEL_GTL_SPESIAL)
+                       else subfolder)
         try:
             tugas = _antre_channel_batch(k, f"{prefix} {tampil}" if prefix else tampil,
                                          _label_kurir(label_x, kurir), pesanan,
                                          label_file=_label_kurir_file(label_x, kurir),
-                                         subfolder=subfolder, folder_label=folder_label)
+                                         subfolder=subfolder_x, folder_label=folder_label)
             antrean += tugas
             if tugas.galat:
                 raise tugas.galat

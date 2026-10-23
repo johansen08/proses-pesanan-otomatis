@@ -2512,9 +2512,12 @@ def uji_urgent_gtl_sicepat_spesial_minimal_3_sku_lalu_sisa_per_lantai():
     assert {h["SKU"]: h["Total Pesanan"] for h in hasil} == {
         "GTL-SICEPAT-SPESIAL-SKU-A": 5, "GTL-SICEPAT-SPESIAL-SKU-B": 3, "GTL-SICEPAT-LANTAI1": 100 - 8,
         "GTL-SICEPAT-LANTAI2": 70, "GTL-SICEPAT-LANTAI3": 50, "GTL-SICEPAT-LAINNYA": 30}, hasil
-    assert all(p[4] == pl.SUBFOLDER_URGENT for p in panggilan)
+    assert pl.SUBFOLDER_GTL_SPESIAL != pl.SUBFOLDER_URGENT
+    for p in panggilan:
+        assert p[4] == (pl.SUBFOLDER_GTL_SPESIAL if p[3].startswith(pl.AWALAN_LABEL_GTL_SPESIAL)
+                        else pl.SUBFOLDER_URGENT), p
     assert panggilan[0][3] == "GTL-SICEPAT-SPESIAL-SKU-A"
-    print("  proses_urgent GTL-SiCepat: picklist SPESIAL-<SKU> dibuat dulu (subfolder URGENT), sisanya per lantai")
+    print("  proses_urgent GTL-SiCepat: picklist SPESIAL-<SKU> dibuat dulu (subfolder GTL_SICEPAT_SPESIAL), sisanya per lantai (URGENT)")
 
     # lanjutkan_picklist ASLI: picklist spesial GTL menulis detail-resi-spesial-gtl-sicepat.xlsx
     baris_resi = [{"salesorder_id": 200 + i, "salesorder_no": f"SO{200 + i}", "tracking_no": f"JY{i}"}
