@@ -165,6 +165,8 @@ SUBFOLDER_GTL_SPESIAL = "GTL_SICEPAT_SPESIAL"   # Alur 2: SKU spesial GTL-SiCepa
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
 SUBFOLDER_SPX_PAGI = "SPX_PAGI"        # Shopee Pagi (SPX <= 12.00), nama file tetap SHOPEE-PAGI-*
+SUBFOLDER_JNT_SIANG_SPESIAL = "JNT-SIANG-SPESIAL"   # Alur 5: SKU spesial J&T Resi Siang (dipisah supaya mudah dicetak bulk)
+SUBFOLDER_JNT_SIANG_SATUAN = "JNTSIANG_SATUAN"      # Alur 5: satuan (1 qty) J&T Resi Siang - folder satuan per kurir, ikut pilah_satuan
 SUBFOLDER_JNT_SIANG = "JNT_SIANG"      # J&T Resi Siang (TikTok Shop <= 15.00), nama file JNT-SIANG-*
 
 
@@ -209,6 +211,7 @@ JAM_LANJUT_URGENT = 16
 # live API ready-to-process dibatasi channel_ids/couriers skenario ini, bukan
 # CHANNEL_IDS_REGULER/KURIR_FILTER_REGULER). Lazada (volume kecil) TETAP 1 picklist gabungan
 # seperti semula - elemen ke-5 tuple ini (`per_lantai`) yang membedakan.
+BAGIAN_SPESIAL, BAGIAN_SATUAN = "spesial", "satuan"   # bagian J&T Resi Siang (_subkelompok_jnt_siang)
 MODE_GTL_SPESIAL = "spesial"   # nilai `per_lantai` skenario: hanya SKU spesial, tanpa pecah lantai
 SKENARIO_URGENT = [
     ("Lazada", [CHANNEL_ID_LAZADA], None, JAM_CUTOFF_URGENT_LAZADA, False),
@@ -270,6 +273,8 @@ WIB = ZoneInfo("Asia/Jakarta")
 # cutoff. Lihat docs/jadwal-proses.md bagian "J&T Resi Siang".
 JAM_CUTOFF_JNT_SIANG = 15
 LABEL_JNT_SIANG = "JNT-SIANG"
+# Satuan J&T Siang: label memuat "1QTY-REGULER-<rak>" supaya pilah_satuan.nama_kelompok() mengenali kelompok raknya
+LABEL_JNT_SIANG_SATUAN = "JNTSIANG-1QTY-REGULER"
 
 MAKS_COBA_PICKLIST = 3
 # Langkah 3-6 (tunggu picking selesai, minta resi, unduh PDF - lihat lanjutkan_picklist())
@@ -342,11 +347,18 @@ NAMA_DETAIL_SPESIAL_GTL = "detail-resi-spesial-gtl-sicepat.xlsx"
 AWALAN_LABEL_SPX_PAGI_SPESIAL = "SHOPEE-PAGI-SPESIAL-"
 NAMA_DETAIL_SPESIAL_SPX_PAGI = "detail-resi-spesial-spx-pagi.xlsx"   # DI DALAM folder SUBFOLDER_SPX_PAGI_SPESIAL
 
+# SKU spesial J&T Resi Siang (--jnt-siang --spesial-saja): label "JNT-SIANG-SPESIAL-<SKU>", folder
+# SUBFOLDER_JNT_SIANG_SPESIAL, detail resi detail-resi-spesial-jnt-siang.xlsx DI DALAM folder itu.
+AWALAN_LABEL_JNT_SIANG_SPESIAL = "JNT-SIANG-SPESIAL-"
+NAMA_DETAIL_SPESIAL_JNT_SIANG = "detail-resi-spesial-jnt-siang.xlsx"
+
 # awalan label picklist SPESIAL bersubfolder sendiri -> (subfolder, path detail resi relatif folder sesi)
 SPESIAL_TERPISAH = {
     AWALAN_LABEL_GTL_SPESIAL: (SUBFOLDER_GTL_SPESIAL, NAMA_DETAIL_SPESIAL_GTL),
     AWALAN_LABEL_SPX_PAGI_SPESIAL: (SUBFOLDER_SPX_PAGI_SPESIAL,
                                     f"{SUBFOLDER_SPX_PAGI_SPESIAL}/{NAMA_DETAIL_SPESIAL_SPX_PAGI}"),
+    AWALAN_LABEL_JNT_SIANG_SPESIAL: (SUBFOLDER_JNT_SIANG_SPESIAL,
+                                     f"{SUBFOLDER_JNT_SIANG_SPESIAL}/{NAMA_DETAIL_SPESIAL_JNT_SIANG}"),
 }
 
 
@@ -1639,28 +1651,53 @@ def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
     return saring_sampai_batas(pesanan, batas_jam_hari_ini(jam, sekarang))
 
 
-def rencana_jnt_siang(k: Klien) -> None:
+def _subkelompok_jnt_siang(k: Klien, pesanan: list[dict], bagian: str | None) -> dict[str, list[dict]]:
+    """Sub-kelompok J&T Resi Siang menurut `bagian` (tiga langkah TERPISAH di alur.py, urut):
+    "spesial" = SKU dengan >= MIN_RESI pesanan (key "SPESIAL-<SKU>" -> label JNT-SIANG-SPESIAL-<SKU>,
+    lihat pisah_spesial_per_sku()); "satuan" = pesanan 1 qty per grup rak (2A/3A/1B/2B/3B/LAINNYA,
+    lihat _kelompok_1qty_per_rak()); None = sisanya per lantai (LANTAI1/2/3/LAINNYA). Tiap langkah
+    mengambil ULANG pesanan Siap Proses, jadi yang sudah masuk picklist langkah sebelumnya tidak ikut lagi."""
+    if bagian == BAGIAN_SPESIAL:
+        spesial, _ = pisah_spesial_per_sku(k, pesanan)
+        log.info("  %d SKU spesial J&T Resi Siang (>= %d pesanan/SKU, %d pesanan)",
+                 len(spesial), MIN_RESI, sum(map(len, spesial.values())))
+        return {f"SPESIAL-{sku}": v for sku, v in spesial.items()}
+    if bagian == BAGIAN_SATUAN:
+        return _kelompok_1qty_per_rak(k, [o for o in pesanan if _angka(o.get("total_qty")) == 1])
+    return _kelompok_per_lantai_berlabel(k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA,
+                                         couriers=["j&t"])
+
+
+def rencana_jnt_siang(k: Klien, bagian: str | None = None) -> None:
     """Mode uji picklist J&T Resi Siang: hanya membaca data, tidak mengubah apa pun di
-    Jubelio. Dipecah per LANTAI_RAK + LABEL_RAK_LAINNYA (lihat
-    _kelompok_kombinasi_per_lantai()), sama pola dengan bagian kombinasi picklist sisa
-    reguler/urgent GTL-SiCepat/Shopee Pagi."""
+    Jubelio. `bagian`: lihat _subkelompok_jnt_siang()."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, dipecah "
-             "per lantai", JAM_CUTOFF_JNT_SIANG, len(pesanan))
-    _log_rencana_subkelompok(_kelompok_per_lantai_berlabel(
-        k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"]))
+    log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, %s",
+             JAM_CUTOFF_JNT_SIANG, len(pesanan),
+             {BAGIAN_SPESIAL: "hanya SKU spesial", BAGIAN_SATUAN: "hanya satuan per grup rak"}.get(
+                 bagian, "dipecah per lantai"))
+    _log_rencana_subkelompok(_subkelompok_jnt_siang(k, pesanan, bagian))
 
 
-def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path) -> list[dict]:
+def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path,
+                     bagian: str | None = None) -> list[dict]:
     """Picklist J&T Resi Siang: semua pesanan channel TikTok Shop, kurir J&T, yang jam
-    pesannya (WIB) maksimal jam 15 siang hari ini, dipecah per LANTAI rak gudang (1/2/3/
-    LAINNYA - lihat _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), masing-masing
-    dipecah lagi kalau > MAKS_PESANAN_PICKLIST. Label/nama file jadi "JNT-SIANG-LANTAI1" dst,
-    bukan "JNT-SIANG" polos. Dipanggil MANUAL 1x sehari (mis. jam 15:00), bukan bagian alur
-    otomatis --label --jalankan. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
+    pesannya (WIB) maksimal jam 15 siang hari ini. Tiga langkah TERPISAH, berurutan (alur.py):
+    1) `bagian`="spesial": SKU >= MIN_RESI pesanan -> picklist "JNT-SIANG-SPESIAL-<SKU>" di subfolder
+    SUBFOLDER_JNT_SIANG_SPESIAL + detail-resi-spesial-jnt-siang.xlsx DI DALAM folder itu;
+    2) "satuan": pesanan 1 qty per grup rak -> label "JNTSIANG-1QTY-REGULER-<rak>" di subfolder
+    SUBFOLDER_JNT_SIANG_SATUAN (folder satuan per kurir, jadi ikut dipilah pilah_satuan.py bersama
+    satuan J&T jam-jam sebelumnya); 3) None: sisanya dipecah per LANTAI rak gudang (1/2/3/LAINNYA -
+    lihat _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), label "JNT-SIANG-LANTAI1" dst di
+    SUBFOLDER_JNT_SIANG; masing-masing dipecah lagi kalau > MAKS_PESANAN_PICKLIST. Dipanggil MANUAL 1x
+    sehari (mis. jam 15:00), bukan bagian alur otomatis --label --jalankan. Kegagalan 1 sub-kelompok
+    tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_jnt_siang(k)
-    subkelompok = _kelompok_per_lantai_berlabel(
-        k, pesanan, channel_ids=CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"])
+    subkelompok = _subkelompok_jnt_siang(k, pesanan, bagian)
+    if bagian == BAGIAN_SATUAN:
+        return _proses_subkelompok(k, "J&T Resi Siang Satuan", LABEL_JNT_SIANG_SATUAN, subkelompok,
+                                   file_riwayat, folder_label, kurir=None, prefix="",
+                                   subfolder=SUBFOLDER_JNT_SIANG_SATUAN)
     return _proses_subkelompok(k, "J&T Resi Siang", LABEL_JNT_SIANG, subkelompok,
                                file_riwayat, folder_label, kurir=None, prefix="",
                                subfolder=SUBFOLDER_JNT_SIANG)

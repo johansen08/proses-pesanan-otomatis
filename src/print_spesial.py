@@ -131,7 +131,8 @@ import nama_sesi
 import serah_terima
 import util_umum
 from proses_label import (KURIR_KODE_FILE_SEMUA, KURIR_LABEL_FILE, KURIR_LABEL_FILE_EVENT,
-                           SUBFOLDER_GTL_SPESIAL, SUBFOLDER_JNT_SIANG, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
+                           SUBFOLDER_GTL_SPESIAL, SUBFOLDER_JNT_SIANG, SUBFOLDER_JNT_SIANG_SATUAN,
+                           SUBFOLDER_JNT_SIANG_SPESIAL, SUBFOLDER_KOMBINASI, SUBFOLDER_SATUAN,
                            SUBFOLDER_SPX_PAGI, SUBFOLDER_SPX_PAGI_SPESIAL, SUBFOLDER_SPX_STANDARD, SUBFOLDER_URGENT,
                            TAG_SPESIAL)
 
@@ -212,6 +213,8 @@ JENIS_LABEL: dict[str, list[str]] = {
     "spx-standard": [SUBFOLDER_SPX_STANDARD],   # SPX Standard seharian (--spx-standard)
     "spx-pagi-spesial": [SUBFOLDER_SPX_PAGI_SPESIAL],   # SKU spesial Shopee Pagi (SEMUA PDF ikut)
     "spx-pagi": [SUBFOLDER_SPX_PAGI],      # Shopee Pagi (--shopee-pagi), SEMUA PDF ikut
+    "jnt-siang-spesial": [SUBFOLDER_JNT_SIANG_SPESIAL],   # SKU spesial J&T Resi Siang (SEMUA PDF ikut)
+    "satuan-jnt-siang": [SUBFOLDER_JNT_SIANG_SATUAN],     # satuan (1 qty) J&T Resi Siang (SEMUA PDF ikut)
     "jnt-siang": [SUBFOLDER_JNT_SIANG],    # J&T Resi Siang (--jnt-siang), SEMUA PDF ikut
     "lazada": [SUBFOLDER_URGENT],          # Urgent Lazada, dicetak skala 68% (SKALA_LAZADA)
     # Hasil pilah satuan (pilah_satuan.py): folder SPESIAL-SATUAN-<sesi> / SISA-SATUAN-<sesi> ada di
@@ -263,7 +266,9 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
         ("GTL & SICEPAT (per lantai)", ["gtl-sicepat"]),
         ("SHOPEE PAGI SPESIAL (SPX s.d. 12.00, per SKU)", ["spx-pagi-spesial"]),
         ("SHOPEE PAGI (SPX s.d. 12.00, per lantai)", ["spx-pagi"]),
-        ("J&T RESI SIANG (s.d. 15.00)", ["jnt-siang"]),
+        ("J&T RESI SIANG SPESIAL (s.d. 15.00, per SKU)", ["jnt-siang-spesial"]),
+        ("J&T RESI SIANG SATUAN (s.d. 15.00, per rak)", ["satuan-jnt-siang"]),
+        ("J&T RESI SIANG (s.d. 15.00, per lantai)", ["jnt-siang"]),
         _paket("pilah-satuan"),
     ]),
     ("EVENT (J&T / J&T NDD / SPX Hemat / SPX Standard dipisah)", [

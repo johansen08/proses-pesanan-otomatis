@@ -86,7 +86,7 @@ JENIS_UI = [(f"{dasar} {kurir}", f"{kode}-{kk}")
                               ("SPX Hemat", "spx-hemat"), ("SPX Hemat Pagi", "spx-hemat-pagi"))]
 JENIS_UI += [("Spesial", "spesial"), ("Satuan", "satuan"), ("Kombinasi", "kombinasi"),
              ("GTL-SiCepat Spesial", "gtl-spesial"), ("GTL-SiCepat", "gtl-sicepat"), ("Urgent Lazada · skala 68%", "lazada"),
-             ("Shopee Pagi Spesial", "spx-pagi-spesial"), ("Shopee Pagi", "spx-pagi"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
+             ("Shopee Pagi Spesial", "spx-pagi-spesial"), ("Shopee Pagi", "spx-pagi"), ("J&T Siang Spesial", "jnt-siang-spesial"), ("J&T Siang Satuan", "satuan-jnt-siang"), ("J&T Resi Siang", "jnt-siang"), ("SPX Standard", "spx-standard")]
 BARIS_LOG_MAKS = 400
 HASIL_PILAH = ("SPESIAL-SATUAN", "SISA-SATUAN")   # awalan folder hasil pilah_satuan.py
 
@@ -484,7 +484,7 @@ def mulai_pilah(data: dict, mode: str) -> None:
     if lanjutan:   # pilah lanjutan: hasil lama harus ada, sesi tidak tumpang tindih, SISA lama belum dicetak
         pl.periksa_lanjutan(folder, lanjutan, sesi)
     elif mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
-        bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi), "-".join(sesi))
+        bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi, jendela=True), "-".join(sesi))
         if bentrok:
             raise ValueError(pl.pesan_bentrok(bentrok))
     perintah = [sys.executable, str(ROOT / "src" / "pilah_satuan.py"), "--folder", str(folder),

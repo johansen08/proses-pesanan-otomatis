@@ -417,6 +417,23 @@ def uji_spx_pagi_spesial_folder_sendiri_terpisah_dari_spx_pagi():
         print("  spx-pagi-spesial: subfolder SPX-PAGI-SPESIAL sendiri; spx-pagi (SPX_PAGI) tidak memuatnya")
 
 
+def uji_jnt_siang_spesial_dan_satuan_folder_sendiri():
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(tmp)
+        for sub in ("JNT-SIANG-SPESIAL", "JNTSIANG_SATUAN", "JNT_SIANG"):
+            (folder / sub).mkdir()
+        _buat(folder / "JNT-SIANG-SPESIAL", "PICK-000000001_JNT-SIANG-SPESIAL-SKU-A_2026-10-23_150000.pdf")
+        (folder / "JNT-SIANG-SPESIAL" / "detail-resi-spesial-jnt-siang.xlsx").write_bytes(b"x")
+        _buat(folder / "JNTSIANG_SATUAN", "PICK-000000002_JNTSIANG-1QTY-REGULER-2A_2026-10-23_150001.pdf")
+        _buat(folder / "JNT_SIANG", "PICK-000000003_JNT-SIANG-LANTAI1_2026-10-23_150002.pdf")
+        assert ps.JENIS_LABEL["jnt-siang-spesial"] == ["JNT-SIANG-SPESIAL"]
+        assert ps.JENIS_LABEL["satuan-jnt-siang"] == ["JNTSIANG_SATUAN"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "jnt-siang-spesial")] == ["PICK-000000001"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "satuan-jnt-siang")] == ["PICK-000000002"]
+        assert [p.name[:14] for p in ps.daftar_label(folder, "jnt-siang")] == ["PICK-000000003"]
+        print("  jnt-siang-spesial & satuan-jnt-siang: folder sendiri (JNT-SIANG-SPESIAL, JNTSIANG_SATUAN), terpisah dari jnt-siang (JNT_SIANG)")
+
+
 def uji_cari_nomor_terlompat_jenis_gtl_sicepat_hitung_dari_semua_urgent():
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)

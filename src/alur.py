@@ -27,6 +27,8 @@ KATALOG: list[tuple[str, list[str]]] = [
     *_LANGKAH_DASAR,
     ("Spesial SPX ≤ 12.00 (Resi Pagi)", ["--shopee-pagi", "--spesial-saja"]),
     ("SPX ≤ 12.00 (Resi Pagi)", ["--shopee-pagi"]),
+    ("Spesial J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--spesial-saja"]),
+    ("Satuan J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--satuan-saja"]),
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
     ("SPX-J&T Spesial", ["--label", "--tanpa-reguler"]),
     ("SPX-J&T 1 qty reguler", ["--reguler", "--bagian", "1qty"]),
@@ -44,6 +46,8 @@ KATALOG: list[tuple[str, list[str]]] = [
 # Nama langkah dipisah dari KATALOG karena nama yang sama ("J&T Spesial") punya flag berbeda.
 KATALOG_EVENT: list[tuple[str, list[str]]] = [
     *_LANGKAH_DASAR,
+    ("Spesial J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--spesial-saja"]),
+    ("Satuan J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--satuan-saja"]),
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
     ("SPX Standard Pagi ≤ 12.00 (per lantai)", ["--spx-standard", "--pagi"]),
     ("SPX Hemat Pagi Spesial", ["--label", "--event", "--kurir", "spx-hemat-pagi", "--tanpa-reguler"]),
@@ -101,7 +105,7 @@ _URGENT = ["Urgent Lazada", "Spesial GTL & SiCepat", "Urgent GTL & SiCepat", "Ur
 _GABUNG = ["SPX-J&T Spesial", "SPX-J&T 1 qty reguler", "SPX-J&T Kombinasi"]
 _JNT = ["J&T Spesial", "J&T 1 qty reguler", "J&T Kombinasi"]
 _SPX = ["SPX Spesial", "SPX 1 qty reguler", "SPX Kombinasi"]
-_SIANG = "J&T ≤ 15.00 (Resi Siang)"
+_SIANG = ["Spesial J&T ≤ 15.00 (Resi Siang)", "Satuan J&T ≤ 15.00 (Resi Siang)", "J&T ≤ 15.00 (Resi Siang)"]   # urut: spesial, satuan, sisanya per lantai
 _E_PAGI = ["SPX Standard Pagi ≤ 12.00 (per lantai)", "SPX Hemat Pagi Spesial",
            "SPX Hemat Pagi 1 qty reguler", "SPX Hemat Pagi Kombinasi"]
 _E_SEHARIAN = [*_JNT, "J&T NDD Spesial", "J&T NDD 1 qty reguler", "J&T NDD Kombinasi",
@@ -114,12 +118,12 @@ PRESET: dict[str, list[str]] = {
     "TIPE 1": [*_PERSIAPAN, *_URGENT, *_GABUNG, *_IRESIS],
     "TIPE 2": [*_PERSIAPAN, *_URGENT, "Spesial SPX ≤ 12.00 (Resi Pagi)", "SPX ≤ 12.00 (Resi Pagi)", *_JNT, *_SPX, *_IRESIS],
     "TIPE 3": [*_PERSIAPAN, *_URGENT, *_JNT, *_SPX, *_IRESIS],
-    "TIPE 4": [*_PERSIAPAN, *_URGENT, _SIANG, *_GABUNG, *_IRESIS],
+    "TIPE 4": [*_PERSIAPAN, *_URGENT, *_SIANG, *_GABUNG, *_IRESIS],
     "MALAM": [*_URGENT, *_GABUNG],
     "EVENT - TIPE 1": [*_PERSIAPAN, *_URGENT, *_E_SEHARIAN, *_IRESIS],
     "EVENT - TIPE 2": [*_PERSIAPAN, *_URGENT, *_E_PAGI, *_E_SEHARIAN, *_IRESIS],
     "EVENT - TIPE 3": [*_PERSIAPAN, *_URGENT, *_E_SEHARIAN, *_IRESIS],
-    "EVENT - TIPE 4": [*_PERSIAPAN, *_URGENT, _SIANG, *_E_SEHARIAN, *_IRESIS],
+    "EVENT - TIPE 4": [*_PERSIAPAN, *_URGENT, *_SIANG, *_E_SEHARIAN, *_IRESIS],
     "EVENT - MALAM": [*_URGENT, *_E_SEHARIAN],
 }
 

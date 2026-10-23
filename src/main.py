@@ -480,8 +480,12 @@ def _main() -> int:
                         "- dijalankan manual 1x sehari, BUKAN bagian alur otomatis --label "
                         "(tanpa --jalankan = mode uji)")
     ap.add_argument("--spesial-saja", action="store_true",
-                    help="dipakai bersama --shopee-pagi: HANYA SKU spesial (>= 3 pesanan/SKU, folder "
-                        "SPX-PAGI-SPESIAL); tanpa flag ini --shopee-pagi hanya membuat picklist per lantai")
+                    help="dipakai bersama --shopee-pagi atau --jnt-siang: HANYA SKU spesial (>= 3 "
+                        "pesanan/SKU; folder SPX-PAGI-SPESIAL / JNT-SIANG-SPESIAL); tanpa flag ini "
+                        "langkah itu hanya membuat picklist per lantai")
+    ap.add_argument("--satuan-saja", action="store_true",
+                    help="dipakai bersama --jnt-siang: HANYA satuan (1 qty) per grup rak, folder "
+                        "JNTSIANG_SATUAN (dipilah bersama satuan J&T lain lewat pilah_satuan)")
     ap.add_argument("--jnt-siang", action="store_true",
                     help="hanya buat picklist J&T Resi Siang (channel TikTok Shop, kurir "
                         "J&T, jam pesan s.d. 15:00 WIB hari ini, dipecah per lantai rak "
@@ -954,9 +958,13 @@ def shopee_pagi_picklist(log: logging.Logger, args) -> int:
 
 
 def jnt_siang_picklist(log: logging.Logger, args) -> int:
+    if args.spesial_saja and args.satuan_saja:
+        raise SystemExit("--spesial-saja dan --satuan-saja tidak bisa dipakai bersamaan")
+    bagian = "spesial" if args.spesial_saja else "satuan" if args.satuan_saja else None
     return _jalankan_picklist(
-        log, args, "J&T Resi Siang", lambda pl, k: pl.rencana_jnt_siang(k),
-        lambda pl, k: pl.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI))
+        log, args, "J&T Resi Siang" + (f" ({bagian})" if bagian else ""),
+        lambda pl, k: pl.rencana_jnt_siang(k, bagian),
+        lambda pl, k: pl.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, bagian))
 
 
 def lanjut_picklist(log: logging.Logger, args) -> int:

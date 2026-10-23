@@ -143,10 +143,13 @@ def pdf_satuan_gabungan(folder_sesi: Path) -> list[Path]:
     return [f for f in (folder_sesi / FOLDER_SATUAN_GABUNG).glob("*.pdf") if POLA_PICK.match(f.name)]
 
 
-def pdf_satuan_sesi(folder_sesi: Path) -> list[Path]:
+def pdf_satuan_sesi(folder_sesi: Path, dengan_gabungan: bool = True) -> list[Path]:
     """PDF SEMUA jenis satuan sebuah sesi: gabungan (`SATUAN`) + per kurir (`JNT_SATUAN`, `SPX_SATUAN`,
-    `SPXHEMAT_SATUAN`, ...), urut nomor PICK."""
-    hasil = [f for d in folder_sesi.iterdir() if d.is_dir() and POLA_FOLDER_SATUAN.match(d.name)
+    `SPXHEMAT_SATUAN`, `JNTSIANG_SATUAN` ...), urut nomor PICK. `dengan_gabungan` False: hanya satuan per
+    kurir (dipakai untuk sesi gabungan yang di luar jendela jam, lihat jendela_gabungan_ok())."""
+    hasil = [f for d in folder_sesi.iterdir()
+             if d.is_dir() and POLA_FOLDER_SATUAN.match(d.name)
+             and (dengan_gabungan or d.name.upper() != FOLDER_SATUAN_GABUNG)
              for f in d.glob("*.pdf") if POLA_PICK.match(f.name)] if folder_sesi.is_dir() else []
     return sorted(hasil, key=lambda f: int(POLA_PICK.match(f.name).group(1)))
 
@@ -155,6 +158,16 @@ def dalam_jendela(menit: int) -> bool:
     """`menit` (sejak 00.00) jatuh di salah satu JENDELA_PILAH_MENIT (batas inklusif; jendela yang
     awalnya lebih besar dari akhirnya melewati tengah malam, mis. 20.00-07.00)."""
     return any(a <= menit <= b if a <= b else menit >= a or menit <= b for a, b in JENDELA_PILAH_MENIT)
+
+
+def jendela_gabungan_ok(folder_sesi: Path) -> tuple[bool, str | None]:
+    """(sesi diproses di dalam jendela jam pilah, alasan kalau tidak). Hanya relevan untuk satuan GABUNGAN."""
+    mulai = waktu_mulai_sesi(sesi_asal(folder_sesi)) or waktu_mulai_sesi(folder_sesi)
+    if mulai is None:
+        return False, "Waktu proses sesi tidak diketahui"
+    if not dalam_jendela(mulai.hour * 60 + mulai.minute):
+        return False, f"Diproses {mulai:%H.%M} - di luar {TEKS_JENDELA}"
+    return True, None
 
 
 def periksa_sesi(folder_sesi: Path, abaikan_jendela: bool = False) -> tuple[bool, str | None]:
@@ -166,13 +179,10 @@ def periksa_sesi(folder_sesi: Path, abaikan_jendela: bool = False) -> tuple[bool
         return False, f"Sesi masih menulis label ({int(umur)} detik lalu) - tunggu proses selesai"
     if abaikan_jendela or not pdf_satuan_gabungan(folder_sesi):   # syarat jam hanya untuk satuan gabungan
         return True, None
-    mulai = waktu_mulai_sesi(sesi_asal(folder_sesi)) or waktu_mulai_sesi(folder_sesi)
-    if mulai is None:
-        return False, "Waktu proses sesi tidak diketahui"
-    menit = mulai.hour * 60 + mulai.minute
-    if not dalam_jendela(menit):
-        return False, f"Diproses {mulai:%H.%M} - di luar {TEKS_JENDELA}"
-    return True, None
+    ok, alasan = jendela_gabungan_ok(folder_sesi)
+    if not ok and pdf_satuan_sesi(folder_sesi, dengan_gabungan=False):
+        return True, None   # satuan gabungannya di luar jam (tidak ikut, lihat cari_pdf_satuan), satuan per kurir tetap ikut
+    return ok, alasan
 
 
 def pdf_terpilih(folder_tanggal: Path, sesi: list[str] | None = None,
@@ -198,15 +208,16 @@ def pdf_terpilih(folder_tanggal: Path, sesi: list[str] | None = None,
     if not layak:
         raise SesiTidakValid("Tidak ada sesi yang boleh dipilah (sesi satuan gabungan J&T + SPX harus "
                              f"diproses {TEKS_JENDELA}; satuan per kurir bebas jam)")
-    return cari_pdf_satuan(folder_tanggal, layak), layak
+    return cari_pdf_satuan(folder_tanggal, layak, jendela=not abaikan_jendela), layak
 
 
-def cari_pdf_satuan(folder_tanggal: Path, sesi: list[str] | None = None) -> list[Path]:
+def cari_pdf_satuan(folder_tanggal: Path, sesi: list[str] | None = None, jendela: bool = False) -> list[Path]:
     """PDF SEMUA jenis satuan (gabungan `SATUAN` + per kurir `JNT_SATUAN` dst, lihat pdf_satuan_sesi())
-    sesi terpilih (default semua sesi), urut nomor PICK."""
+    sesi terpilih (default semua sesi), urut nomor PICK. `jendela` True: satuan GABUNGAN dari sesi yang
+    diproses di luar jendela jam TIDAK ikut (satuan per kurir selalu ikut) - dipakai pilah sungguhan."""
     folder = ([folder_tanggal / pola_sesi.folder_dari_kode(s) for s in sesi] if sesi
               else [d for d in folder_tanggal.iterdir() if d.is_dir()])
-    hasil = [f for d in folder for f in pdf_satuan_sesi(d)]
+    hasil = [f for d in folder for f in pdf_satuan_sesi(d, not jendela or jendela_gabungan_ok(d)[0])]
     return sorted(hasil, key=lambda f: int(POLA_PICK.match(f.name).group(1)))
 
 
@@ -540,7 +551,7 @@ def pdf_untuk_pilah(folder_tanggal: Path, sesi: list[str] | None, abaikan_jendel
         return pdfs, pdfs, sesi or sesi_ok
     sesi_lama = periksa_lanjutan(folder_tanggal, lanjutan_dari, sesi)
     pdfs_baru, sesi_ok = pdf_terpilih(folder_tanggal, sesi, abaikan_jendela)   # sesi baru: syarat jam tetap berlaku
-    pdfs_lama = cari_pdf_satuan(folder_tanggal, sesi_lama)
+    pdfs_lama = cari_pdf_satuan(folder_tanggal, sesi_lama, jendela=not abaikan_jendela)
     if not pdfs_lama:
         raise SesiTidakValid(f"Tidak ada PDF satuan asal sesi {'-'.join(sesi_lama)} (hasil pilah {lanjutan_dari})")
     semua = sorted(pdfs_lama + pdfs_baru, key=lambda f: int(POLA_PICK.match(f.name).group(1)))

@@ -24,9 +24,9 @@ import menu_konsol as mk  # noqa: E402
 
 coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
-JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 15, "TIPE 3": 13, "TIPE 4": 11, "MALAM": 7,
+JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 15, "TIPE 3": 13, "TIPE 4": 13, "MALAM": 7,
                   "EVENT - TIPE 1": 17, "EVENT - TIPE 2": 21, "EVENT - TIPE 3": 17,
-                  "EVENT - TIPE 4": 18, "EVENT - MALAM": 14}
+                  "EVENT - TIPE 4": 20, "EVENT - MALAM": 14}
 
 
 def _katalog(judul):

@@ -93,6 +93,34 @@ def uji_semua_jenis_satuan_gabungan_dan_per_kurir_ikut():
     print("  semua jenis satuan ikut (SATUAN, JNT_/SPXHEMAT_SATUAN); sesi per-kurir bebas jam, gabungan tetap kena jam")
 
 
+def uji_satuan_jnt_siang_dipilah_bersama_satuan_jam_sebelumnya():
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        for sub in ("1/SATUAN", "4/SATUAN", "4/JNTSIANG_SATUAN", "5/SATUAN"):
+            (tmp / sub).mkdir(parents=True)
+        # sesi 1 (pagi 08.15, gabungan) + sesi 4 (15.00: gabungan di luar jam + JNTSIANG_SATUAN per kurir)
+        _pdf_label(tmp / "1" / "SATUAN" / "PICK-000000010_1QTY-REGULER-2A_2026-10-13_081500.pdf", [("O1", "R1"), ("O2", "R2")])
+        _pdf_label(tmp / "4" / "SATUAN" / "PICK-000000040_1QTY-REGULER-3A_2026-10-13_150000.pdf", [("O3", "R3")])
+        _pdf_label(tmp / "4" / "JNTSIANG_SATUAN" / "PICK-000000041_JNTSIANG-1QTY-REGULER-2A_2026-10-13_150100.pdf",
+                   [("O4", "R4"), ("O5", "R5")])
+        # sesi 4 tetap boleh (satuan J&T siang bebas jam) walau satuan gabungannya di luar jendela jam
+        assert ps.periksa_sesi(tmp / "4") == (True, None)
+        pdfs, sesi = ps.pdf_terpilih(tmp)
+        assert sesi == ["1", "4"]
+        nama = [f.name[:14] for f in pdfs]
+        assert nama == ["PICK-000000010", "PICK-000000041"], nama      # gabungan sesi 4 (di luar jam) TIDAK ikut
+        assert ps.nama_kelompok(pdfs[1]) == "1QTY-REGULER-2A"
+        # tanpa filter jendela (uji/analisis lama) semuanya ikut
+        assert len(ps.cari_pdf_satuan(tmp)) == 3
+        # --abaikan-jendela: gabungan sesi 4 ikut juga
+        assert len(ps.pdf_terpilih(tmp, abaikan_jendela=True)[0]) == 3
+        # sesi yang HANYA punya satuan gabungan di luar jam tetap ditolak
+        _pdf_label(tmp / "5" / "SATUAN" / "PICK-000000050_1QTY-REGULER-2A_2026-10-13_160000.pdf", [("O6", "R6")])
+        ok, alasan = ps.periksa_sesi(tmp / "5")
+        assert not ok and "di luar" in alasan, alasan
+    print("  satuan J&T siang (JNTSIANG_SATUAN, sesi 15.00) dipilah bersama satuan jam sebelumnya; gabungan sesi itu di luar jam tidak ikut")
+
+
 def uji_hanya_sesi_diproses_0700_1200_dan_2000_0700():
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)

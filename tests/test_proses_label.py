@@ -1622,6 +1622,80 @@ class JubelioPalsuJntSiang:
         raise AssertionError(f"POST tak dikenal {url}")
 
 
+def uji_jnt_siang_tiga_langkah_spesial_satuan_lalu_per_lantai():
+    import datetime as dt
+
+    class JubelioPalsuSiangTiga(JubelioPalsuJntSiang):
+        """7 pesanan TikTok J&T <= 15:00: id 1-3 SKU-A (spesial), id 4 & 5 satuan (rak 2A, 3B),
+        id 6 qty 2 (kombinasi, rak 1A), id 7 SKU-B qty 1 tapi sendirian (jadi satuan, rak 2A)."""
+
+        def __init__(self):
+            super().__init__()
+            tgl = "2026-09-29T02:00:00.000Z"
+            self.pesanan = [{"salesorder_id": i, "salesorder_no": f"SO-JS-{i}", "source": 131076,
+                             "grand_total": "35900.0000", "transaction_date": tgl,
+                             "total_qty": "2.0000" if i == 6 else "1.0000"} for i in range(1, 8)]
+            self.rak = {4: "2A-Y4-1", 5: "3B-Y5-1", 6: "1A-Y6-1", 7: "2A-Y7-1"}
+            self.kombinasi_rak = list(self.rak.values())
+
+        def get(self, url, params=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("ready-to-process/") and any(kk.startswith("combination[") for kk in params):
+                combos = {v for kk, v in params.items() if kk.startswith("combination[")}
+                cocok = [so for so, c in self.rak.items() if c in combos]
+                return Resp(data={"data": [{"salesorder_id": so} for so in cocok], "totalCount": len(cocok)})
+            return super().get(url, params, headers, timeout, cookies)
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                                   "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                                   "item_full_name": ("SKU-A" if i <= 3 else f"SKU-{i}") + " - Baju",
+                                   "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            return super().post(url, json, headers, timeout, cookies)
+
+    j = JubelioPalsuSiangTiga()
+    k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+    sekarang = dt.datetime(2026, 9, 29, 16, 0, 0, tzinfo=pl.WIB)
+    asli_ambil, asli_lanjut = pl.ambil_pesanan_jnt_siang, pl.lanjutkan_picklist
+    panggilan = []
+
+    def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+        panggilan.append((pno, jumlah, sku, subfolder))
+        return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                "Resi Keluar": jumlah, "File Label": "", "Catatan": ""}
+    pl.ambil_pesanan_jnt_siang = lambda k: asli_ambil(k, sekarang=sekarang)
+    pl.lanjutkan_picklist = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            riwayat, label = Path(d) / "riwayat.xlsx", Path(d) / "label"
+            # langkah 1: spesial
+            h1 = pl.proses_jnt_siang(k, riwayat, label, "spesial")
+            assert [(h["SKU"], h["Total Pesanan"]) for h in h1] == [("JNT-SIANG-SPESIAL-SKU-A", 3)], h1
+            j.pesanan = [o for o in j.pesanan if o["salesorder_id"] > 3]        # sudah keluar dari Siap Proses
+            # langkah 2: satuan per grup rak (id 4 & 7 di 2A, id 5 di 3B; id 6 qty 2 bukan satuan)
+            h2 = pl.proses_jnt_siang(k, riwayat, label, "satuan")
+            assert {h["SKU"]: h["Total Pesanan"] for h in h2} == {
+                "JNTSIANG-1QTY-REGULER-2A": 2, "JNTSIANG-1QTY-REGULER-3B": 1}, h2
+            j.pesanan = [o for o in j.pesanan if o["salesorder_id"] == 6]
+            # langkah 3: sisanya per lantai
+            h3 = pl.proses_jnt_siang(k, riwayat, label)
+            assert [(h["SKU"], h["Total Pesanan"]) for h in h3] == [("JNT-SIANG-LANTAI1", 1)], h3
+    finally:
+        pl.ambil_pesanan_jnt_siang, pl.lanjutkan_picklist = asli_ambil, asli_lanjut
+    folder = {p[2]: p[3] for p in panggilan}
+    assert folder["JNT-SIANG-SPESIAL-SKU-A"] == "JNT-SIANG-SPESIAL"
+    assert folder["JNTSIANG-1QTY-REGULER-2A"] == folder["JNTSIANG-1QTY-REGULER-3B"] == "JNTSIANG_SATUAN"
+    assert folder["JNT-SIANG-LANTAI1"] == "JNT_SIANG"
+    # detail resi spesial: file & folder sendiri
+    detail = pl.detail_spesial_terpisah("JNT-SIANG-SPESIAL-SKU-A", "PICK-1", [{"salesorder_no": "SO1", "tracking_no": "R1"}])
+    assert detail[0] == "JNT-SIANG-SPESIAL/detail-resi-spesial-jnt-siang.xlsx" and detail[1][0]["SKU"] == "SKU-A", detail
+    assert pl.detail_spesial_terpisah("JNT-SIANG-LANTAI1", "PICK-1", [{"salesorder_no": "SO1"}]) is None
+    assert pl.detail_spesial_terpisah("JNTSIANG-1QTY-REGULER-2A", "PICK-1", [{"salesorder_no": "SO1"}]) is None
+    print("  J&T Resi Siang: spesial (JNT-SIANG-SPESIAL) -> satuan per rak (JNTSIANG_SATUAN, label JNTSIANG-1QTY-REGULER-<rak>) "
+          "-> sisa per lantai (JNT_SIANG); detail-resi-spesial-jnt-siang.xlsx di folder spesial")
+
+
 def uji_jnt_siang_filter_channel_kurir_dan_jam_cutoff():
     import datetime as dt
 

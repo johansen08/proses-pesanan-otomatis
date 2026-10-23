@@ -64,6 +64,10 @@ def kelas_jenis(nama: str) -> str:
         return "gtl-spesial"
     if n.startswith("SHOPEE-PAGI-SPESIAL-"):
         return "spx-pagi-spesial"
+    if n.startswith("JNT-SIANG-SPESIAL-"):
+        return "jnt-siang-spesial"
+    if n.startswith("JNTSIANG-1QTY"):
+        return "jnt-siang-satuan"
     if n.startswith(("GTL-SICEPAT", "LAZADA", "JNE-LEX", "URGENT")):
         return "urgent"
     if n.startswith("SHOPEE-PAGI"):
@@ -79,6 +83,7 @@ def kelas_jenis(nama: str) -> str:
 BAWAAN_JENIS = {"satuan": (None, "SATUAN"), "kombinasi": (None, "KOMBINASI"), "urgent": (None, "URGENT"),
                 "gtl-spesial": (None, "GTL_SICEPAT_SPESIAL"),
                 "spx-pagi-spesial": (None, "SPX-PAGI-SPESIAL"),
+                "jnt-siang-spesial": (None, "JNT-SIANG-SPESIAL"), "jnt-siang-satuan": (None, "JNTSIANG_SATUAN"),
                 "spx-pagi": (None, "SPX_PAGI"), "jnt-siang": (None, "JNT_SIANG"), "sampel": (None, None),
                 "spesial": ("SPESIAL", None)}
 
