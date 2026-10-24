@@ -124,7 +124,7 @@ project secara umum, root tidak boleh berisi file `.py`):
   kelompok "Urgent Lazada · skala 68%", `--ulang`, lanjut sebagian). Jumlah halaman sama; `sudah_dicetak` tetap
   path asli. SumatraPDF tidak punya opsi skala persen - jangan diganti `-print-settings fit/shrink`.
 - `src/pilah_satuan.py` — pilah ulang label SATUAN yang sudah dicetak (`python src/pilah_satuan.py --tanggal YYYY-MM-DD`):
-  READ-ONLY ke Jubelio (GET `sales/picklists/{id}`), SEMUA jenis satuan (2026-10-23: gabungan `SATUAN` + per kurir `JNT_/SPX_/SPXHEMAT_/SPXHEMATPAGI_/JNTNDD_SATUAN`, `pdf_satuan_sesi()`) DIGABUNG lintas kurir; syarat jam 07.00-12.00 atau 20.00-07.00 (cap waktu terawal di nama file PDF sesi; `periksa_sesi()`) HANYA untuk sesi yang punya satuan gabungan, sesi satuan per kurir bebas jam; resi kurir selain J&T/SPX tidak dihitung; `--abaikan-jendela` (CLI, uji) hanya melewati syarat jam, memetakan tiap halaman PDF SATUAN semua sesi ke SKU lewat "No Resi"
+  READ-ONLY ke Jubelio (GET `sales/picklists/{id}`), SEMUA jenis satuan (2026-10-23: gabungan `SATUAN` + per kurir `JNT_/SPX_/SPXHEMAT_/SPXHEMATPAGI_/JNTNDD_SATUAN`, `pdf_satuan_sesi()`) DIGABUNG lintas kurir; TANPA batas jam (2026-10-24: syarat 07.00-12.00 / 20.00-07.00 dihapus, sesi jam berapa pun boleh; `periksa_sesi()` hanya menolak sesi tanpa label satuan atau yang PDF-nya baru diubah); resi kurir selain J&T/SPX tidak dihitung; memetakan tiap halaman PDF SATUAN semua sesi ke SKU lewat "No Resi"
   di teks label, lalu SKU dengan >= `MIN_RESI` resi (gabungan lintas sesi) dibuatkan PDF per SKU + `ringkasan-pilah-satuan.xlsx`
   di `label-pengiriman/<tanggal>/pilah-satuan/`. Tidak membuat picklist/resi baru. Halaman tak cocok = umumnya pesanan batal
   setelah dicetak. Hasil: `SPESIAL-SATUAN-<sesi>/` (PDF per SKU + `detail-resi-spesial-satuan-<sesi>.xlsx`) dan
@@ -215,8 +215,8 @@ project secara umum, root tidak boleh berisi file `.py`):
   dan riwayat — untuk SEMUA picklist sesi itu (yang tidak bermasalah ikut, jadi folder hasilnya satu sesi LENGKAP dengan Excel utuh; tidak ada pilihan sebagian). Semua keluaran ke folder BARU `label-pengiriman/<tanggal>/N-PEMULIHAN` (N = nomor sesi terbesar hari itu + 1); sesi asal
   tidak disentuh. `src/nama_sesi.py` = satu-satunya pola nama folder sesi (`N` atau `N-PEMULIHAN`): cetak bulk, menu Cetak UI
   (judul "N-PEMULIHAN"), `--sesi`, dan penomoran sesi baru memperlakukannya sebagai sesi (pilah_satuan/kurasi tetap hanya sesi `N` biasa).
-  **Pilah satuan bisa memakai `N-PEMULIHAN`** (kode sesi `11P`, mis. `--sesi 1-2-11P`; UI mengirim kode itu): berguna kalau satuan sesi N tidak lengkap. Syarat jendela
-  jam dinilai dari jam proses sesi ASAL (penanda `pulihan.json` di folder pemulihan), sesi N dan `NP` tidak boleh dipilih bersamaan (resi sama), tanpa `--sesi`
+  **Pilah satuan bisa memakai `N-PEMULIHAN`** (kode sesi `11P`, mis. `--sesi 1-2-11P`; UI mengirim kode itu): berguna kalau satuan sesi N tidak lengkap. Jam tampil
+  di UI dari sesi ASAL (penanda `pulihan.json` di folder pemulihan), sesi N dan `NP` tidak boleh dipilih bersamaan (resi sama), tanpa `--sesi`
   pemulihan menggantikan sesi asalnya. Folder hasil: `SPESIAL-SATUAN-<kode>` (mis. `-11P`).
   **UI tab Pulih (tersambung ke data nyata)**: `GET /api/pulih/sesi` (status tiap picklist dari data LOKAL: jurnal terhenti, `PICKLIST.xlsx`, PDF, peringatan tanpa resi),
   `POST /api/pulih/cek|jalankan` (= `main.py --pulihkan-sesi` mode uji / sungguhan, proses terpisah, satu job sekaligus, 409 bila harian/download ulang/pilah berjalan),

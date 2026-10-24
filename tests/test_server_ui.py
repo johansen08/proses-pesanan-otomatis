@@ -619,7 +619,7 @@ def uji_server_ui_pilah_satuan():
     with tempfile.TemporaryDirectory() as tmp:
         label = Path(tmp) / "label-pengiriman"
         for sesi, n, jam, folder in (("1", 3, "081500", "SATUAN"), ("2", 2, "104000", "SATUAN"),
-                                      ("4", 1, "140500", "SATUAN"),            # diproses 14.05: di luar 07.00-12.00
+                                      ("4", 1, "140500", "SATUAN"),            # diproses 14.05: tidak ada batas jam
                                       ("5", 1, "090000", "JNT_SATUAN")):       # satuan per kurir, bukan gabungan
             d = label / hari_ini / sesi / folder
             d.mkdir(parents=True)
@@ -653,19 +653,18 @@ def uji_server_ui_pilah_satuan():
                 kode, d = _panggil(port, "/api/pilah/sesi")
                 sesi = d["hari"][0]["sesi"]
                 assert kode == 200 and [(s["no"], s["picklist"], s["label"], s["layak"], s["jam"]) for s in sesi] == [
-                    (1, 1, 3, True, "08.15"), (2, 1, 2, True, "10.40"), (4, 1, 1, False, "14.05"),
+                    (1, 1, 3, True, "08.15"), (2, 1, 2, True, "10.40"), (4, 1, 1, True, "14.05"),
                     (5, 1, 1, True, "09.00")], d
-                assert "di luar 07.00-12.00" in sesi[2]["alasan"] and sesi[3]["alasan"] is None, sesi
+                assert all(x["alasan"] is None for x in sesi), sesi
                 # validasi: tidak ada proses dijalankan
                 for bad in ({"tanggal": "x", "sesi": ["1"]}, {"tanggal": hari_ini, "sesi": []},
                             {"tanggal": hari_ini, "sesi": ["3"]}, {"tanggal": hari_ini, "sesi": ["1"], "min_resi": 0},
                             {"tanggal": hari_ini, "sesi": ["1"], "min_resi": "3"},
-                            {"tanggal": "2020-01-01", "sesi": ["1"]},
-                            {"tanggal": hari_ini, "sesi": ["1", "4"]}):     # sesi gabungan di luar jam 07.00-12.00
+                            {"tanggal": "2020-01-01", "sesi": ["1"]}):
                     kode, isi = _panggil(port, "/api/pilah/analisis", bad)
                     assert kode == 400, bad
-                kode, isi = _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1", "4"]})
-                assert kode == 400 and "Sesi 4" in isi["error"] and "Sesi 1" not in isi["error"], isi
+                kode, isi = _panggil(port, "/api/pilah/buat", {"tanggal": hari_ini, "sesi": ["1", "3"]})
+                assert kode == 400 and "Sesi 3" in isi["error"] and "Sesi 1" not in isi["error"], isi
                 assert _panggil(port, "/api/pilah/analisis", data="x", tipe="text/plain")[0] == 404
                 assert diluncurkan == []
                 # analisis -> job selesai dengan hasil

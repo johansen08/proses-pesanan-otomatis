@@ -80,17 +80,16 @@ def uji_semua_jenis_satuan_gabungan_dan_per_kurir_ikut():
         assert ps.periksa_sesi(tmp / "3") == (True, None)
         assert ps.pdf_terpilih(tmp, ["1", "3"])[1] == ["1", "3"]
         assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3"]
-        # sesi gabungan di luar jam tetap ditolak
+        # sesi gabungan sore hari juga boleh (tidak ada batas jam)
         (tmp / "4" / "SATUAN").mkdir(parents=True)
         _pdf_label(tmp / "4" / "SATUAN" / "PICK-000000050_1QTY-REGULER-2A_2026-10-13_153000.pdf", [("O10", "R10")])
-        ok, alasan = ps.periksa_sesi(tmp / "4")
-        assert not ok and "di luar" in alasan, alasan
-        assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3"]
+        assert ps.periksa_sesi(tmp / "4") == (True, None)
+        assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3", "4"]
         # kelompok rak satuan per kurir dinormalkan ke kelompok yang sama dengan gabungan
         assert ps.nama_kelompok(Path("PICK-000000040_JNT-1QTY-REGULER-2A_2026-10-13_153000.pdf")) == "1QTY-REGULER-2A"
         assert ps.nama_kelompok(Path("PICK-000000040_SPXHEMAT-1QTY-REGULER-LAINNYA_2026-10-13_153000.pdf")) == "1QTY-REGULER-LAINNYA"
         assert ps.nama_kelompok(Path("PICK-000000010_1QTY-REGULER-3B_2026-10-13_081500.pdf")) == "1QTY-REGULER-3B"
-    print("  semua jenis satuan ikut (SATUAN, JNT_/SPXHEMAT_SATUAN); sesi per-kurir bebas jam, gabungan tetap kena jam")
+    print("  semua jenis satuan ikut (SATUAN, JNT_/SPXHEMAT_SATUAN); semua sesi bebas jam")
 
 
 def uji_satuan_jnt_siang_dipilah_bersama_satuan_jam_sebelumnya():
@@ -103,25 +102,21 @@ def uji_satuan_jnt_siang_dipilah_bersama_satuan_jam_sebelumnya():
         _pdf_label(tmp / "4" / "SATUAN" / "PICK-000000040_1QTY-REGULER-3A_2026-10-13_150000.pdf", [("O3", "R3")])
         _pdf_label(tmp / "4" / "JNTSIANG_SATUAN" / "PICK-000000041_JNTSIANG-1QTY-REGULER-2A_2026-10-13_150100.pdf",
                    [("O4", "R4"), ("O5", "R5")])
-        # sesi 4 tetap boleh (satuan J&T siang bebas jam) walau satuan gabungannya di luar jendela jam
+        # tidak ada batas jam: sesi 4 (15.00) boleh, gabungan maupun per kurir
         assert ps.periksa_sesi(tmp / "4") == (True, None)
         pdfs, sesi = ps.pdf_terpilih(tmp)
         assert sesi == ["1", "4"]
         nama = [f.name[:14] for f in pdfs]
-        assert nama == ["PICK-000000010", "PICK-000000041"], nama      # gabungan sesi 4 (di luar jam) TIDAK ikut
-        assert ps.nama_kelompok(pdfs[1]) == "1QTY-REGULER-2A"
-        # tanpa filter jendela (uji/analisis lama) semuanya ikut
+        assert nama == ["PICK-000000010", "PICK-000000040", "PICK-000000041"], nama   # gabungan sesi 4 ikut
+        assert ps.nama_kelompok(pdfs[2]) == "1QTY-REGULER-2A"
         assert len(ps.cari_pdf_satuan(tmp)) == 3
-        # --abaikan-jendela: gabungan sesi 4 ikut juga
-        assert len(ps.pdf_terpilih(tmp, abaikan_jendela=True)[0]) == 3
-        # sesi yang HANYA punya satuan gabungan di luar jam tetap ditolak
+        # sesi yang HANYA punya satuan gabungan sore hari juga boleh
         _pdf_label(tmp / "5" / "SATUAN" / "PICK-000000050_1QTY-REGULER-2A_2026-10-13_160000.pdf", [("O6", "R6")])
-        ok, alasan = ps.periksa_sesi(tmp / "5")
-        assert not ok and "di luar" in alasan, alasan
-    print("  satuan J&T siang (JNTSIANG_SATUAN, sesi 15.00) dipilah bersama satuan jam sebelumnya; gabungan sesi itu di luar jam tidak ikut")
+        assert ps.periksa_sesi(tmp / "5") == (True, None)
+    print("  satuan J&T siang (JNTSIANG_SATUAN, sesi 15.00) dipilah bersama satuan jam sebelumnya; gabungan sesi itu juga ikut")
 
 
-def uji_hanya_sesi_diproses_0700_1200_dan_2000_0700():
+def uji_sesi_dari_jam_berapa_pun_boleh_dipilah():
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
 
@@ -129,32 +124,21 @@ def uji_hanya_sesi_diproses_0700_1200_dan_2000_0700():
             f = tmp / no / "SATUAN"
             f.mkdir(parents=True)
             _pdf_label(f / f"PICK-0000000{no}0_1QTY-REGULER-2A_2026-10-13_{jam}.pdf", [("O" + no, "R" + no)])
-            (tmp / no / "SPESIAL").mkdir()   # waktu mulai sesi = cap TERAWAL dari semua PDF sesi
-            _pdf_label(tmp / no / "SPESIAL" / f"PICK-0000000{no}9_SPESIAL_A_2026-10-13_{jam}.pdf", [("Z", "Z")])
-        kasus = {"1": ("070000", True), "2": ("115900", True), "3": ("120000", True),      # pagi 07.00-12.00
-                 "4": ("120100", False), "5": ("153000", False), "6": ("195900", False),   # siang-sore: ditolak
-                 "7": ("200000", True), "8": ("233000", True), "9": ("003000", True),      # malam 20.00-07.00
-                 "10": ("065900", True), "11": ("070100", True)}   # 06.59 (malam) dan 07.01 (pagi) sama-sama boleh
-        for no, (jam, _) in kasus.items():
+        kasus = {"1": "070000", "2": "120100", "3": "153000", "4": "195900", "5": "200000", "6": "003000"}
+        for no, jam in kasus.items():
             sesi(no, jam)
-        hasil = {no: ps.periksa_sesi(tmp / no)[0] for no in kasus}
-        assert hasil == {no: ok for no, (_, ok) in kasus.items()}, hasil
-        assert "di luar 07.00-12.00 atau 20.00-07.00" in ps.periksa_sesi(tmp / "5")[1]
-        assert ps.dalam_jendela(0) and ps.dalam_jendela(7 * 60) and ps.dalam_jendela(12 * 60) and ps.dalam_jendela(20 * 60)             and ps.dalam_jendela(24 * 60 - 1) and not ps.dalam_jendela(12 * 60 + 1) and not ps.dalam_jendela(20 * 60 - 1)
-        # tanpa cap waktu di nama file -> tidak bisa dibuktikan -> ditolak
-        (tmp / "12" / "SATUAN").mkdir(parents=True)
-        _pdf_label(tmp / "12" / "SATUAN" / "PICK-000000120_1QTY-REGULER-2A_x.pdf", [("O8", "R8")])
-        ok, alasan = ps.periksa_sesi(tmp / "12")
-        assert not ok and "tidak diketahui" in alasan
-        # sesi eksplisit di luar jendela -> SesiTidakValid; --abaikan-jendela (uji) melewatinya
-        try:
-            ps.pdf_terpilih(tmp, ["1", "6"])
-            assert False
-        except ps.SesiTidakValid as e:
-            assert "Sesi 6" in str(e) and "Sesi 1" not in str(e)
-        assert ps.pdf_terpilih(tmp, ["1", "6"], abaikan_jendela=True)[1] == ["1", "6"]
-        assert ps.pdf_terpilih(tmp)[1] == sorted((n for n, (_, ok) in kasus.items() if ok), key=int)   # 4,5,6 & 12 tersaring
-    print("  sesi boleh 07.00-12.00 & 20.00-07.00 (lewat tengah malam), 12.01-19.59 & tanpa cap waktu ditolak; --abaikan-jendela untuk uji")
+        assert all(ps.periksa_sesi(tmp / no) == (True, None) for no in kasus)
+        # tanpa cap waktu di nama file pun boleh
+        (tmp / "7" / "SATUAN").mkdir(parents=True)
+        _pdf_label(tmp / "7" / "SATUAN" / "PICK-000000070_1QTY-REGULER-2A_x.pdf", [("O8", "R8")])
+        assert ps.periksa_sesi(tmp / "7") == (True, None)
+        assert ps.pdf_terpilih(tmp, ["1", "4"])[1] == ["1", "4"]
+        assert ps.pdf_terpilih(tmp)[1] == ["1", "2", "3", "4", "5", "6", "7"]
+        # sesi tanpa label satuan tetap ditolak
+        (tmp / "8").mkdir()
+        ok, alasan = ps.periksa_sesi(tmp / "8")
+        assert not ok and "satuan" in alasan
+    print("  sesi dari jam berapa pun (juga tanpa cap waktu) boleh dipilah; tanpa label satuan ditolak")
 
 
 def uji_sesi_pemulihan_dipakai_pilah_dengan_jam_sesi_asal():
@@ -167,10 +151,9 @@ def uji_sesi_pemulihan_dipakai_pilah_dengan_jam_sesi_asal():
             f = tmp / nama / "SATUAN"
             f.mkdir(parents=True)
             _pdf_label(f / f"PICK-{picklist:09d}_1QTY-REGULER-2A_{tanggal}_{jam}.pdf", [("O" + nama, "R" + nama)])
-        sesi("10", "170000", 1)                 # sore: di luar jendela
+        sesi("10", "170000", 1)                 # sore
         sesi("11", "072000", 2)                 # pagi: boleh
         sesi("11-PEMULIHAN", "180000", 2)       # dibuat ulang sore hari
-        assert not ps.periksa_sesi(tmp / "11-PEMULIHAN")[0], "tanpa penanda: jam pemulihan (sore) dipakai -> ditolak"
         (tmp / "11-PEMULIHAN" / "pulihan.json").write_text(json.dumps({"asal": "2026-10-19/11"}), encoding="utf-8")
         # penanda menunjuk folder <tanggal>/<asal>: letakkan sesi di folder tanggal sungguhan
         tgl = tmp.parent / "2026-10-19"
@@ -183,8 +166,8 @@ def uji_sesi_pemulihan_dipakai_pilah_dengan_jam_sesi_asal():
             _pdf_label(f / f"PICK-{pk:09d}_1QTY-REGULER-2A_2026-10-19_{jam}.pdf", [("O" + nama, "R" + nama)])
         (tgl / "11-PEMULIHAN" / "pulihan.json").write_text(json.dumps({"asal": "2026-10-19/11"}), encoding="utf-8")
         assert ps.sesi_asal(tgl / "11-PEMULIHAN") == tgl / "11"
-        assert ps.periksa_sesi(tgl / "11-PEMULIHAN")[0], "jendela dinilai dari jam proses sesi ASAL (07.20)"
-        assert not ps.periksa_sesi(tgl / "10")[0]
+        assert ps.periksa_sesi(tgl / "11-PEMULIHAN")[0]
+        assert ps.periksa_sesi(tgl / "10")[0], "sesi sore juga boleh"
         pdfs, kode = ps.pdf_terpilih(tgl, ["11P"])
         assert kode == ["11P"] and [f.parent.parent.name for f in pdfs] == ["11-PEMULIHAN"]
         assert ps.nama_sesi(pdfs) == "11P"
@@ -193,8 +176,8 @@ def uji_sesi_pemulihan_dipakai_pilah_dengan_jam_sesi_asal():
             assert False, "sesi dan pemulihannya tidak boleh dipilih bersamaan"
         except ps.SesiTidakValid as e:
             assert "pilih salah satu" in str(e), e
-        assert ps.pdf_terpilih(tgl)[1] == ["11P"], "tanpa --sesi: pemulihan menggantikan sesi asalnya"
-    print("  pilah: sesi N-PEMULIHAN (kode 11P) bisa dipilah, jendela jam dari sesi asal, tidak bersamaan dengan sesi asalnya")
+        assert ps.pdf_terpilih(tgl)[1] == ["10", "11P"], "tanpa --sesi: pemulihan menggantikan sesi asalnya"
+    print("  pilah: sesi N-PEMULIHAN (kode 11P) bisa dipilah, tidak bersamaan dengan sesi asalnya")
 
 
 def uji_resi_kurir_lain_tidak_dihitung_spesial():
@@ -418,14 +401,12 @@ def uji_sesi_yang_masih_menulis_label_ditolak():
                 assert False
             except ps.SesiTidakValid as e:
                 assert "Sesi 1" in str(e)
-            ok_abai, _ = ps.periksa_sesi(tmp / "1", abaikan_jendela=True)
-            assert not ok_abai, "--abaikan-jendela hanya melewati syarat JAM, bukan sesi yang masih menulis"
             for f in (tmp / "1").rglob("*.pdf"):
                 os.utime(f, (f.stat().st_atime, f.stat().st_mtime - 300))   # 5 menit lalu
             assert ps.periksa_sesi(tmp / "1")[0] is True
         finally:
             ps.MASA_TENANG_S = lama
-    print("  sesi yang PDF-nya baru diubah (<2 menit) ditolak; --abaikan-jendela tidak melewatinya")
+    print("  sesi yang PDF-nya baru diubah (<2 menit) ditolak")
 
 
 def uji_cache_analisis_kedaluwarsa():

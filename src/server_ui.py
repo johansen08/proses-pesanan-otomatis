@@ -412,8 +412,7 @@ def _pdf_satuan_sesi(folder: Path) -> list[Path]:
 
 def data_pilah(hari_ini: date | None = None) -> dict:
     """Sesi HARI_UI hari terakhir yang punya PDF SATUAN: nomor, jam, jumlah picklist & label, dan
-    `layak` (+ `alasan` kalau tidak): semua jenis satuan boleh; sesi dengan satuan gabungan J&T + SPX harus diproses
-    07.00-12.00 / 20.00-07.00 yang boleh dipilah (pilah_satuan.periksa_sesi)."""
+    `layak` (+ `alasan` kalau tidak): semua jenis satuan dari jam berapa pun boleh dipilah (pilah_satuan.periksa_sesi)."""
     import pilah_satuan as pl
     hari_ini = hari_ini or date.today()
     per_tanggal: dict[str, list[dict]] = {}
@@ -479,12 +478,12 @@ def mulai_pilah(data: dict, mode: str) -> None:
         raise ValueError("lanjutan_dari harus label hasil pilah sebelumnya (mis. \"1-2\" atau \"1-2+3\")")
     ditolak = [f"Sesi {x}: {alasan}" for x in sesi
                for ok, alasan in [pl.periksa_sesi(folder / nama_sesi.folder_dari_kode(x))] if not ok]
-    if ditolak:   # sesi satuan gabungan hanya 07.00-12.00 / 20.00-07.00 (lihat pilah_satuan.periksa_sesi)
+    if ditolak:   # tanpa label satuan / sesi masih menulis (lihat pilah_satuan.periksa_sesi)
         raise ValueError("; ".join(ditolak))
     if lanjutan:   # pilah lanjutan: hasil lama harus ada, sesi tidak tumpang tindih, SISA lama belum dicetak
         pl.periksa_lanjutan(folder, lanjutan, sesi)
     elif mode == "buat" and not tanpa_pdf:   # hasil baru di atas PDF yang sudah dikurasi ke folder lain = resi dobel
-        bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi, jendela=True), "-".join(sesi))
+        bentrok = kurasi_satuan.bentrok(pl.cari_pdf_satuan(folder, sesi), "-".join(sesi))
         if bentrok:
             raise ValueError(pl.pesan_bentrok(bentrok))
     perintah = [sys.executable, str(ROOT / "src" / "pilah_satuan.py"), "--folder", str(folder),
