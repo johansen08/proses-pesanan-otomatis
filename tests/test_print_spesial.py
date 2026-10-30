@@ -653,6 +653,7 @@ def uji_semua_jenis_dan_paket_terjangkau_dari_menu():
     assert semua == (ps.PAKET["jnt"][1] + ps.PAKET["jnt-ndd"][1] + ps.PAKET["spx-hemat-pagi"][1]
                      + ps.PAKET["spx-hemat"][1] + ps.PAKET["spx-standard"][1])
     assert not {"spesial", "satuan", "kombinasi", "gtl-sicepat", "jnt-siang"} & set(semua)
+    assert ps.PAKET["event-urgent-siang"][1] == ["gtl-spesial", "gtl-sicepat", "jnt-siang-spesial", "satuan-jnt-siang", "jnt-siang"]
     print(f"  {len(ps.JENIS_LABEL)} jenis & {len(ps.PAKET)} paket semuanya terjangkau dari menu; "
           "SEMUA EVENT berurutan J&T -> J&T NDD -> Hemat Pagi -> Hemat -> Standard")
 

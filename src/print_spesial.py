@@ -237,6 +237,8 @@ _HEMAT = ["spesial-spx-hemat", "satuan-spx-hemat", "kombinasi-spx-hemat"]
 _HEMAT_PAGI = ["spesial-spx-hemat-pagi", "satuan-spx-hemat-pagi", "kombinasi-spx-hemat-pagi"]
 _STANDARD = ["spx-pagi", "spx-standard"]
 _PILAH = ["spesial-satuan", "sisa-satuan"]
+# Urgent GTL/SiCepat + J&T Resi Siang (langkah event yang bukan per kurir): spesial dulu, lalu satuan, lalu per lantai
+_E_URGENT_SIANG = ["gtl-spesial", "gtl-sicepat", "jnt-siang-spesial", "satuan-jnt-siang", "jnt-siang"]
 PAKET: dict[str, tuple[str, list[str]]] = {
     "pilah-satuan": ("Hasil pilah satuan (SPESIAL-SATUAN + SISA-SATUAN)", _PILAH),
     "jnt": ("Semua J&T (spesial + satuan + kombinasi)", _JNT),
@@ -245,6 +247,7 @@ PAKET: dict[str, tuple[str, list[str]]] = {
     "spx-hemat": ("Semua SPX Hemat (spesial + satuan + kombinasi)", _HEMAT),
     "spx-hemat-pagi": ("Semua SPX Hemat Pagi (spesial + satuan + kombinasi)", _HEMAT_PAGI),
     "spx-standard": ("SPX Standard (pagi + seharian)", _STANDARD),
+    "event-urgent-siang": ("Urgent GTL & SiCepat + J&T Resi Siang (spesial -> satuan -> per lantai)", _E_URGENT_SIANG),
     "event-semua": ("SEMUA EVENT berurutan: J&T -> J&T NDD -> SPX Hemat Pagi -> SPX Hemat -> SPX Standard",
                     _JNT + _JNT_NDD + _HEMAT_PAGI + _HEMAT + _STANDARD),
 }
@@ -273,7 +276,7 @@ MENU: list[tuple[str, list[tuple[str, list[str]]]]] = [
     ]),
     ("EVENT (J&T / J&T NDD / SPX Hemat / SPX Standard dipisah)", [
         _paket("event-semua"), _paket("jnt"), _paket("jnt-ndd"), _paket("spx-hemat-pagi"),
-        _paket("spx-hemat"), _paket("spx-standard"),
+        _paket("spx-hemat"), _paket("spx-standard"), _paket("event-urgent-siang"),
     ]),
     ("PER KURIR (harian, hasil TIPE 2 & 3)", [_paket("jnt"), _paket("spx")]),
     ("SATU JENIS (semua pilihan, satu per satu)",

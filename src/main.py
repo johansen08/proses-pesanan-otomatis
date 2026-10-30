@@ -726,13 +726,15 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
     # reguler tidak perlu menunggu PDF SKU spesial selesai. Urutan pembuatan (dan deteksi nomor
     # picklist terlompat) sama seperti sebelumnya.
     gelombang = proses_label.Gelombang()
+    dilepas: set[str] = set()       # pesanan SKU spesial yang tidak jadi picklist spesial -> kembali ke reguler
     hasil, hasil_reguler, lama_proses = [], [], 0.0
     mulai = time.monotonic()
     try:
         if resi_per_sku:
             log.info("MEMPROSES %d SKU spesial per rak sampai label PDF", len(resi_per_sku))
             hasil = proses_label.proses(k, resi_per_sku, FOLDER_LABEL_SESI, FILE_RIWAYAT,
-                                        rak_per_sku, args.kurir, batas, gelombang=gelombang)
+                                        rak_per_sku, args.kurir, batas, gelombang=gelombang,
+                                        dilepas=dilepas)
         else:
             log.info("Tidak ada SKU spesial untuk diproses")
 
@@ -743,7 +745,10 @@ def proses_label_sku(log: logging.Logger, token: str, df, tabel, ringkasan: dict
             # daftar SKU spesial belum lengkap utk pengecualian), atau --tanpa-reguler (SKU
             # spesial saja).
             resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values()
-                                  for no in daftar}
+                                  for no in daftar} - dilepas
+            if dilepas:
+                log.info("%d pesanan SKU spesial yang tidak jadi picklist spesial dikembalikan ke picklist "
+                         "reguler", len(dilepas))
             log.info("MEMPROSES picklist sisa reguler (TikTok Shop & Shopee, bukan SKU spesial)")
             hasil_reguler = proses_label.proses_reguler(
                 k, resi_spesial_semua, FILE_RIWAYAT, FOLDER_LABEL_SESI, kurir=args.kurir,

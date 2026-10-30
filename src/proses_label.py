@@ -735,7 +735,7 @@ def bagi_batch(ids: list[int], maks: int = MAKS_PESANAN_PICKLIST) -> list[list[i
 
 
 def _ambil_item_picklist(k: Klien, ids: list[int],
-                         cek=None) -> tuple[list[dict], list[int]]:
+                         cek=None, saring=None) -> tuple[list[dict], list[int]]:
     """Item yang akan dipicking untuk pesanan `ids` (items-to-pick) minus pesanan stok kosong
     (ditandai di Jubelio, dikeluarkan dari picklist). `cek`: fungsi validasi opsional yang
     menerima item mentah (sebelum stok kosong dipisahkan). Return (items, salesorder_id yang
@@ -743,6 +743,8 @@ def _ambil_item_picklist(k: Klien, ids: list[int],
     items = k.post("sales/picklists/items-to-pick/", {"ids": ids})
     if cek:
         cek(items)
+    if saring:      # buang pesanan bermasalah saja (lihat _saring_item()), sebelum cek stok kosong
+        items = saring(items)
     items, pesan_kosong = _pisahkan_stok_kosong(k, items)
     for p in pesan_kosong:
         log.warning("  Stok kosong (ditandai di Jubelio, dikeluarkan dari picklist): %s", p)
@@ -836,6 +838,21 @@ def _saring_jam_urgent(pesanan: list[dict], jam_cutoff: int | None,
     return pakai, ditahan
 
 
+def _rak_per_sku(k: Klien, skus: list[str]) -> dict[str, str]:
+    """SKU -> rak master (rack_no kartu item, lewat _item_variasi()), dicari paralel; SKU yang gagal/tanpa rak
+    tidak masuk hasil (diurutkan paling akhir). Urutan spesial = urutan rak seperti spesial Excel (No Rak),
+    supaya rute picker sama."""
+    def _satu(sku: str) -> tuple[str, str | None]:
+        try:
+            return sku, (_item_variasi(k, sku) or {}).get("rack_no")
+        except Exception:      # noqa: BLE001 - hanya untuk urutan, jangan menghentikan alur
+            return sku, None
+    if not skus:
+        return {}
+    with ThreadPoolExecutor(max_workers=min(MAKS_WORKER_PARALEL, len(skus))) as ex:
+        return {s: str(r) for s, r in ex.map(_satu, skus) if r}
+
+
 def _sku_item(x: dict) -> str:
     """SKU 1 item items-to-pick: item_code kalau ada, kalau tidak bagian sebelum " - " di
     item_full_name (format "<SKU> - <nama>", lihat _cek_item())."""
@@ -869,7 +886,9 @@ def pisah_spesial_per_sku(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list
         sku = _sku_item(xs[0])
         if sku and not sku.upper().startswith(awalan):
             per_sku.setdefault(sku, []).append(o)
-    spesial = {s: per_sku[s] for s in sorted(per_sku) if len(per_sku[s]) >= MIN_RESI}
+    layak = [s for s in per_sku if len(per_sku[s]) >= MIN_RESI]
+    rak = _rak_per_sku(k, layak)
+    spesial = {s: per_sku[s] for s in sorted(layak, key=lambda s: (rak.get(s) or "~", s))}   # urut rak, lalu SKU
     id_spesial = {o["salesorder_id"] for v in spesial.values() for o in v}
     return spesial, [o for o in pesanan if o["salesorder_id"] not in id_spesial]
 
@@ -1800,7 +1819,7 @@ def buat_picklist(k: Klien, sku: str, resi_spesial: set[str], kurir: str | None 
             raise Lewati(f"pesanan tersisa {len(pakai)} (< {MIN_RESI})")
         ids = [o["salesorder_id"] for o in pakai]
 
-        items, ids_pakai = _ambil_item_picklist(k, ids, cek=lambda it: _cek_item(sku, ids, it))
+        items, ids_pakai = _ambil_item_picklist(k, ids, saring=lambda it: _saring_item(sku, ids, it))
         hasil = _kirim_picklist(k, items, ids_pakai, coba, "filter ulang")
         if hasil:
             picklist_id, picklist_no, ids_diterima = hasil
@@ -1810,39 +1829,78 @@ def buat_picklist(k: Klien, sku: str, resi_spesial: set[str], kurir: str | None 
     raise ProsesError(f"Picklist tetap ditolak setelah {MAKS_COBA_PICKLIST} percobaan")
 
 
-def _cek_item(sku: str, ids: list[int], items: list[dict]) -> None:
-    """Validasi item hasil items-to-pick. SKU biasa = 1 item per pesanan.
-    SKU bundle (paket) meledak jadi >1 komponen per pesanan (bundle_item_id sama,
-    1 salesorder_detail_id); nama komponen tidak berhubungan dengan nama SKU jualan,
-    jadi dicek lewat bundle_item_id, bukan nama. SKU bundle hanya boleh diproses sebagai
-    spesial kalau namanya mengandung "PTAA" (lihat SKU_BUNDLE_DIIZINKAN) - bundle lain
-    (PTAE, PTAD, BKAG, dst) dilewati (Lewati) supaya SKU itu sama sekali tidak jadi
-    picklist spesial."""
+def _alasan_pesanan_tidak_valid(sku: str, so_id: int, xs: list[dict]) -> str | None:
+    """Alasan 1 pesanan (item-itemnya `xs` dari items-to-pick) TIDAK boleh masuk picklist spesial `sku`,
+    None kalau boleh. SKU biasa = 1 item per pesanan. SKU bundle (paket) meledak jadi >1 komponen per
+    pesanan (bundle_item_id sama, 1 salesorder_detail_id); nama komponen tidak berhubungan dengan nama SKU
+    jualan, jadi dicek lewat bundle_item_id, bukan nama. SKU bundle hanya boleh jadi spesial kalau namanya
+    mengandung "PTAA" (lihat SKU_BUNDLE_DIIZINKAN) - bundle lain (PTAE, PTAD, BKAG, dst) tidak."""
+    if len({x["salesorder_detail_id"] for x in xs}) != 1:
+        return f"pesanan {so_id} berisi lebih dari 1 baris pesanan untuk {sku}"
+    bundle_ids = {x.get("bundle_item_id") or 0 for x in xs}
+    if len(bundle_ids) != 1:
+        return f"pesanan {so_id}: item campur bundle dan non-bundle"
+    if next(iter(bundle_ids)) == 0:
+        if len(xs) != 1 or not str(xs[0].get("item_full_name", "")).startswith(f"{sku} - "):
+            return f"ada item lain: {xs[0].get('item_full_name')}"
+    elif SKU_BUNDLE_DIIZINKAN not in sku.lower():
+        return f"SKU {sku} bundle tapi bukan {SKU_BUNDLE_DIIZINKAN.upper()}, tidak diproses sebagai spesial"
+    for x in xs:
+        if _angka(x["qty_ordered"]) != 1:
+            return f"qty item {x['qty_ordered']} pada {x.get('salesorder_no')}"
+    return None
+
+
+def _per_pesanan(items: list[dict]) -> dict[int, list[dict]]:
     per_so: dict[int, list[dict]] = {}
     for x in items:
         per_so.setdefault(x["salesorder_id"], []).append(x)
+    return per_so
+
+
+def _cek_item(sku: str, ids: list[int], items: list[dict]) -> None:
+    """Validasi KETAT hasil items-to-pick: pesanan mana pun yang bermasalah melempar Lewati (seluruh SKU
+    dilewati). Dipakai tes & alur lama; buat_picklist() memakai _saring_item() yang hanya menggugurkan
+    pesanan bermasalah. Aturan per pesanan: lihat _alasan_pesanan_tidak_valid()."""
+    per_so = _per_pesanan(items)
     if sorted(per_so) != sorted(ids):
         raise Lewati("item dari Jubelio tidak cocok dengan pesanan")
-
     for so_id, xs in per_so.items():
-        if len({x["salesorder_detail_id"] for x in xs}) != 1:
-            raise Lewati(f"pesanan {so_id} berisi lebih dari 1 baris pesanan untuk {sku}")
-        bundle_ids = {x.get("bundle_item_id") or 0 for x in xs}
-        if len(bundle_ids) != 1:
-            raise Lewati(f"pesanan {so_id}: item campur bundle dan non-bundle")
-        if next(iter(bundle_ids)) == 0:
-            if len(xs) != 1 or not str(xs[0].get("item_full_name", "")).startswith(f"{sku} - "):
-                raise Lewati(f"ada item lain: {xs[0].get('item_full_name')}")
-        elif SKU_BUNDLE_DIIZINKAN not in sku.lower():
-            raise Lewati(f"SKU {sku} bundle tapi bukan {SKU_BUNDLE_DIIZINKAN.upper()}, "
-                        "tidak diproses sebagai spesial")
-        for x in xs:
-            if _angka(x["qty_ordered"]) != 1:
-                raise Lewati(f"qty item {x['qty_ordered']} pada {x.get('salesorder_no')}")
-
+        if (alasan := _alasan_pesanan_tidak_valid(sku, so_id, xs)):
+            raise Lewati(alasan)
     lokasi = {x["location_id"] for x in items}
     if len(lokasi) != 1:
         raise Lewati(f"pesanan berasal dari {len(lokasi)} lokasi berbeda")
+
+
+def _saring_item(sku: str, ids: list[int], items: list[dict]) -> list[dict]:
+    """Seperti _cek_item() tapi TIDAK menggugurkan seluruh SKU karena 1-2 pesanan janggal: pesanan yang
+    item-nya tidak cocok (item lain, qty bukan 1, bundle bukan PTAA, hilang dari items-to-pick, atau lokasi
+    di luar lokasi terbanyak) dikeluarkan dan dicatat di log; yang lolos tetap dibuatkan picklist selama
+    masih >= MIN_RESI (Lewati kalau kurang). Pesanan yang dikeluarkan TIDAK hilang: proses() melaporkannya
+    lewat `dilepas` supaya main.py mengembalikannya ke picklist reguler."""
+    per_so = _per_pesanan(items)
+    buang: list[str] = [f"pesanan {so} tidak ada di items-to-pick" for so in ids if so not in per_so]
+    lolos: dict[int, list[dict]] = {}
+    for so_id, xs in per_so.items():
+        alasan = _alasan_pesanan_tidak_valid(sku, so_id, xs)
+        (buang.append(alasan) if alasan else lolos.__setitem__(so_id, xs))
+    lokasi: dict = {}
+    for xs in lolos.values():
+        for lok in {x["location_id"] for x in xs}:
+            lokasi[lok] = lokasi.get(lok, 0) + 1
+    if len(lokasi) > 1:
+        utama = max(lokasi, key=lambda lok: (lokasi[lok], str(lok)))
+        for so_id in [s for s, xs in lolos.items() if {x["location_id"] for x in xs} != {utama}]:
+            buang.append(f"pesanan {so_id} di lokasi {sorted({x['location_id'] for x in lolos[so_id]})}, "
+                         f"bukan lokasi utama {utama}")
+            del lolos[so_id]
+    if buang:
+        log.warning("  %d pesanan %s dikeluarkan dari picklist spesial (kembali ke reguler): %s",
+                    len(buang), sku, "; ".join(buang[:5]) + (" ..." if len(buang) > 5 else ""))
+    if len(lolos) < MIN_RESI:
+        raise Lewati((buang[0] if buang else "pesanan valid") + f" (valid tersisa {len(lolos)} < {MIN_RESI})")
+    return [x for xs in lolos.values() for x in xs]
 
 
 def _pisahkan_stok_kosong(k: Klien, items: list[dict]) -> tuple[list[dict], list[str]]:
@@ -2325,6 +2383,16 @@ def perintah_lanjut(picklist_no: str, folder_label: Path, nama: str,
     return " ".join(bagian)
 
 
+def _log_fase(picklist_no: str, t: dict[str, float]) -> None:
+    """Satu baris log durasi per fase langkah 3-6 satu picklist: "picking" (selesaikan picking + tunggu
+    Picking > Selesai), "resi" (minta resi sampai terisi), "pdf" (unduh label). Dasar optimasi berikutnya -
+    cari tahu fase mana yang paling lama sebelum menebak."""
+    urut = [("picking", "mulai"), ("resi", "picking"), ("pdf", "resi")]
+    bagian = [f"{fase} {durasi(t[fase] - t[sebelum])}" for fase, sebelum in urut if fase in t and sebelum in t]
+    if bagian:
+        log.info("  Durasi fase %s: %s", picklist_no, " | ".join(bagian))
+
+
 def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int,
                        sku: str, folder_label: Path, nama_file: str | None = None,
                        tag: str | None = None, subfolder: str | None = None) -> dict:
@@ -2343,11 +2411,13 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     resinya benar-benar keluar dicatat juga ke catat_detail_spesial() - NAMA_DETAIL_SPESIAL
     kalau jumlahnya masih >= MIN_RESI, NAMA_DETAIL_BUKAN_SPESIAL kalau kurang (sebagian resi
     di picklist ini batal/tidak keluar saat proses, jadi SKU-nya gugur jadi tidak spesial)."""
+    t_fase = {"mulai": time.monotonic()}      # durasi per fase, dicatat di log (lihat _log_fase())
     log.info("  [3] Selesaikan picking %s", picklist_no)
     selesaikan_picking(k, picklist_id)
 
     log.info("  [4] Cari pesanan %s di Picking > Selesai", picklist_no)
     pesanan = pesanan_selesai_pick(k, picklist_no, jumlah)
+    t_fase["picking"] = time.monotonic()
     if not pesanan:
         raise ProsesError(f"Tidak ada pesanan {picklist_no} di Picking > Selesai "
                           "(mungkin label sudah dicetak)")
@@ -2358,6 +2428,7 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
     log.info("  [5] Siap dikirim: minta resi untuk %d pesanan", len(ids))
     info_slot_pickup(k, pesanan)
     rows = minta_resi(k, ids)
+    t_fase["resi"] = time.monotonic()
     baris_ada_resi = [r for r in rows if _ada_resi(r)]
     ada_resi = [r["salesorder_id"] for r in baris_ada_resi]
     batal = [str(r.get("salesorder_no")) for r in rows if not _ada_resi(r) and _batal(r)]
@@ -2381,6 +2452,8 @@ def lanjutkan_picklist(k: Klien, picklist_id: int, picklist_no: str, jumlah: int
         sumber = {o.get("source") for o in pesanan if o["salesorder_id"] in set(ada_resi)}
         file_label = str(unduh_label(k, ada_resi, tujuan, lazada=sumber == {CHANNEL_ID_LAZADA}))
         log.info("  Label: %s", file_label)
+    t_fase["pdf"] = time.monotonic()
+    _log_fase(picklist_no, t_fase)
 
     if tag and tag.endswith(TAG_SPESIAL) and baris_ada_resi:
         nama_detail = nama_detail_per_kurir(
@@ -2429,8 +2502,11 @@ def rencana(k: Klien, resi_per_sku: dict[str, list[str]],
 def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
            file_riwayat: Path, rak_per_sku: dict[str, str] | None = None,
            kurir: str | None = None, batas: datetime | None = None,
-           gelombang: Gelombang | None = None) -> list[dict]:
+           gelombang: Gelombang | None = None, dilepas: set[str] | None = None) -> list[dict]:
     """Proses SKU sesuai urutan resi_per_sku (urut rak). Tiap hasil berisi Rak, Durasi & detik.
+    `dilepas` (set dari pemanggil, diisi in-place SINKRON sebelum return): nomor pesanan SKU spesial yang
+    TIDAK masuk picklist spesial (SKU dilewati/gagal dibuat, atau pesanannya dikeluarkan _saring_item()) -
+    main.py mengeluarkannya dari `resi_spesial_semua` supaya diproses picklist reguler, bukan hilang.
     `kurir`, `batas`: lihat cari_pesanan(). Picklist (langkah 1-2) dibuat berurutan untuk tiap SKU
     (perlu urutan pasti demi peringatan_picklist.ambil_nomor_hilang()), tapi langkah 3-6
     (tunggu picking, minta resi, unduh PDF - lihat lanjutkan_picklist()) untuk SKU yang
@@ -2453,19 +2529,26 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
         idx = len(hasil) - 1
         try:
             log.info("  [1-2] Filter pesanan & buat picklist")
-            pid, pno, ids, _ = buat_picklist(k, sku, set(resi), kurir, batas)
+            pid, pno, ids, pesanan_dipakai = buat_picklist(k, sku, set(resi), kurir, batas)
+            log.info("  Durasi fase buat picklist %s: %s", pno, durasi(time.monotonic() - mulai))
         except Lewati as e:
             log.info("  Dilewati: %s", e)
+            if dilepas is not None:
+                dilepas.update(resi)
             detik = time.monotonic() - mulai
             hasil[idx] = {"SKU": sku, "Catatan": f"Dilewati: {e}", "Rak": rak,
                          "detik": detik, "Durasi": durasi(detik)}
         except Exception as e:     # noqa: BLE001 - satu SKU gagal, SKU lain tetap jalan
             log.exception("  GAGAL %s: %s", sku, e)
+            if dilepas is not None:      # aman: pesanan yang ternyata sudah ber-picklist tidak lagi Siap Proses
+                dilepas.update(resi)
             detik = time.monotonic() - mulai
             hasil[idx] = {"SKU": sku, "Catatan": f"GAGAL sebelum picklist dibuat: {e}", "Rak": rak,
                          "detik": detik, "Durasi": durasi(detik)}
         else:
             nomor_terlompat = peringatan_picklist.ambil_nomor_hilang()
+            if dilepas is not None:
+                dilepas.update(set(resi) - {o["salesorder_no"] for o in pesanan_dipakai})
             peringatan_gagal.catat_dibuat(pno, sku, folder_label, tag=_tag_spesial(kurir))
             log.info("  Picklist %s dibuat, %d pesanan - lanjut diproses paralel", pno, len(ids))
             tugas.append((idx, mulai, pid, pno, len(ids), sku, nomor_terlompat))

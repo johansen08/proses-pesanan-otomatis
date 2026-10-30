@@ -2562,6 +2562,124 @@ def uji_gelombang_bersama_reguler_dibuat_selagi_spesial_menunggu():
           "menunggu; pencatatan baru saat tunggu(); tunggu() ganda aman")
 
 
+def uji_saring_item_hanya_gugurkan_pesanan_bermasalah_bukan_seluruh_sku():
+    def item(so, nama="SKU-A - Baju", qty="1.0000", lokasi=-1, bundle=0, detail=None):
+        return {"salesorder_id": so, "salesorder_detail_id": detail or 9000 + so, "item_full_name": nama,
+                "qty_ordered": qty, "location_id": lokasi, "bundle_item_id": bundle, "salesorder_no": f"SO{so}"}
+
+    # 5 pesanan: 1-3 bersih, 4 qty 2, 5 berisi item lain -> 3 lolos (= MIN_RESI)
+    items = [item(1), item(2), item(3), item(4, qty="2.0000"), item(5, nama="LAIN - Topi")]
+    lolos = pl._saring_item("SKU-A", [1, 2, 3, 4, 5], items)
+    assert sorted({x["salesorder_id"] for x in lolos}) == [1, 2, 3], lolos
+    # versi KETAT lama tetap menolak seluruh SKU (dipakai tes/alur lama)
+    try:
+        pl._cek_item("SKU-A", [1, 2, 3, 4, 5], items)
+        assert False, "_cek_item harus melempar Lewati"
+    except pl.Lewati:
+        pass
+    # kurang dari MIN_RESI setelah penyaringan -> Lewati (SKU gugur, pesanannya dilepas ke reguler oleh proses())
+    try:
+        pl._saring_item("SKU-A", [1, 2, 4], [item(1), item(2), item(4, qty="2.0000")])
+        assert False, "harus Lewati: valid tersisa 2"
+    except pl.Lewati as e:
+        assert "2 < 3" in str(e), e
+    # pesanan hilang dari items-to-pick (mis. batal) tidak menggugurkan SKU kalau sisanya cukup
+    assert len(pl._saring_item("SKU-A", [1, 2, 3, 99], [item(1), item(2), item(3)])) == 3
+    # lokasi: yang di luar lokasi terbanyak dikeluarkan
+    items = [item(1, lokasi=7), item(2, lokasi=7), item(3, lokasi=7), item(4, lokasi=8)]
+    assert sorted({x["salesorder_id"] for x in pl._saring_item("SKU-A", [1, 2, 3, 4], items)}) == [1, 2, 3]
+    # bundle bukan PTAA: semua pesanan gugur -> Lewati
+    try:
+        pl._saring_item("T01-PTAE-2", [1, 2, 3], [item(s, nama="komponen", bundle=5, detail=1) for s in (1, 2, 3)])
+        assert False
+    except pl.Lewati:
+        pass
+    print("  _saring_item: pesanan janggal (qty 2, item lain, hilang, lokasi lain) dikeluarkan, SKU tetap jadi selama >= 3; "
+          "_cek_item ketat tetap melempar Lewati")
+
+
+def uji_proses_melaporkan_pesanan_spesial_yang_dilepas_ke_reguler():
+    asli = (pl.buat_picklist, pl.lanjutkan_picklist, pl.catat_riwayat, pl.rekap_master_excel.catat,
+            pl.peringatan_picklist.ambil_nomor_hilang, pl.peringatan_gagal.catat_dibuat)
+
+    def buat(k, sku, resi, kurir=None, batas=None):
+        if sku == "B":
+            raise pl.Lewati("pesanan tersisa 2 (< 3)")
+        if sku == "C":
+            raise RuntimeError("API mati")
+        dipakai = [{"salesorder_id": i, "salesorder_no": no} for i, no in enumerate(("a1", "a2", "a3"), 1)]
+        return 1, "PICK-1", [1, 2, 3], dipakai          # a4 tidak ikut (dikeluarkan _saring_item)
+
+    pl.buat_picklist = buat
+    pl.lanjutkan_picklist = lambda k, pid, pno, jumlah, sku, folder, **kw: {
+        "Waktu": "x", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah, "Resi Keluar": jumlah,
+        "File Label": "", "Catatan": ""}
+    pl.catat_riwayat = lambda f, b: None
+    pl.rekap_master_excel.catat = lambda *a, **kw: None
+    pl.peringatan_picklist.ambil_nomor_hilang = lambda: []
+    pl.peringatan_gagal.catat_dibuat = lambda *a, **kw: None
+    try:
+        dilepas = set()
+        hasil = pl.proses(None, {"A": ["a1", "a2", "a3", "a4"], "B": ["b1", "b2", "b3"], "C": ["c1", "c2", "c3"]},
+                          Path("sesi"), Path("r.xlsx"), dilepas=dilepas)
+        assert dilepas == {"a4", "b1", "b2", "b3", "c1", "c2", "c3"}, dilepas
+        assert [h["SKU"] for h in hasil] == ["A", "B", "C"]
+        # tanpa `dilepas` perilaku lama (tidak error)
+        pl.proses(None, {"B": ["b1", "b2", "b3"]}, Path("sesi"), Path("r.xlsx"))
+    finally:
+        (pl.buat_picklist, pl.lanjutkan_picklist, pl.catat_riwayat, pl.rekap_master_excel.catat,
+         pl.peringatan_picklist.ambil_nomor_hilang, pl.peringatan_gagal.catat_dibuat) = asli
+    print("  proses(dilepas=): SKU dilewati/gagal + pesanan yang dikeluarkan dilaporkan supaya kembali ke reguler")
+
+
+def uji_spesial_berbasis_items_to_pick_diurutkan_menurut_rak():
+    class KlienPalsu:
+        def __init__(self):
+            self.rak = {"SKU-A": "3A-01", "SKU-B": "1B-02", "SKU-C": None, "SKU-D": "2A-05"}
+
+        def post(self, path, body):
+            assert path.endswith("items-to-pick/")
+            return [{"salesorder_id": i, "salesorder_detail_id": 1, "item_id": 1, "location_id": -1,
+                     "qty_ordered": "1.0000", "bundle_item_id": 0,
+                     "item_full_name": f"{'ABCD'[(i - 1) // 3]} - x".replace("A -", "SKU-A -").replace("B -", "SKU-B -")
+                     .replace("C -", "SKU-C -").replace("D -", "SKU-D -"), "salesorder_no": f"SO{i}"}
+                    for i in body["ids"]]
+
+        def get(self, path, params=None):
+            assert path.startswith("variations/v2")
+            kode = params["q"]
+            return {"data": [{"item_code": kode, "rack_no": self.rak[kode]}]}
+
+    pesanan = [{"salesorder_id": i, "salesorder_no": f"SO{i}", "total_qty": "1.0000", "grand_total": "100"}
+               for i in range(1, 13)]                      # 4 SKU x 3 pesanan
+    spesial, sisa = pl.pisah_spesial_per_sku(KlienPalsu(), pesanan)
+    assert list(spesial) == ["SKU-B", "SKU-D", "SKU-A", "SKU-C"], list(spesial)   # 1B, 2A, 3A, tanpa rak di akhir
+    assert sisa == []
+    print("  spesial berbasis items-to-pick diurutkan menurut rak master (1B, 2A, 3A), SKU tanpa rak di akhir")
+
+
+def uji_log_durasi_per_fase_picklist():
+    import logging
+
+    class Tangkap(logging.Handler):
+        def __init__(self):
+            super().__init__()
+            self.baris = []
+
+        def emit(self, record):
+            self.baris.append(record.getMessage())
+    h = Tangkap()
+    pl.log.addHandler(h)
+    pl.log.setLevel(logging.INFO)
+    try:
+        pl._log_fase("PICK-1", {"mulai": 100.0, "picking": 112.0, "resi": 172.0, "pdf": 197.0})
+        pl._log_fase("PICK-2", {"mulai": 100.0})      # fase belum ada -> tidak ada baris
+    finally:
+        pl.log.removeHandler(h)
+    assert h.baris == ["  Durasi fase PICK-1: picking 12 detik | resi 1 menit 0 detik | pdf 25 detik"], h.baris
+    print("  _log_fase: durasi picking | resi | pdf per picklist tercatat di log")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 def uji_jnt_ndd_event_dipisah_dari_jnt_lain():
