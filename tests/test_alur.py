@@ -221,6 +221,8 @@ def uji_menu_tiap_tipe_menjalankan_tepat_langkah_alur_sekali():
             assert all(env["LABEL_SESI_DIR"] == "2026-10-12/3" and float(env["WAKTU_MENU_MULAI"]) > 0
                        for _, env in papan.panggilan)
             assert "--jalankan" in harapan[0] and all("--jalankan" in h for h in papan.flag_main())
+            # satu snapshot Siap Proses per TIPE: path sama di semua langkah
+            assert len({env["SNAPSHOT_SIAP_PROSES"] for _, env in papan.panggilan}) == 1
     print("  menu harian & event: tiap pilihan menjalankan tepat langkah preset-nya, berurutan, sekali, "
           "lalu rekap; LABEL_SESI_DIR & WAKTU_MENU_MULAI terisi")
 

@@ -364,7 +364,7 @@ def uji_shopee_pagi_dan_jnt_siang_disimpan_di_subfolder_sendiri():
     asli = (pl.ambil_pesanan_shopee_pagi, pl.ambil_pesanan_jnt_siang,
             pl._kelompok_kombinasi_per_lantai, pl._proses_subkelompok)
     pl.ambil_pesanan_shopee_pagi = lambda k: []
-    pl.ambil_pesanan_jnt_siang = lambda k: []
+    pl.ambil_pesanan_jnt_siang = lambda k, **kw: []
     pl._kelompok_kombinasi_per_lantai = lambda *a, **kw: {}
 
     def stub(k, nama, label, sub, riwayat, folder, **kw):
@@ -1664,7 +1664,7 @@ def uji_jnt_siang_tiga_langkah_spesial_satuan_lalu_per_lantai():
         panggilan.append((pno, jumlah, sku, subfolder))
         return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
                 "Resi Keluar": jumlah, "File Label": "", "Catatan": ""}
-    pl.ambil_pesanan_jnt_siang = lambda k: asli_ambil(k, sekarang=sekarang)
+    pl.ambil_pesanan_jnt_siang = lambda k, **kw: asli_ambil(k, sekarang=sekarang, **kw)
     pl.lanjutkan_picklist = stub
     try:
         with tempfile.TemporaryDirectory() as d:
@@ -1694,6 +1694,39 @@ def uji_jnt_siang_tiga_langkah_spesial_satuan_lalu_per_lantai():
     assert pl.detail_spesial_terpisah("JNTSIANG-1QTY-REGULER-2A", "PICK-1", [{"salesorder_no": "SO1"}]) is None
     print("  J&T Resi Siang: spesial (JNT-SIANG-SPESIAL) -> satuan per rak (JNTSIANG_SATUAN, label JNTSIANG-1QTY-REGULER-<rak>) "
           "-> sisa per lantai (JNT_SIANG); detail-resi-spesial-jnt-siang.xlsx di folder spesial")
+
+
+def uji_jnt_siang_mode_event_membuang_ndd_harian_tetap_menyertakan():
+    import datetime as dt
+
+    class JubelioPalsuNdd(JubelioPalsuJntSiang):
+        def __init__(self):
+            super().__init__()
+            shipper = ["J&T Express Standard", "J&T EXPRESS NEXT-DAY DELIVERY", "J&T Express Hemat"]
+            for o, s in zip(self.pesanan[:3], shipper):
+                o["shipper"] = s
+
+    k = pl.Klien("TKN", sesi=JubelioPalsuNdd(), tidur=lambda s: None)
+    sekarang = dt.datetime(2026, 9, 29, 16, 0, 0, tzinfo=pl.WIB)
+    assert {o["salesorder_id"] for o in pl.ambil_pesanan_jnt_siang(k, sekarang=sekarang)} == {1, 2, 3}
+    event = pl.ambil_pesanan_jnt_siang(k, sekarang=sekarang, event=True)
+    assert {o["salesorder_id"] for o in event} == {1, 3}, event
+    print("  J&T Resi Siang: mode event membuang J&T NEXT-DAY DELIVERY (punya langkah sendiri), harian tetap menyertakan")
+
+
+def uji_jumlah_siap_proses_satu_request_ringan():
+    class KlienPalsu:
+        def get(self, path, params=None):
+            assert path.endswith("ready-to-process/") and params["page_size"] == 1 and params["page"] == 1
+            assert params["couriers[0]"] == "spx hemat" and "order_type[0]" in params
+            return {"totalCount": "7", "data": [{"salesorder_id": 1}]}
+    assert pl.jumlah_siap_proses(KlienPalsu(), "spx-hemat") == 7
+
+    class KlienRusak:
+        def get(self, path, params=None):
+            raise RuntimeError("504")
+    assert pl.jumlah_siap_proses(KlienRusak(), "jnt") is None
+    print("  jumlah_siap_proses: 1 request page_size 1 -> totalCount; gagal -> None (langkah tidak dilewati)")
 
 
 def uji_jnt_siang_filter_channel_kurir_dan_jam_cutoff():

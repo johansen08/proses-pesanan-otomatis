@@ -24,6 +24,7 @@ from pathlib import Path
 
 import alur
 import coba_ulang
+import snapshot_siap_proses
 
 SRC = Path(__file__).resolve().parent
 ROOT = SRC.parent
@@ -50,7 +51,8 @@ def jalankan_tipe(judul: str, uji: bool, sesi: str, jalankan=_jalankan_proses,
     langkah = alur.langkah_urut(judul, alur.PRESET[judul])
     awal = sekarang()
     # WAKTU_MENU_MULAI: dibaca main.py untuk --non-wajib-sore (TIPE 1), sama dengan jalankan_harian.py
-    env = {**os.environ, "LABEL_SESI_DIR": sesi, "WAKTU_MENU_MULAI": str(awal)}
+    env = {**os.environ, "LABEL_SESI_DIR": sesi, "WAKTU_MENU_MULAI": str(awal),
+           snapshot_siap_proses.ENV: snapshot_siap_proses.jalur_baru(awal)}
     waktu = []
     cetak("")
     for i, nama in enumerate(langkah, 1):

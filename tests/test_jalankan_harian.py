@@ -104,6 +104,7 @@ def uji_urutan_katalog_flag_jalankan_dan_lewati_malam():
         ["--label", "--tanpa-reguler", "--jalankan", "--non-wajib-sore"],      # TIPE 1 -> tulisan non wajib (sore)
         ["--upload-iresis", "--jalankan"]], palsu.flag_main()
     assert all(env["LABEL_SESI_DIR"] == "2026-10-08/7" for _, env in palsu.panggilan)
+    assert len({env["SNAPSHOT_SIAP_PROSES"] for _, env in palsu.panggilan}) == 1      # 1 snapshot per job
     rekap = palsu.panggilan[-1][0]
     assert Path(rekap[1]).name == "rekap_waktu.py" and rekap[2] == "TIPE 1", rekap
     assert len(rekap) == 3 + 4 and rekap[3].startswith("RECHECK STOK:"), rekap

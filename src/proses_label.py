@@ -160,7 +160,6 @@ TAG_SPESIAL = "SPESIAL"
 # reguler (kombinasi) tanpa harus baca nama file satu-satu.
 SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada, GTL-SiCepat & JNE-LEX (semua skenario)
 SUBFOLDER_SPX_PAGI_SPESIAL = "SPX-PAGI-SPESIAL"   # Alur 4: SKU spesial Shopee Pagi (SPX <= 12.00), dipisah dari SPX_PAGI
-SUBFOLDER_SPX_PAGI_SPESIAL = "SPX-PAGI-SPESIAL"   # Alur 4: SKU spesial Shopee Pagi (SPX <= 12.00), dipisah dari SPX_PAGI
 SUBFOLDER_GTL_SPESIAL = "GTL_SICEPAT_SPESIAL"   # Alur 2: SKU spesial GTL-SiCepat (dipisah dari URGENT supaya mudah dicetak bulk)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
 SUBFOLDER_KOMBINASI = "KOMBINASI"      # Alur 3 bagian "kombinasi" (qty > 1 / multi-baris)
@@ -594,6 +593,23 @@ def cari_pesanan(k: Klien, sku: str, kurir: str | None = None,
         if not data or len(hasil) >= int(j.get("totalCount") or 0):
             return saring_sampai_batas(_buang_kurir_kecuali(hasil, kurir), batas)
         page += 1
+
+
+def jumlah_siap_proses(k: Klien, kurir: str | None = None) -> int | None:
+    """Jumlah pesanan Siap Proses untuk `kurir` (None = J&T + SPX digabung) lewat SATU request ringan
+    (page_size 1, hanya totalCount), semua channel - jadi BATAS ATAS untuk langkah reguler/spesial (yang
+    juga dibatasi channel/jam, dan "jnt-event" masih memuat NDD). Dipakai pra-cek main.pracek_lewati()
+    untuk melewati langkah yang pasti kosong tanpa mengunduh Excel. None = gagal/tak diketahui (jangan
+    dilewati)."""
+    params = {"q": "", "page": 1, "page_size": 1, "is_total_qty": 0, "sku_filter": "false",
+              "sort_by": "transaction_date", "sort_direction": "ASC"}
+    params.update({f"couriers[{i}]": c for i, c in enumerate(_filter_kurir(kurir, KURIR_FILTER))})
+    params.update({f"order_type[{i}]": t for i, t in enumerate(TIPE_PESANAN_FILTER)})
+    try:
+        return int(k.get("wms/sales/v2/orders/ready-to-process/", params).get("totalCount") or 0)
+    except Exception as e:      # noqa: BLE001 - pra-cek hanya optimasi, jangan menghentikan langkah
+        log.warning("  Pra-cek jumlah pesanan gagal (%s) - langkah dilanjutkan tanpa pra-cek", e)
+        return None
 
 
 def saring(pesanan: list[dict], resi_spesial: set[str],
@@ -1641,13 +1657,16 @@ def proses_shopee_pagi(k: Klien, file_riwayat: Path, folder_label: Path,
 
 # ==================================================== 1e. picklist J&T Resi Siang
 def ambil_pesanan_jnt_siang(k: Klien, jam: int = JAM_CUTOFF_JNT_SIANG,
-                            sekarang: datetime | None = None) -> list[dict]:
+                            sekarang: datetime | None = None, event: bool = False) -> list[dict]:
     """Semua pesanan Siap Proses channel TikTok Shop, kurir J&T saja, dengan jam pesan
     (WIB) maksimal `jam` HARI INI. Dipakai untuk picklist yang dijalankan manual 1x sehari
     jam 15:00 (resi TikTok Shop wajib keluar lewat J&T yang masuk sebelum jam 15:00 harus
     sudah masuk picklist ini). `sekarang`: dipakai tes, default waktu sungguhan (WIB) saat
-    dipanggil."""
+    dipanggil. `event`: mode event (--event) - J&T NEXT-DAY DELIVERY (NDD) dibuang (punya langkah
+    sendiri sepanjang hari, lihat KURIR_KECUALI_SHIPPER["jnt-event"]); harian tetap menyertakan NDD."""
     pesanan = ambil_pesanan_channel(k, CHANNEL_IDS_TIKTOK_TOKOPEDIA, couriers=["j&t"])
+    if event:
+        pesanan = _buang_kurir_kecuali(pesanan, "jnt-event")
     return saring_sampai_batas(pesanan, batas_jam_hari_ini(jam, sekarang))
 
 
@@ -1668,10 +1687,10 @@ def _subkelompok_jnt_siang(k: Klien, pesanan: list[dict], bagian: str | None) ->
                                          couriers=["j&t"])
 
 
-def rencana_jnt_siang(k: Klien, bagian: str | None = None) -> None:
+def rencana_jnt_siang(k: Klien, bagian: str | None = None, event: bool = False) -> None:
     """Mode uji picklist J&T Resi Siang: hanya membaca data, tidak mengubah apa pun di
-    Jubelio. `bagian`: lihat _subkelompok_jnt_siang()."""
-    pesanan = ambil_pesanan_jnt_siang(k)
+    Jubelio. `bagian`: lihat _subkelompok_jnt_siang(). `event`: lihat ambil_pesanan_jnt_siang()."""
+    pesanan = ambil_pesanan_jnt_siang(k, event=event)
     log.info("[UJI] J&T Resi Siang (s.d. jam %02d:00 WIB) pesanan siap proses %3d, %s",
              JAM_CUTOFF_JNT_SIANG, len(pesanan),
              {BAGIAN_SPESIAL: "hanya SKU spesial", BAGIAN_SATUAN: "hanya satuan per grup rak"}.get(
@@ -1680,7 +1699,7 @@ def rencana_jnt_siang(k: Klien, bagian: str | None = None) -> None:
 
 
 def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path,
-                     bagian: str | None = None) -> list[dict]:
+                     bagian: str | None = None, event: bool = False) -> list[dict]:
     """Picklist J&T Resi Siang: semua pesanan channel TikTok Shop, kurir J&T, yang jam
     pesannya (WIB) maksimal jam 15 siang hari ini. Tiga langkah TERPISAH, berurutan (alur.py):
     1) `bagian`="spesial": SKU >= MIN_RESI pesanan -> picklist "JNT-SIANG-SPESIAL-<SKU>" di subfolder
@@ -1691,8 +1710,8 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path,
     lihat _kelompok_kombinasi_per_lantai()/_proses_subkelompok()), label "JNT-SIANG-LANTAI1" dst di
     SUBFOLDER_JNT_SIANG; masing-masing dipecah lagi kalau > MAKS_PESANAN_PICKLIST. Dipanggil MANUAL 1x
     sehari (mis. jam 15:00), bukan bagian alur otomatis --label --jalankan. Kegagalan 1 sub-kelompok
-    tidak menghentikan yang lain."""
-    pesanan = ambil_pesanan_jnt_siang(k)
+    tidak menghentikan yang lain. `event`: mode event, tanpa NDD (lihat ambil_pesanan_jnt_siang())."""
+    pesanan = ambil_pesanan_jnt_siang(k, event=event)
     subkelompok = _subkelompok_jnt_siang(k, pesanan, bagian)
     if bagian == BAGIAN_SATUAN:
         return _proses_subkelompok(k, "J&T Resi Siang Satuan", LABEL_JNT_SIANG_SATUAN, subkelompok,

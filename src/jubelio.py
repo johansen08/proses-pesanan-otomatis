@@ -213,7 +213,7 @@ def _angka(v) -> float:
     return float(v) if v not in (None, "") else 0.0
 
 
-def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
+def ambil_nilai_pesanan(token: str, dicari: set[str], semua_halaman: bool = True) -> dict[str, float]:
     """Ambil grand_total per No pesanan dari daftar 'Siap Proses'.
 
     Semua halaman diambil dulu; No pesanan di `dicari` yang belum ketemu
@@ -221,11 +221,13 @@ def ambil_nilai_pesanan(token: str, dicari: set[str]) -> dict[str, float]:
     ketemu di API (bukan field grand_total-nya yang kosong, tapi pesanannya
     sendiri tidak ada di hasil) tidak masuk dict ini - lihat sku_spesial.hitung_sku_spesial
     yang mengeluarkannya lewat nilai.notna().
+    `semua_halaman` False: lewati paging penuh, hanya cari `dicari` satu per satu (dipakai kalau sebagian
+    besar nilai sudah ada di snapshot - lihat snapshot_siap_proses).
     """
     nilai: dict[str, float] = {}
     sesi = _sesi()
     page, total = 1, None
-    while page <= MAKS_HALAMAN:
+    while semua_halaman and page <= MAKS_HALAMAN:
         j = _halaman_pesanan(sesi, token, page)
         data = j.get("data") or []
         total = j.get("totalCount", total)

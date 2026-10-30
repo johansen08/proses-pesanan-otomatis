@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 import coba_ulang
+import snapshot_siap_proses
 import transfer_stok
 # Definisi langkah/TIPE/flag ada di alur.py (satu sumber, juga dipakai menu_konsol.py/.bat);
 # nama-nama di bawah di-ekspor ulang supaya pemakai lama (server_ui, tes) tetap jalan.
@@ -112,7 +113,8 @@ def _jalankan_proses(job: dict, argumen: list[str], env: dict) -> int:
 def _kerjakan(job: dict, sesi: str) -> None:
     global _proses
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1",
-           "LABEL_SESI_DIR": sesi, "WAKTU_MENU_MULAI": str(job["mulai"])}
+           "LABEL_SESI_DIR": sesi, "WAKTU_MENU_MULAI": str(job["mulai"]),
+           snapshot_siap_proses.ENV: snapshot_siap_proses.jalur_baru(job["mulai"])}
     total = len(job["langkah"])
     waktu = []
     _tambah(job, f"Sesi label: {sesi}")

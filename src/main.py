@@ -121,6 +121,7 @@ import peringatan_resi
 import peringatan_sisa
 import rekap_master_excel
 import serah_terima
+import snapshot_siap_proses
 import transfer_stok
 import util_umum
 from proses_label import durasi
@@ -465,7 +466,8 @@ def _main() -> int:
     ap.add_argument("--event", action="store_true",
                     help="mode event, dipakai bersama --label atau --reguler dan --kurir jnt|"
                         "jnt-ndd|spx-hemat|spx-hemat-pagi: penentuan SKU spesial dihitung hanya "
-                        "dari kurir itu (bukan J&T+SPX digabung). Tanpa --event perilaku harian")
+                        "dari kurir itu (bukan J&T+SPX digabung). Dengan --jnt-siang: pesanan J&T NDD "
+                        "dibuang (NDD punya langkah sendiri). Tanpa --event perilaku harian")
     ap.add_argument("--spx-standard", action="store_true",
                     help="hanya buat picklist SPX Standard (mode event): semua pesanan SPX "
                         "Standard, TANPA dipisah spesial/satuan/kombinasi, dipecah per lantai "
@@ -625,6 +627,9 @@ def _main() -> int:
         waktu, mulai = datetime.now(), time.monotonic()
         perlu_api = not args.excel or not args.tanpa_cek_nilai or args.label
         token = login(log) if perlu_api else None
+        if token and (alasan := pracek_lewati(_klien_pracek(token), args)):
+            log.info("PRA-CEK: %s", alasan)
+            return 0
 
         proses_sungguhan = args.label and args.jalankan
 
@@ -812,15 +817,37 @@ def recheck_stok_pesanan(log: logging.Logger, args) -> int:
 def muat_data_excel(log: logging.Logger, args, token: str | None):
     """Excel laporan Siap Proses (`--excel` atau diunduh) + nilai pesanan kandidat dari API
     (None kalau --tanpa-cek-nilai). Return (DataFrame, nilai)."""
-    excel = args.excel or download(log, token)
+    snap = None if args.excel else snapshot_siap_proses.dari_env()
+    data = snap.baca() if snap else None
+    excel = args.excel
+    if not excel and data:
+        excel = Path(data["excel"])
+        log.info("Snapshot Siap Proses dipakai ulang (Excel tidak diunduh lagi)")
+    elif not excel:
+        excel = download(log, token)
     log.info("Excel: %s", excel)
     df = baca_excel(excel)
     nilai = None
+    simpan_nilai, tak_ketemu = (data or {}).get("nilai"), (data or {}).get("tak_ketemu", [])
     if not args.tanpa_cek_nilai:
         import jubelio
         kandidat = resi_kandidat(df, kurir_hitung(args))
-        log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
-        nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
+        if simpan_nilai is not None:        # nilai semua pesanan Siap Proses sudah ada di snapshot
+            nilai = {no: v for no, v in simpan_nilai.items() if no in kandidat}
+            belum = kandidat - nilai.keys() - set(tak_ketemu)
+            if belum:
+                log.info("Mencari nilai %d resi kandidat yang belum ada di snapshot", len(belum))
+                tambahan = jubelio.ambil_nilai_pesanan(token, belum, semua_halaman=False)
+                nilai.update(tambahan)
+                simpan_nilai.update(tambahan)
+                tak_ketemu = sorted(set(tak_ketemu) | (belum - tambahan.keys()))
+            log.info("Nilai pesanan dari snapshot untuk %d resi kandidat", len(kandidat))
+        else:
+            log.info("Mengambil nilai pesanan dari API untuk %d resi kandidat", len(kandidat))
+            nilai = simpan_nilai = jubelio.ambil_nilai_pesanan(token, kandidat)
+            tak_ketemu = sorted(kandidat - nilai.keys())
+    if snap:
+        snap.simpan(str(excel), simpan_nilai, tak_ketemu)
     return df, nilai
 
 
@@ -864,6 +891,9 @@ def reguler_picklist(log: logging.Logger, args) -> int:
     import proses_label
 
     token = login(log)
+    if (alasan := pracek_lewati(_klien_pracek(token), args)):
+        log.info("PRA-CEK: %s", alasan)
+        return 0
     df, nilai = muat_data_excel(log, args, token)
     _, ringkasan = hitung_sku_spesial(df, nilai, kurir_hitung(args))
     resi_spesial_semua = {no for daftar in ringkasan["resi_per_sku"].values() for no in daftar}
@@ -915,9 +945,11 @@ def pesan_salah_mode_event(args) -> str | None:
     boleh menghasilkan picklist dengan hitungan yang tidak dimaksud."""
     if args.kurir in KURIR_HANYA_EVENT and not args.event:
         return f"--kurir {args.kurir} hanya untuk mode event: tambahkan --event"
+    if args.event and getattr(args, "jnt_siang", False):
+        return None   # J&T Resi Siang mode event: hanya membuang NDD, tidak butuh --kurir
     if args.event:
         if not (args.label or args.reguler):
-            return "--event dipakai bersama --label atau --reguler"
+            return "--event dipakai bersama --label atau --reguler (atau --jnt-siang)"
         if args.kurir not in KURIR_MODE_EVENT:
             return "--event butuh --kurir " + " atau ".join(KURIR_MODE_EVENT)
     if (args.non_wajib or args.non_wajib_sore) and not (args.label or args.reguler):
@@ -926,6 +958,33 @@ def pesan_salah_mode_event(args) -> str | None:
         return "--pagi hanya dipakai bersama --spx-standard"
     if args.spx_standard and (args.label or args.reguler or args.event):
         return "--spx-standard berdiri sendiri (tidak bersama --label/--reguler/--event)"
+    return None
+
+
+def _klien_pracek(token: str):
+    import proses_label
+    return proses_label.Klien(token)
+
+
+def pracek_lewati(k, args) -> str | None:
+    """Alasan melewati langkah label/reguler tanpa mengunduh Excel (hemat ~10 detik per langkah), atau None
+    kalau harus lanjut. Hanya `--label --tanpa-reguler` (butuh >= MIN_RESI pesanan) dan `--reguler` (butuh >= 1):
+    jumlah pesanan Siap Proses kurir itu dari SATU request ringan (batas atas, lihat
+    proses_label.jumlah_siap_proses()); gagal/tidak diketahui = lanjut. `--sku`/`--excel` tidak dipra-cek."""
+    from sku_spesial import MIN_RESI
+    if args.excel or args.sku:
+        return None
+    if args.label and args.tanpa_reguler:
+        minimal, apa = MIN_RESI, "spesial"
+    elif args.reguler and not args.label:
+        minimal, apa = 1, "reguler"
+    else:
+        return None
+    import proses_label
+    n = proses_label.jumlah_siap_proses(k, args.kurir)
+    if n is not None and n < minimal:
+        return (f"hanya {n} pesanan Siap Proses untuk kurir {args.kurir or 'J&T + SPX'} "
+                f"(butuh >= {minimal} untuk {apa}) - langkah dilewati")
     return None
 
 
@@ -963,8 +1022,8 @@ def jnt_siang_picklist(log: logging.Logger, args) -> int:
     bagian = "spesial" if args.spesial_saja else "satuan" if args.satuan_saja else None
     return _jalankan_picklist(
         log, args, "J&T Resi Siang" + (f" ({bagian})" if bagian else ""),
-        lambda pl, k: pl.rencana_jnt_siang(k, bagian),
-        lambda pl, k: pl.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, bagian))
+        lambda pl, k: pl.rencana_jnt_siang(k, bagian, args.event),
+        lambda pl, k: pl.proses_jnt_siang(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, bagian, args.event))
 
 
 def lanjut_picklist(log: logging.Logger, args) -> int:

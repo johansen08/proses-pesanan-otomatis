@@ -46,9 +46,9 @@ KATALOG: list[tuple[str, list[str]]] = [
 # Nama langkah dipisah dari KATALOG karena nama yang sama ("J&T Spesial") punya flag berbeda.
 KATALOG_EVENT: list[tuple[str, list[str]]] = [
     *_LANGKAH_DASAR,
-    ("Spesial J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--spesial-saja"]),
-    ("Satuan J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--satuan-saja"]),
-    ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang"]),
+    ("Spesial J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--spesial-saja", "--event"]),
+    ("Satuan J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--satuan-saja", "--event"]),
+    ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--event"]),
     ("SPX Standard Pagi ≤ 12.00 (per lantai)", ["--spx-standard", "--pagi"]),
     ("SPX Hemat Pagi Spesial", ["--label", "--event", "--kurir", "spx-hemat-pagi", "--tanpa-reguler"]),
     ("SPX Hemat Pagi 1 qty reguler", ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "1qty"]),

@@ -3,6 +3,7 @@ lewat test_proses_label.py & test_sku_spesial.py untuk bagian yang dipanggilnya)
 
 Jalankan:  .venv\\Scripts\\python tests\\test_main.py
 """
+import json
 import time
 import os
 import sys
@@ -413,6 +414,155 @@ def uji_upload_iresis_mode_uji_gagal_dan_sukses():
         assert m.upload_faktur_iresis(log, SimpleNamespace(jalankan=True, hari=2)) == 1
         login.assert_not_called()
     print("  --upload-iresis: mode uji hanya unduh; gagal -> exit 1 tanpa menghentikan TIPE")
+
+
+def uji_snapshot_siap_proses_modul_umur_rusak_dan_excel_hilang():
+    import json
+    import snapshot_siap_proses as sp
+    with tempfile.TemporaryDirectory() as d:
+        excel = Path(d) / "laporan.xlsx"
+        excel.write_bytes(b"x")
+        snap = sp.Snapshot(Path(d) / "snap.json")
+        assert snap.baca() is None                                       # belum ada
+        snap.simpan(str(excel), {"A": 1.0}, ["B"], sekarang=1000.0)
+        assert snap.baca(sekarang=1100.0)["nilai"] == {"A": 1.0}
+        snap.simpan(str(excel), {"A": 1.0, "C": 2.0}, [], sekarang=1500.0)   # Excel sama -> umur dihitung sejak unduh
+        assert snap.baca(sekarang=1100.0)["waktu"] == 1000.0
+        assert snap.baca(sekarang=1000.0 + sp.UMUR_MAKS_S + 1) is None   # kedaluwarsa
+        (Path(d) / "snap.json").write_text("{rusak", encoding="utf-8")
+        assert snap.baca() is None                                       # JSON rusak
+        snap.simpan(str(excel), None, [])
+        excel.unlink()
+        assert snap.baca() is None                                       # Excel sudah dihapus
+        assert not list(Path(d).glob("*.tmp")), "berkas sementara tidak boleh tertinggal"
+        os.environ.pop(sp.ENV, None)
+        assert sp.dari_env() is None
+        assert Path(sp.jalur_baru(1234.0, Path(d))).name.startswith("snapshot_1234_")
+    print("  snapshot_siap_proses: umur maks, JSON rusak, Excel hilang, waktu asal dipertahankan, tanpa env = None")
+
+
+def uji_muat_data_excel_snapshot_dipakai_ulang_antar_langkah():
+    import types
+    import pandas as pd
+    import jubelio
+    import snapshot_siap_proses as sp
+
+    df = pd.DataFrame({"No pesanan": ["A1", "A2", "B1"], "SKU": ["S", "S", "T"], "qty": [1, 1, 1],
+                       "Kurir": ["J&T Express", "SPX Hemat", "J&T Express"], "Rak": ["1A", "1A", "2A"]})
+    unduhan, panggilan_nilai = [], []
+
+    def ambil_nilai(token, dicari, semua_halaman=True):
+        panggilan_nilai.append((set(dicari), semua_halaman))
+        return {no: 10.0 for no in ("A1", "A2")}                       # B1 tidak ketemu di API
+
+    log = m.logging.getLogger("uji-snapshot")
+    with tempfile.TemporaryDirectory() as d:
+        excel = Path(d) / "laporan.xlsx"
+        excel.write_bytes(b"x")
+
+        def download_palsu(log_, token):
+            unduhan.append(1)
+            return excel
+        args = types.SimpleNamespace(excel=None, tanpa_cek_nilai=False, kurir=None, event=False)
+        env = {sp.ENV: str(Path(d) / "snap.json")}
+        with mock.patch.dict(os.environ, env), mock.patch.object(m, "download", download_palsu), \
+                mock.patch.object(m, "baca_excel", lambda p: df), \
+                mock.patch.object(jubelio, "ambil_nilai_pesanan", ambil_nilai):
+            _, nilai1 = m.muat_data_excel(log, args, "TKN")
+            _, nilai2 = m.muat_data_excel(log, args, "TKN")
+            args_event = types.SimpleNamespace(excel=None, tanpa_cek_nilai=False, kurir="spx-hemat", event=True)
+            _, nilai3 = m.muat_data_excel(log, args_event, "TKN")
+        assert len(unduhan) == 1, "Excel hanya diunduh SEKALI untuk semua langkah"
+        assert len(panggilan_nilai) == 1 and panggilan_nilai[0][1] is True, panggilan_nilai   # paging penuh hanya sekali
+        assert nilai1 == nilai2 == {"A1": 10.0, "A2": 10.0}
+        assert nilai3 == {"A2": 10.0}, nilai3                                  # kandidat SPX Hemat saja
+        # resi kandidat yang tidak ketemu (B1) dicatat di snapshot: tidak dicari berulang
+        data = json.loads((Path(d) / "snap.json").read_text(encoding="utf-8"))
+        assert data["tak_ketemu"] == ["B1"], data
+        # pesanan kandidat BARU yang belum ada di snapshot: dicari satu per satu (tanpa paging penuh)
+        df2 = pd.concat([df, pd.DataFrame({"No pesanan": ["C1"], "SKU": ["U"], "qty": [1],
+                                           "Kurir": ["J&T Express"], "Rak": ["3A"]})], ignore_index=True)
+        panggilan_nilai.clear()
+
+        def ambil_nilai2(token, dicari, semua_halaman=True):
+            panggilan_nilai.append((set(dicari), semua_halaman))
+            return {"C1": 5.0}
+        with mock.patch.dict(os.environ, env), mock.patch.object(m, "download", download_palsu), \
+                mock.patch.object(m, "baca_excel", lambda p: df2), \
+                mock.patch.object(jubelio, "ambil_nilai_pesanan", ambil_nilai2):
+            _, nilai4 = m.muat_data_excel(log, args, "TKN")
+        assert panggilan_nilai == [({"C1"}, False)], panggilan_nilai
+        assert nilai4["C1"] == 5.0 and len(unduhan) == 1
+        # tanpa env (CLI manual): selalu unduh baru
+        with mock.patch.dict(os.environ, {}, clear=False), mock.patch.object(m, "download", download_palsu), \
+                mock.patch.object(m, "baca_excel", lambda p: df), \
+                mock.patch.object(jubelio, "ambil_nilai_pesanan", ambil_nilai):
+            os.environ.pop(sp.ENV, None)
+            m.muat_data_excel(log, args, "TKN")
+            m.muat_data_excel(log, args, "TKN")
+        assert len(unduhan) == 3
+    print("  muat_data_excel: 1x unduh + 1x paging nilai untuk semua langkah satu TIPE; resi baru dicari terpisah; tanpa env selalu unduh")
+
+
+def uji_pracek_lewati_langkah_kosong_tanpa_unduh_excel():
+    import types
+
+    class KlienPalsu:
+        def __init__(self, total):
+            self.total, self.params = total, None
+
+        def get(self, path, params=None):
+            assert path.endswith("ready-to-process/")
+            self.params = params
+            if isinstance(self.total, Exception):
+                raise self.total
+            return {"totalCount": self.total, "data": []}
+
+    def args(**kw):
+        dasar = dict(excel=None, sku=None, label=False, tanpa_reguler=False, reguler=False, kurir=None)
+        return types.SimpleNamespace(**{**dasar, **kw})
+
+    k = KlienPalsu(2)
+    alasan = m.pracek_lewati(k, args(label=True, tanpa_reguler=True, kurir="jnt-ndd"))
+    assert alasan and "2 pesanan" in alasan and ">= 3" in alasan, alasan
+    assert k.params["page_size"] == 1 and k.params["couriers[0]"] == "j&t express next-day delivery", k.params
+    assert m.pracek_lewati(KlienPalsu(3), args(label=True, tanpa_reguler=True, kurir="jnt")) is None
+    assert "0 pesanan" in m.pracek_lewati(KlienPalsu(0), args(reguler=True, kurir="spx-hemat"))
+    assert m.pracek_lewati(KlienPalsu(1), args(reguler=True, kurir="spx-hemat")) is None       # reguler butuh >= 1
+    # gabungan J&T + SPX (kurir None) memakai filter gabungan
+    k = KlienPalsu(0)
+    assert m.pracek_lewati(k, args(reguler=True)) and [k.params["couriers[0]"], k.params["couriers[1]"]] == ["j&t", "spx"]
+    # TIDAK dipra-cek: --sku, --excel, --label tanpa --tanpa-reguler (ikut reguler), API gagal
+    assert m.pracek_lewati(KlienPalsu(0), args(label=True, tanpa_reguler=True, sku=["X"])) is None
+    assert m.pracek_lewati(KlienPalsu(0), args(label=True, tanpa_reguler=True, excel="x.xlsx")) is None
+    assert m.pracek_lewati(KlienPalsu(0), args(label=True)) is None
+    assert m.pracek_lewati(KlienPalsu(RuntimeError("API mati")), args(reguler=True)) is None
+    print("  pra-cek: <3 pesanan = spesial dilewati, 0 = reguler dilewati (tanpa unduh Excel); --sku/--excel/API gagal = lanjut")
+
+
+def uji_event_jnt_siang_diterima_tanpa_kurir_dan_kelas_jenis_pulihan_per_kurir():
+    import types
+    import pulihkan_sesi as ps
+    ok = types.SimpleNamespace(kurir=None, event=True, label=False, reguler=False, jnt_siang=True, non_wajib=False,
+                               non_wajib_sore=False, pagi=False, spx_standard=False)
+    assert m.pesan_salah_mode_event(ok) is None
+    salah = types.SimpleNamespace(**{**vars(ok), "jnt_siang": False})
+    assert m.pesan_salah_mode_event(salah) is not None
+    # tebakan jenis pemulihan: label per kurir TIDAK jatuh ke "spesial" lagi
+    assert ps.kelas_jenis("JNT-1QTY-REGULER-2A") == "satuan-JNT"
+    assert ps.kelas_jenis("SPXHEMATPAGI-KOMBINASI-REGULER-LANTAI1") == "kombinasi-SPXHEMATPAGI"
+    assert ps.kelas_jenis("SPXHEMAT-1QTY-REGULER-3A") == "satuan-SPXHEMAT"
+    assert ps.kelas_jenis("JNTNDD-KOMBINASI-REGULER-LAINNYA") == "kombinasi-JNTNDD"
+    assert ps.kelas_jenis("SPX-1QTY-REGULER-1B") == "satuan-SPX"
+    assert ps.kelas_jenis("SPX-STANDARD-LANTAI2") == "spx-standard"
+    assert ps.kelas_jenis("SHOPEE-PAGI-SPX-STANDARD-LANTAI1") == "spx-pagi"
+    assert ps.kelas_jenis("1QTY-REGULER-2A") == "satuan" and ps.kelas_jenis("KOMBINASI-REGULER-LANTAI1") == "kombinasi"
+    assert ps.kelas_jenis("T01-PTAA-5") == "spesial"                     # SKU biasa tetap spesial
+    assert ps.bawaan_jenis("satuan-JNT") == (None, "JNT_SATUAN")
+    assert ps.bawaan_jenis("kombinasi-SPXHEMATPAGI") == (None, "SPXHEMATPAGI_KOMBINASI")
+    assert ps.bawaan_jenis("spx-standard") == (None, "SPX_STANDARD")
+    assert ps.bawaan_jenis("satuan") == (None, "SATUAN") and ps.bawaan_jenis("spesial") == ("SPESIAL", None)
+    print("  event --jnt-siang diterima tanpa --kurir; kelas_jenis pemulihan mengenali label per kurir (satuan-JNT dst, spx-standard)")
 
 
 def uji_jam_malam_16_sampai_0659():

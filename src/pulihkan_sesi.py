@@ -53,9 +53,22 @@ def dari_pdf(folder_sesi: Path) -> dict[str, dict]:
     return hasil
 
 
+# Kode kurir di awal label satuan/kombinasi saat kurir dipisah (JNT-1QTY-REGULER-2A, SPXHEMAT-KOMBINASI-REGULER-
+# LANTAI1, ...) = nilai KURIR_KODE_FILE_SEMUA di proses_label.py; terpanjang dulu supaya SPXHEMATPAGI tidak
+# terbaca SPXHEMAT.
+KODE_KURIR = ("SPXHEMATPAGI", "SPXHEMAT", "SPXSTD", "JNTNDD", "JNT", "SPX")
+POLA_KURIR_BAGIAN = re.compile(rf"^({'|'.join(KODE_KURIR)})-(1QTY-REGULER|KOMBINASI-REGULER)")
+
+
 def kelas_jenis(nama: str) -> str:
-    """Jenis picklist dari nama/label di kolom T PICKLIST.xlsx (= nama file PDF)."""
+    """Jenis picklist dari nama/label di kolom T PICKLIST.xlsx (= nama file PDF). Satuan/kombinasi per kurir
+    dikembalikan sebagai "satuan-<KODE>"/"kombinasi-<KODE>" (folder `<KODE>_SATUAN`/`<KODE>_KOMBINASI`,
+    lihat bawaan_jenis())."""
     n = (nama or "").upper()
+    if (m := POLA_KURIR_BAGIAN.match(n)):
+        return f"{'satuan' if m.group(2).startswith('1QTY') else 'kombinasi'}-{m.group(1)}"
+    if n.startswith("SPX-STANDARD"):
+        return "spx-standard"
     if n.startswith("1QTY-REGULER"):
         return "satuan"
     if n.startswith("KOMBINASI-REGULER"):
@@ -85,7 +98,15 @@ BAWAAN_JENIS = {"satuan": (None, "SATUAN"), "kombinasi": (None, "KOMBINASI"), "u
                 "spx-pagi-spesial": (None, "SPX-PAGI-SPESIAL"),
                 "jnt-siang-spesial": (None, "JNT-SIANG-SPESIAL"), "jnt-siang-satuan": (None, "JNTSIANG_SATUAN"),
                 "spx-pagi": (None, "SPX_PAGI"), "jnt-siang": (None, "JNT_SIANG"), "sampel": (None, None),
-                "spesial": ("SPESIAL", None)}
+                "spx-standard": (None, "SPX_STANDARD"), "spesial": ("SPESIAL", None)}
+
+
+def bawaan_jenis(kelas: str) -> tuple:
+    """(tag, subfolder) bawaan untuk `kelas` dari kelas_jenis(), termasuk "satuan-<KODE>"/"kombinasi-<KODE>"."""
+    if kelas in BAWAAN_JENIS:
+        return BAWAAN_JENIS[kelas]
+    bagian, _, kode = kelas.partition("-")
+    return (None, f"{kode}_{bagian.upper()}")
 
 
 def dari_excel(folder_sesi: Path, tahu: dict[str, dict]) -> dict[str, dict]:
@@ -102,7 +123,7 @@ def dari_excel(folder_sesi: Path, tahu: dict[str, dict]) -> dict[str, dict]:
         jenis = x.get("jenis")
         if not jenis or jenis.strip().upper() == "PICKLIST CANCEL":
             continue
-        tag, subfolder = contoh.get(kelas_jenis(jenis)) or BAWAAN_JENIS[kelas_jenis(jenis)]
+        tag, subfolder = contoh.get(kelas_jenis(jenis)) or bawaan_jenis(kelas_jenis(jenis))
         hasil[f"PICK-{angka:09d}"] = {"nama": jenis.strip(), "tag": tag, "subfolder": subfolder}
     return hasil
 
