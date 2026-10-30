@@ -282,6 +282,9 @@ MAKS_COBA_PICKLIST = 3
 # (lihat proses()) karena deteksi picklist terlompat (peringatan_picklist.ambil_nomor_hilang())
 # butuh urutan pasti nomor picklist yang baru dibuat.
 MAKS_WORKER_PARALEL = 5
+# Prefetch pencarian pesanan per SKU spesial di proses(): sebanyak ini SKU berikutnya dicari (cari_pesanan, hanya
+# BACA) selagi picklist SKU sebelumnya dibuat; pembuatan picklist TETAP serial (urutan nomor PICK).
+JENDELA_PREFETCH_SKU = 4
 TUNGGU_PICKING_S = 90                   # batas tunggu status FINISH_PICK
 TUNGGU_FINISH_PICK_S = 90               # batas tunggu pesanan muncul di Picking > Selesai
 TUNGGU_RESI_S = 180                     # batas tunggu semua nomor resi keluar
@@ -1811,10 +1814,14 @@ def proses_spx_standard(k: Klien, file_riwayat: Path, folder_label: Path, pagi: 
 
 # ============================================================== 2. picklist
 def buat_picklist(k: Klien, sku: str, resi_spesial: set[str], kurir: str | None = None,
-                  batas: datetime | None = None) -> tuple[int, str, list[int], list[dict]]:
-    """`kurir`, `batas`: lihat cari_pesanan()."""
+                  batas: datetime | None = None,
+                  pesanan_awal: list[dict] | None = None) -> tuple[int, str, list[int], list[dict]]:
+    """`kurir`, `batas`: lihat cari_pesanan(). `pesanan_awal`: hasil cari_pesanan() yang sudah diambil lebih
+    dulu (prefetch di proses()), dipakai HANYA percobaan pertama - percobaan ulang (picklist ditolak karena
+    pesanan sudah dipakai) selalu mencari ulang."""
     for coba in range(1, MAKS_COBA_PICKLIST + 1):
-        pakai, _ = saring(cari_pesanan(k, sku, kurir, batas), resi_spesial, kurir)
+        ditemukan = pesanan_awal if (coba == 1 and pesanan_awal is not None) else cari_pesanan(k, sku, kurir, batas)
+        pakai, _ = saring(ditemukan, resi_spesial, kurir)
         if len(pakai) < MIN_RESI:
             raise Lewati(f"pesanan tersisa {len(pakai)} (< {MIN_RESI})")
         ids = [o["salesorder_id"] for o in pakai]
@@ -2520,8 +2527,19 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
     hasil: list[dict] = []
     tugas = []     # (indeks di hasil, mulai, pid, pno, jumlah, sku, nomor_terlompat)
 
+    urut_sku = list(resi_per_sku)
+    prefetch = ThreadPoolExecutor(max_workers=JENDELA_PREFETCH_SKU) if len(urut_sku) > 1 else None
+    masa_depan: dict = {}
+
+    def _prefetch_awal(n0: int):
+        """Jadwalkan pencarian pesanan SKU urutan n0 .. n0+JENDELA_PREFETCH_SKU-1 (yang belum dijadwalkan)."""
+        for s in urut_sku[n0:n0 + JENDELA_PREFETCH_SKU]:
+            if prefetch and s not in masa_depan:
+                masa_depan[s] = prefetch.submit(cari_pesanan, k, s, kurir, batas)
+
     for n, (sku, resi) in enumerate(resi_per_sku.items(), 1):
         mulai = time.monotonic()
+        _prefetch_awal(n - 1)
         rak = rak_per_sku.get(sku, "-")
         log.info("=== [%d/%d] Rak %s | SKU %s (%d resi spesial)",
                  n, len(resi_per_sku), rak, sku, len(resi))
@@ -2529,7 +2547,12 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
         idx = len(hasil) - 1
         try:
             log.info("  [1-2] Filter pesanan & buat picklist")
-            pid, pno, ids, pesanan_dipakai = buat_picklist(k, sku, set(resi), kurir, batas)
+            try:       # hasil prefetch; gagal/tidak ada -> buat_picklist mencari sendiri
+                awal = masa_depan.pop(sku).result() if sku in masa_depan else None
+            except Exception:      # noqa: BLE001 - hanya optimasi
+                awal = None
+            pid, pno, ids, pesanan_dipakai = buat_picklist(
+                k, sku, set(resi), kurir, batas, **({"pesanan_awal": awal} if awal is not None else {}))
             log.info("  Durasi fase buat picklist %s: %s", pno, durasi(time.monotonic() - mulai))
         except Lewati as e:
             log.info("  Dilewati: %s", e)
@@ -2552,6 +2575,9 @@ def proses(k: Klien, resi_per_sku: dict[str, list[str]], folder_label: Path,
             peringatan_gagal.catat_dibuat(pno, sku, folder_label, tag=_tag_spesial(kurir))
             log.info("  Picklist %s dibuat, %d pesanan - lanjut diproses paralel", pno, len(ids))
             tugas.append((idx, mulai, pid, pno, len(ids), sku, nomor_terlompat))
+
+    if prefetch:
+        prefetch.shutdown(wait=False, cancel_futures=True)
 
     def _lanjutkan(t: tuple) -> tuple:
         idx, mulai, pid, pno, jumlah, sku, nomor_terlompat = t

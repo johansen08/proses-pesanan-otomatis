@@ -2680,6 +2680,51 @@ def uji_log_durasi_per_fase_picklist():
     print("  _log_fase: durasi picking | resi | pdf per picklist tercatat di log")
 
 
+def uji_proses_prefetch_pencarian_pesanan_picklist_tetap_serial_berurutan():
+    import threading
+
+    asli = (pl.cari_pesanan, pl.buat_picklist, pl.lanjutkan_picklist, pl.catat_riwayat, pl.rekap_master_excel.catat,
+            pl.peringatan_picklist.ambil_nomor_hilang, pl.peringatan_gagal.catat_dibuat)
+    dicari, dibuat, thread_cari = [], [], set()
+
+    def cari(k, sku, kurir=None, batas=None):
+        dicari.append(sku)
+        thread_cari.add(threading.current_thread().name)
+        if sku == "C":
+            raise RuntimeError("API sesaat mati")          # prefetch gagal -> buat_picklist mencari sendiri
+        return [{"salesorder_no": f"{sku}{i}", "salesorder_id": i} for i in range(1, 4)]
+
+    def buat(k, sku, resi, kurir=None, batas=None, pesanan_awal=None):
+        dibuat.append((sku, None if pesanan_awal is None else [o["salesorder_no"] for o in pesanan_awal]))
+        pakai = pesanan_awal if pesanan_awal is not None else [
+            {"salesorder_no": f"{sku}{i}", "salesorder_id": i} for i in range(1, 4)]
+        return len(dibuat), f"PICK-{len(dibuat)}", [o["salesorder_id"] for o in pakai], pakai
+
+    pl.cari_pesanan, pl.buat_picklist = cari, buat
+    pl.lanjutkan_picklist = lambda k, pid, pno, jumlah, sku, folder, **kw: {
+        "Waktu": "x", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah, "Resi Keluar": jumlah,
+        "File Label": "", "Catatan": ""}
+    pl.catat_riwayat = lambda f, b: None
+    pl.rekap_master_excel.catat = lambda *a, **kw: None
+    pl.peringatan_picklist.ambil_nomor_hilang = lambda: []
+    pl.peringatan_gagal.catat_dibuat = lambda *a, **kw: None
+    try:
+        skus = {s: [f"{s}1", f"{s}2", f"{s}3"] for s in "ABCDEF"}
+        hasil = pl.proses(None, skus, Path("sesi"), Path("r.xlsx"))
+    finally:
+        (pl.cari_pesanan, pl.buat_picklist, pl.lanjutkan_picklist, pl.catat_riwayat, pl.rekap_master_excel.catat,
+         pl.peringatan_picklist.ambil_nomor_hilang, pl.peringatan_gagal.catat_dibuat) = asli
+    assert [s for s, _ in dibuat] == list("ABCDEF"), "pembuatan picklist HARUS tetap serial berurutan"
+    assert [h["No Picklist"] for h in hasil] == [f"PICK-{i}" for i in range(1, 7)]
+    awal = dict(dibuat)
+    assert awal["A"] == ["A1", "A2", "A3"] and awal["F"] == ["F1", "F2", "F3"], awal    # hasil prefetch dipakai
+    assert awal["C"] is None, "prefetch C gagal -> tidak ada pesanan_awal, buat_picklist mencari sendiri"
+    assert sorted(dicari) == list("ABCDEF"), dicari                                      # tiap SKU dicari sekali
+    assert thread_cari and not any(n == threading.current_thread().name for n in thread_cari), thread_cari
+    print("  proses: pencarian pesanan SKU berikutnya di-prefetch (thread lain, 1x per SKU); picklist tetap serial "
+          "berurutan; prefetch gagal -> pencarian normal")
+
+
 JEDA_RESI = pl.JEDA_RESI_S
 
 def uji_jnt_ndd_event_dipisah_dari_jnt_lain():
