@@ -177,7 +177,12 @@ def ambil_total_picklist(sesi: requests.Session, dari: date, sampai: datetime,
             raise IresisError(f"Laporan total picklist: format tak dikenal: {str(data)[:200]}")
         for b in baris:
             try:
-                hasil[int(b[2])] = int(b[3])
+                nomor = str(b[2]).strip()
+                # Picklist buatan manual di IRESIS bisa bernomor non-angka (mis. "C"):
+                # bukan picklist program ini, jadi dilewati - bukan alasan menggagalkan isi SCAN.
+                if not nomor.isdigit():
+                    continue
+                hasil[int(nomor)] = int(b[3])
             except (IndexError, ValueError, TypeError) as e:
                 raise IresisError(f"Laporan total picklist: baris tak dikenal {b!r}") from e
         mulai += per_halaman

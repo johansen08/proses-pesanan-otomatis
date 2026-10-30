@@ -190,12 +190,17 @@ def uji_total_picklist_banyak_halaman():
     assert [x[2]["data"]["start"] for x in sesi.log] == [0, 3]
     try:
         iresis.ambil_total_picklist(Sesi({("POST", "/get-receipt-report-data-tab1"): [
-            Resp(200, {"data": [["1.", "x", "abc", "2"]], "recordsFiltered": 1})]}), date.today(),
-            datetime.now())
+            Resp(200, {"data": [["1.", "x", "158001", "abc"]], "recordsFiltered": 1})]}),
+            date.today(), datetime.now())
     except iresis.IresisError as e:
         assert "tak dikenal" in str(e)
     else:
         raise AssertionError
+    # picklist manual bernomor non-angka (mis. "C") dilewati, bukan menggagalkan
+    hasil = iresis.ambil_total_picklist(Sesi({("POST", "/get-receipt-report-data-tab1"): [
+        Resp(200, {"data": [["855.", "2026-10-29", "C", "1"], ["856.", "x", "158001", "2"]],
+                   "recordsFiltered": 2})]}), date.today(), datetime.now())
+    assert hasil == {158001: 2}, hasil
 
 
 if __name__ == "__main__":
