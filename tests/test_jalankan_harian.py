@@ -158,13 +158,14 @@ def uji_menu_event():
     _reset()
     palsu = Palsu()
     with mock.patch.object(jh, "_luncurkan", palsu), mock.patch.object(jh, "_sesi_label", return_value="x/1"):
-        jh.mulai(["SPX Standard (per lantai)", "J&T Spesial", "SPX Hemat Pagi Kombinasi", "Urgent Lazada"], "EVENT - TIPE 2")
+        jh.mulai(["SPX Standard (per lantai)", "Spesial SPX Standard", "J&T Spesial", "SPX Hemat Pagi Kombinasi", "Urgent Lazada"], "EVENT - TIPE 2")
         j = _tunggu()
     assert j["status"] == "selesai", j
     assert palsu.flag_main() == [
         ["--urgent", "--channel", "lazada", "--jalankan"],            # TIPE 2: tanpa --lewati-malam
         ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "kombinasi", "--jalankan"],
         ["--label", "--event", "--kurir", "jnt", "--tanpa-reguler", "--jalankan"],
+        ["--spx-standard", "--spesial-saja", "--jalankan"],           # spesial dulu, baru per lantai
         ["--spx-standard", "--jalankan"]], palsu.flag_main()
     rekap = palsu.panggilan[-1][0]
     assert rekap[2] == "EVENT - TIPE 2", rekap

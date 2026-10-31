@@ -610,7 +610,7 @@ def _args(**kw):
     dasar = dict(kurir=None, event=False, label=False, reguler=False, spx_standard=False,
                  pagi=False, bagian=None, excel=Path("x.xlsx"), tanpa_cek_nilai=True,
                  jalankan=True, sku=None, tanpa_reguler=False,
-                 non_wajib=False, non_wajib_sore=False)
+                 non_wajib=False, non_wajib_sore=False, spesial_saja=False)
     dasar.update(kw)
     return SimpleNamespace(**dasar)
 
@@ -726,7 +726,11 @@ def uji_spx_standard_picklist_meneruskan_pagi_dan_mode_uji():
         assert proses.call_args.args[3] is False
         assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=True, pagi=True)) == 0
         assert proses.call_args.args[3] is True
-    print("  --spx-standard: mode uji tidak memproses; --pagi diteruskan ke proses_label")
+        assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=True, spesial_saja=True)) == 0
+        assert proses.call_args.kwargs["spesial_saja"] is True
+        assert m.spx_standard_picklist(log, _args(spx_standard=True, jalankan=True)) == 0
+        assert proses.call_args.kwargs["spesial_saja"] is False
+    print("  --spx-standard: mode uji tidak memproses; --pagi dan --spesial-saja diteruskan ke proses_label")
 
 
 def uji_main_menolak_spx_hemat_tanpa_event_sebelum_login():

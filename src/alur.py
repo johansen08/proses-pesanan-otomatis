@@ -49,6 +49,7 @@ KATALOG_EVENT: list[tuple[str, list[str]]] = [
     ("Spesial J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--spesial-saja", "--event"]),
     ("Satuan J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--satuan-saja", "--event"]),
     ("J&T ≤ 15.00 (Resi Siang)", ["--jnt-siang", "--event"]),
+    ("Spesial SPX Standard Pagi ≤ 12.00", ["--spx-standard", "--pagi", "--spesial-saja"]),
     ("SPX Standard Pagi ≤ 12.00 (per lantai)", ["--spx-standard", "--pagi"]),
     ("SPX Hemat Pagi Spesial", ["--label", "--event", "--kurir", "spx-hemat-pagi", "--tanpa-reguler"]),
     ("SPX Hemat Pagi 1 qty reguler", ["--reguler", "--event", "--kurir", "spx-hemat-pagi", "--bagian", "1qty"]),
@@ -62,6 +63,7 @@ KATALOG_EVENT: list[tuple[str, list[str]]] = [
     ("SPX Hemat Spesial", ["--label", "--event", "--kurir", "spx-hemat", "--tanpa-reguler"]),
     ("SPX Hemat 1 qty reguler", ["--reguler", "--event", "--kurir", "spx-hemat", "--bagian", "1qty"]),
     ("SPX Hemat Kombinasi", ["--reguler", "--event", "--kurir", "spx-hemat", "--bagian", "kombinasi"]),
+    ("Spesial SPX Standard", ["--spx-standard", "--spesial-saja"]),
     ("SPX Standard (per lantai)", ["--spx-standard"]),
     ("Upload faktur & pesanan ke IRESIS", ["--upload-iresis"]),
 ]
@@ -106,11 +108,11 @@ _GABUNG = ["SPX-J&T Spesial", "SPX-J&T 1 qty reguler", "SPX-J&T Kombinasi"]
 _JNT = ["J&T Spesial", "J&T 1 qty reguler", "J&T Kombinasi"]
 _SPX = ["SPX Spesial", "SPX 1 qty reguler", "SPX Kombinasi"]
 _SIANG = ["Spesial J&T ≤ 15.00 (Resi Siang)", "Satuan J&T ≤ 15.00 (Resi Siang)", "J&T ≤ 15.00 (Resi Siang)"]   # urut: spesial, satuan, sisanya per lantai
-_E_PAGI = ["SPX Standard Pagi ≤ 12.00 (per lantai)", "SPX Hemat Pagi Spesial",
+_E_PAGI = ["Spesial SPX Standard Pagi ≤ 12.00", "SPX Standard Pagi ≤ 12.00 (per lantai)", "SPX Hemat Pagi Spesial",
            "SPX Hemat Pagi 1 qty reguler", "SPX Hemat Pagi Kombinasi"]
 _E_SEHARIAN = [*_JNT, "J&T NDD Spesial", "J&T NDD 1 qty reguler", "J&T NDD Kombinasi",
                "SPX Hemat Spesial", "SPX Hemat 1 qty reguler", "SPX Hemat Kombinasi",
-               "SPX Standard (per lantai)"]
+               "Spesial SPX Standard", "SPX Standard (per lantai)"]
 _IRESIS = [LANGKAH_IRESIS]
 
 # Isi preset tiap judul (himpunan; urutan eksekusi selalu mengikuti KATALOG/KATALOG_EVENT).

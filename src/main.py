@@ -482,7 +482,7 @@ def _main() -> int:
                         "- dijalankan manual 1x sehari, BUKAN bagian alur otomatis --label "
                         "(tanpa --jalankan = mode uji)")
     ap.add_argument("--spesial-saja", action="store_true",
-                    help="dipakai bersama --shopee-pagi atau --jnt-siang: HANYA SKU spesial (>= 3 "
+                    help="dipakai bersama --shopee-pagi, --jnt-siang atau --spx-standard: HANYA SKU spesial (>= 3 "
                         "pesanan/SKU; folder SPX-PAGI-SPESIAL / JNT-SIANG-SPESIAL); tanpa flag ini "
                         "langkah itu hanya membuat picklist per lantai")
     ap.add_argument("--satuan-saja", action="store_true",
@@ -1009,9 +1009,11 @@ def nama_pdf_spesial(waktu: datetime, args) -> str:
 
 def spx_standard_picklist(log: logging.Logger, args) -> int:
     return _jalankan_picklist(
-        log, args, "SPX Standard" + (" (Shopee Pagi)" if args.pagi else ""),
-        lambda pl, k: pl.rencana_spx_standard(k, args.pagi),
-        lambda pl, k: pl.proses_spx_standard(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, args.pagi))
+        log, args, "SPX Standard" + (" (Shopee Pagi)" if args.pagi else "")
+        + (" (spesial)" if args.spesial_saja else ""),
+        lambda pl, k: pl.rencana_spx_standard(k, args.pagi, spesial_saja=args.spesial_saja),
+        lambda pl, k: pl.proses_spx_standard(k, FILE_RIWAYAT, FOLDER_LABEL_SESI, args.pagi,
+                                             spesial_saja=args.spesial_saja))
 
 
 def shopee_pagi_picklist(log: logging.Logger, args) -> int:

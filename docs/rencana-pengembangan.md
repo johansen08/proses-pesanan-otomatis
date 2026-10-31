@@ -43,7 +43,7 @@ dikonfirmasi sniff & uji langsung 2026-10-08):
 | Kurir | SKU spesial? | 1 SKU 1 qty reguler | Kombinasi reguler |
 |---|---|---|---|
 | **J&T** | Ya | Ya | Ya |
-| **SPX Standard** | Tidak — volumenya kecil, hanya dipecah per lantai 1/2/3/LAINNYA | – | – |
+| **SPX Standard** | Ya (2026-10-31) — langkah "Spesial SPX Standard" (+ versi Pagi di EVENT - TIPE 2) diambil DULU di semua tipe event: SKU >= 3 resi → picklist `SPX-STANDARD-SPESIAL-<SKU>` (folder `SPX_STANDARD`, pagi: `SPX-PAGI-SPESIAL`), sisanya per lantai 1/2/3/LAINNYA | – | – |
 | **SPX Hemat** | Ya (sama seperti J&T) | Ya | Ya |
 
 Keputusan (2026-10-08): penentuan SKU spesial dihitung **per kurir** di mode event (J&T dan SPX

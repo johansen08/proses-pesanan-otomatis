@@ -159,6 +159,7 @@ TAG_SPESIAL = "SPESIAL"
 # print-out Lazada/GTL-SiCepat (urgent), 1 qty reguler (satuan), dan kombinasi/multi-qty
 # reguler (kombinasi) tanpa harus baca nama file satu-satu.
 SUBFOLDER_URGENT = "URGENT"            # Alur 2: Lazada, GTL-SiCepat & JNE-LEX (semua skenario)
+SUBFOLDER_SPX_STANDARD = "SPX_STANDARD"   # Alur 6 (event): SPX Standard per lantai + SKU spesialnya
 SUBFOLDER_SPX_PAGI_SPESIAL = "SPX-PAGI-SPESIAL"   # Alur 4: SKU spesial Shopee Pagi (SPX <= 12.00), dipisah dari SPX_PAGI
 SUBFOLDER_GTL_SPESIAL = "GTL_SICEPAT_SPESIAL"   # Alur 2: SKU spesial GTL-SiCepat (dipisah dari URGENT supaya mudah dicetak bulk)
 SUBFOLDER_SATUAN = "SATUAN"            # Alur 3 bagian "1qty" (1 SKU qty 1, bukan spesial)
@@ -354,6 +355,13 @@ NAMA_DETAIL_SPESIAL_SPX_PAGI = "detail-resi-spesial-spx-pagi.xlsx"   # DI DALAM 
 AWALAN_LABEL_JNT_SIANG_SPESIAL = "JNT-SIANG-SPESIAL-"
 NAMA_DETAIL_SPESIAL_JNT_SIANG = "detail-resi-spesial-jnt-siang.xlsx"
 
+# SKU spesial SPX Standard (mode event, `--spx-standard --spesial-saja`): seharian label
+# "SPX-STANDARD-SPESIAL-<SKU>" di SUBFOLDER_SPX_STANDARD; versi pagi "SHOPEE-PAGI-SPX-STANDARD-SPESIAL-<SKU>"
+# di SUBFOLDER_SPX_PAGI_SPESIAL (ikut jenis cetak spx-pagi-spesial, detail resi file Shopee Pagi yang sama).
+AWALAN_LABEL_SPX_STANDARD_SPESIAL = "SPX-STANDARD-SPESIAL-"
+AWALAN_LABEL_SPX_STANDARD_PAGI_SPESIAL = "SHOPEE-PAGI-SPX-STANDARD-SPESIAL-"
+NAMA_DETAIL_SPESIAL_SPX_STANDARD = "detail-resi-spesial-spx-standard.xlsx"   # DI DALAM folder SUBFOLDER_SPX_STANDARD
+
 # awalan label picklist SPESIAL bersubfolder sendiri -> (subfolder, path detail resi relatif folder sesi)
 SPESIAL_TERPISAH = {
     AWALAN_LABEL_GTL_SPESIAL: (SUBFOLDER_GTL_SPESIAL, NAMA_DETAIL_SPESIAL_GTL),
@@ -361,6 +369,10 @@ SPESIAL_TERPISAH = {
                                     f"{SUBFOLDER_SPX_PAGI_SPESIAL}/{NAMA_DETAIL_SPESIAL_SPX_PAGI}"),
     AWALAN_LABEL_JNT_SIANG_SPESIAL: (SUBFOLDER_JNT_SIANG_SPESIAL,
                                      f"{SUBFOLDER_JNT_SIANG_SPESIAL}/{NAMA_DETAIL_SPESIAL_JNT_SIANG}"),
+    AWALAN_LABEL_SPX_STANDARD_SPESIAL: (SUBFOLDER_SPX_STANDARD,
+                                        f"{SUBFOLDER_SPX_STANDARD}/{NAMA_DETAIL_SPESIAL_SPX_STANDARD}"),
+    AWALAN_LABEL_SPX_STANDARD_PAGI_SPESIAL: (SUBFOLDER_SPX_PAGI_SPESIAL,
+                                             f"{SUBFOLDER_SPX_PAGI_SPESIAL}/{NAMA_DETAIL_SPESIAL_SPX_PAGI}"),
 }
 
 
@@ -1751,7 +1763,6 @@ def proses_jnt_siang(k: Klien, file_riwayat: Path, folder_label: Path,
 # diproses lewat alur biasa dengan kurir="spx-hemat" (spesial, satuan, kombinasi).
 LABEL_SPX_STANDARD = "SPX-STANDARD"
 LABEL_SHOPEE_PAGI_SPX_STANDARD = "SHOPEE-PAGI-SPX-STANDARD"
-SUBFOLDER_SPX_STANDARD = "SPX_STANDARD"
 KURIR_FILTER_SPX_STANDARD = [KURIR_PILIHAN["spx-standard"]]
 
 
@@ -1780,28 +1791,47 @@ def _kelompok_spx_standard(k: Klien, pesanan: list[dict], pagi: bool,
                                          couriers=KURIR_FILTER_SPX_STANDARD)
 
 
+def _subkelompok_spx_standard(k: Klien, pesanan: list[dict], pagi: bool, spesial_saja: bool,
+                              lantai_dari_excel: dict[str, str] | None = None) -> dict[str, list[dict]]:
+    """Sub-kelompok SPX Standard. `spesial_saja`: hanya SKU spesial (key "SPESIAL-<SKU>" -> label
+    SPX-STANDARD-SPESIAL-<SKU>, lihat pisah_spesial_per_sku(); hitungan hanya dari pesanan SPX Standard
+    lingkup `pagi`); selain itu per lantai - langkah spesial berjalan SEBELUMNYA, jadi pesanan SKU spesial
+    sudah masuk picklist sendiri."""
+    if spesial_saja:
+        spesial, _ = pisah_spesial_per_sku(k, pesanan)
+        log.info("  %d SKU spesial SPX Standard%s (>= %d pesanan/SKU, %d pesanan)",
+                 len(spesial), " Pagi" if pagi else "", MIN_RESI, sum(map(len, spesial.values())))
+        return {f"SPESIAL-{sku}": v for sku, v in spesial.items()}
+    return _kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel)
+
+
 def rencana_spx_standard(k: Klien, pagi: bool = False, sekarang: datetime | None = None,
-                         lantai_dari_excel: dict[str, str] | None = None) -> None:
+                         lantai_dari_excel: dict[str, str] | None = None,
+                         spesial_saja: bool = False) -> None:
     """Mode uji picklist SPX Standard: hanya membaca data, tidak mengubah apa pun di Jubelio."""
     pesanan = ambil_pesanan_spx_standard(k, pagi, sekarang)
-    log.info("[UJI] %s pesanan siap proses %3d, dipecah per lantai",
-             "Shopee Pagi SPX Standard" if pagi else "SPX Standard", len(pesanan))
-    _log_rencana_subkelompok(_kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel))
+    log.info("[UJI] %s pesanan siap proses %3d, %s",
+             "Shopee Pagi SPX Standard" if pagi else "SPX Standard", len(pesanan),
+             "hanya SKU spesial" if spesial_saja else "dipecah per lantai")
+    _log_rencana_subkelompok(_subkelompok_spx_standard(k, pesanan, pagi, spesial_saja, lantai_dari_excel))
 
 
 def proses_spx_standard(k: Klien, file_riwayat: Path, folder_label: Path, pagi: bool = False,
                         sekarang: datetime | None = None,
-                        lantai_dari_excel: dict[str, str] | None = None) -> list[dict]:
-    """Picklist SPX Standard: semua pesanan kurir SPX Standard digabung (TANPA dipisah spesial/
-    satuan/kombinasi), dipecah per LANTAI rak gudang (1/2/3/LAINNYA - lihat
-    _kelompok_spx_standard()/_proses_subkelompok()), masing-masing dipecah lagi kalau >
-    MAKS_PESANAN_PICKLIST. Label/nama file "SPX-STANDARD-LANTAI1" dst, disimpan di subfolder
+                        lantai_dari_excel: dict[str, str] | None = None,
+                        spesial_saja: bool = False) -> list[dict]:
+    """Picklist SPX Standard. Dua langkah TERPISAH (alur.py, spesial dulu): `spesial_saja` True = HANYA SKU
+    yang punya >= MIN_RESI pesanan (picklist "SPX-STANDARD-SPESIAL-<SKU>" di SUBFOLDER_SPX_STANDARD +
+    detail-resi-spesial-spx-standard.xlsx; versi pagi "SHOPEE-PAGI-SPX-STANDARD-SPESIAL-<SKU>" di
+    SUBFOLDER_SPX_PAGI_SPESIAL); False = sisanya digabung (TANPA dipisah satuan/kombinasi), dipecah per
+    LANTAI rak gudang (1/2/3/LAINNYA - lihat _kelompok_spx_standard()/_proses_subkelompok()), masing-masing
+    dipecah lagi kalau > MAKS_PESANAN_PICKLIST. Label/nama file "SPX-STANDARD-LANTAI1" dst, disimpan di
     SUBFOLDER_SPX_STANDARD. `pagi`: versi Shopee Pagi di hari event - hanya pesanan Shopee jam
     pesan <= 12:00, label "SHOPEE-PAGI-SPX-STANDARD-LANTAI1" dst, disimpan di SUBFOLDER_SPX_PAGI
     (ikut tercetak bersama jenis cetak spx-pagi). Dipanggil lewat mode event saja, tidak pernah
     dari alur harian. Kegagalan 1 sub-kelompok tidak menghentikan yang lain."""
     pesanan = ambil_pesanan_spx_standard(k, pagi, sekarang)
-    subkelompok = _kelompok_spx_standard(k, pesanan, pagi, lantai_dari_excel)
+    subkelompok = _subkelompok_spx_standard(k, pesanan, pagi, spesial_saja, lantai_dari_excel)
     if pagi:
         nama, label = "Shopee Pagi SPX Standard", LABEL_SHOPEE_PAGI_SPX_STANDARD
         subfolder = SUBFOLDER_SPX_PAGI

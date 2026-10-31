@@ -2368,6 +2368,59 @@ def uji_spx_standard_seharian_hanya_per_lantai():
           "subfolder SPX_STANDARD, tidak ada pecahan spesial/satuan/kombinasi")
 
 
+def uji_spx_standard_spesial_dulu_lalu_sisanya_per_lantai():
+    import datetime as dt
+
+    class JubelioPalsuStdSpesial(JubelioPalsuSpxStandard):
+        """5 pesanan SPX Standard Shopee (id 1-5): SKU-A x3 (= MIN_RESI, spesial), SKU-B x2 (ikut lantai)."""
+
+        def __init__(self):
+            super().__init__()
+            self.pesanan = [dict(o, total_qty="1.0000") for o in self.pesanan]
+
+        def post(self, url, json=None, headers=None, timeout=None, cookies=None):
+            if url.endswith("items-to-pick/"):
+                return Resp(data=[{"salesorder_detail_id": 9000 + i, "item_id": 1, "location_id": -1,
+                                   "qty_ordered": "1.0000", "salesorder_id": i, "bundle_item_id": 0,
+                                   "package_detail_id": None, "package_id": None, "end_qty": "999.0000",
+                                   "item_full_name": ("SKU-A" if i <= 3 else "SKU-B") + " - Baju",
+                                   "salesorder_no": f"SO{i}"} for i in json["ids"]])
+            return super().post(url, json, headers, timeout, cookies)
+
+    sekarang = dt.datetime(2026, 9, 29, 13, 0, 0, tzinfo=pl.WIB)
+    asli = pl.lanjutkan_picklist
+    for pagi, label_spesial, sub_spesial, label_lantai, sub_lantai in (
+            (False, "SPX-STANDARD-SPESIAL-SKU-A", pl.SUBFOLDER_SPX_STANDARD,
+             "SPX-STANDARD-LANTAI", pl.SUBFOLDER_SPX_STANDARD),
+            (True, "SHOPEE-PAGI-SPX-STANDARD-SPESIAL-SKU-A", pl.SUBFOLDER_SPX_PAGI_SPESIAL,
+             "SHOPEE-PAGI-SPX-STANDARD-LANTAI", pl.SUBFOLDER_SPX_PAGI)):
+        j = JubelioPalsuStdSpesial()
+        if pagi:     # hanya id 1-3 yang jam pesannya <= 12:00; SKU-A x3 tetap spesial
+            j.pesanan = [o for o in j.pesanan if o["salesorder_id"] <= 3]
+        k = pl.Klien("TKN", sesi=j, tidur=lambda s: None)
+        panggilan = []
+
+        def stub(k, pid, pno, jumlah, sku, folder_label, nama_file=None, subfolder=None):
+            panggilan.append((sku, jumlah, subfolder))
+            return {"Waktu": "-", "SKU": sku, "No Picklist": pno, "Total Pesanan": jumlah,
+                    "Resi Keluar": jumlah, "File Label": "", "Catatan": ""}
+        pl.lanjutkan_picklist = stub
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                pl.rencana_spx_standard(k, pagi, sekarang, spesial_saja=True)    # mode uji: tidak boleh POST
+                assert not [x for x in j.log if x[0] == "POST"], "mode uji tidak boleh POST"
+                pl.proses_spx_standard(k, Path(d) / "riwayat.xlsx", Path(d) / "label", pagi, sekarang,
+                                       spesial_saja=True)
+        finally:
+            pl.lanjutkan_picklist = asli
+        assert [(s, n, f) for s, n, f in panggilan] == [(label_spesial, 3, sub_spesial)], (pagi, panggilan)
+        info = pl._spesial_terpisah(label_spesial)
+        assert info and info[1] == sub_spesial, info
+    assert pl.SUBFOLDER_SPX_STANDARD == "SPX_STANDARD"
+    print("  SPX Standard spesial (seharian & pagi): SKU >= MIN_RESI jadi picklist SPESIAL-<SKU> "
+          "(SPX_STANDARD / SPX-PAGI-SPESIAL), detail resi terpetakan lewat SPESIAL_TERPISAH")
+
+
 def uji_spx_standard_shopee_pagi_dibatasi_jam_12():
     hasil = _jalankan_spx_standard(pagi=True)
     assert hasil == {

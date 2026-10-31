@@ -25,8 +25,8 @@ import menu_konsol as mk  # noqa: E402
 coba_ulang.FOLDER_LOG = Path(tempfile.mkdtemp())     # jangan baca logs/ sungguhan
 
 JUMLAH_LANGKAH = {"TIPE 1": 10, "TIPE 2": 15, "TIPE 3": 13, "TIPE 4": 13, "MALAM": 7,
-                  "EVENT - TIPE 1": 17, "EVENT - TIPE 2": 21, "EVENT - TIPE 3": 17,
-                  "EVENT - TIPE 4": 20, "EVENT - MALAM": 14}
+                  "EVENT - TIPE 1": 18, "EVENT - TIPE 2": 23, "EVENT - TIPE 3": 18,
+                  "EVENT - TIPE 4": 21, "EVENT - MALAM": 15}
 
 
 def _katalog(judul):
@@ -132,7 +132,7 @@ LANGKAH_MALAM_HARIAN = ["Urgent Lazada", "Spesial GTL & SiCepat", "Urgent GTL & 
 
 
 def uji_aturan_bisnis_event():
-    pagi_nama = {"SPX Standard Pagi ≤ 12.00 (per lantai)", "SPX Hemat Pagi Spesial",
+    pagi_nama = {"Spesial SPX Standard Pagi ≤ 12.00", "SPX Standard Pagi ≤ 12.00 (per lantai)", "SPX Hemat Pagi Spesial",
                  "SPX Hemat Pagi 1 qty reguler", "SPX Hemat Pagi Kombinasi"}
     for judul in (j for j in alur.PRESET if j in alur.JUDUL_EVENT):
         urut = _urut(judul)
@@ -150,12 +150,17 @@ def uji_aturan_bisnis_event():
         assert (urut[0] == "Recheck stok" and urut[1] == "Sampel TikTok (nilai 0)") == (not malam), judul
         assert ("J&T ≤ 15.00 (Resi Siang)" in urut) == (judul == "EVENT - TIPE 4"), judul
         pagi = [i for i, n in enumerate(urut) if n in pagi_nama]
-        assert len(pagi) == (4 if judul == "EVENT - TIPE 2" else 0), (judul, pagi)
+        assert len(pagi) == (5 if judul == "EVENT - TIPE 2" else 0), (judul, pagi)
         assert not any(alur.flag_non_wajib(judul, n) for n in urut), judul
+        # SPX Standard: spesial SELALU diambil dulu, di SEMUA tipe event (pagi di TIPE 2, seharian di semuanya)
+        assert urut.index("Spesial SPX Standard") + 1 == urut.index("SPX Standard (per lantai)"), judul
+        assert alur.FLAG_EVENT["Spesial SPX Standard"] == ["--spx-standard", "--spesial-saja"]
+        if judul == "EVENT - TIPE 2":
+            assert urut.index("Spesial SPX Standard Pagi ≤ 12.00") + 1 ==                 urut.index("SPX Standard Pagi ≤ 12.00 (per lantai)"), judul
     urut = _urut("EVENT - TIPE 2")
     idx_pagi = [i for i, n in enumerate(urut) if n in pagi_nama]
     harian = [i for i, n in enumerate(urut) if n in ("J&T Spesial", "SPX Hemat Spesial", "SPX Standard (per lantai)")]
-    assert idx_pagi == list(range(idx_pagi[0], idx_pagi[0] + 4)) and min(harian) > max(idx_pagi), \
+    assert idx_pagi == list(range(idx_pagi[0], idx_pagi[0] + 5)) and min(harian) > max(idx_pagi), \
         "Shopee Pagi harus selesai sebelum langkah seharian"
     print("  event: --event pada J&T/Hemat, Shopee Pagi hanya TIPE 2 & mendahului seharian, Resi Siang hanya "
           "TIPE 4, MALAM tanpa recheck/sampel/IRESIS, --lewati-malam sesuai")

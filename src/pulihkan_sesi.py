@@ -67,6 +67,8 @@ def kelas_jenis(nama: str) -> str:
     n = (nama or "").upper()
     if (m := POLA_KURIR_BAGIAN.match(n)):
         return f"{'satuan' if m.group(2).startswith('1QTY') else 'kombinasi'}-{m.group(1)}"
+    if n.startswith("SHOPEE-PAGI-SPX-STANDARD-SPESIAL-"):
+        return "spx-pagi-spesial"
     if n.startswith("SPX-STANDARD"):
         return "spx-standard"
     if n.startswith("1QTY-REGULER"):
