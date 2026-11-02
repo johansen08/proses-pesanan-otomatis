@@ -203,6 +203,22 @@ def uji_total_picklist_banyak_halaman():
     assert hasil == {158001: 2}, hasil
 
 
+def uji_perbaiki_marketplace():
+    import zipfile
+    f = Path(tempfile.mkdtemp()) / "faktur.xlsx"
+    with zipfile.ZipFile(f, "w") as z:
+        z.writestr("xl/sharedStrings.xml", "<sst><si><t>Shop | Tokopedia</t></si>"
+                   "<si><t>TOKOPEDIA</t></si></sst>")
+        z.writestr("xl/worksheets/sheet1.xml", "<worksheet/>")
+    assert iresis.perbaiki_marketplace(f) == 1
+    with zipfile.ZipFile(f) as z:
+        ss = z.read("xl/sharedStrings.xml").decode()
+        assert "<t>Tiktok</t>" in ss and "Shop |" not in ss and "<t>TOKOPEDIA</t>" in ss, ss
+        assert z.read("xl/worksheets/sheet1.xml") == b"<worksheet/>"
+    assert iresis.perbaiki_marketplace(f) == 0        # sudah benar -> tak diubah
+    assert iresis.perbaiki_marketplace(_xlsx()) == 0  # bukan zip valid -> dibiarkan
+
+
 if __name__ == "__main__":
     for nama, fn in sorted(globals().items()):
         if nama.startswith("uji_"):

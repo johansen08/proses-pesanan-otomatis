@@ -27,6 +27,7 @@ server; kalau kosong verifikasi SSL dimatikan karena sertifikat server lokal sel
 import logging
 import os
 import time
+import zipfile
 from datetime import date, datetime
 from pathlib import Path
 
@@ -145,8 +146,45 @@ def tunggu_selesai(sesi: requests.Session, token: str, timeout: int = 30,
         tidur(JEDA_PROGRES_S)
 
 
+# Jubelio menamai marketplace TikTok Shop "Shop | Tokopedia" di kolom MARKETPLACE; IRESIS
+# menyimpannya apa adanya sebagai "Tokopedia" (salah) - harus "Tiktok".
+NAMA_MARKETPLACE_JUBELIO_TIKTOK = "Shop | Tokopedia"
+NAMA_MARKETPLACE_IRESIS_TIKTOK = "Tiktok"
+
+
+def perbaiki_marketplace(file: Path) -> int:
+    """Ganti "Shop | Tokopedia" jadi "Tiktok" di xlsx `file` (langsung di zip, hanya sharedStrings
+    dan sheet, jadi cepat dan format lain utuh). Mengembalikan jumlah penggantian; file bukan
+    xlsx valid / tanpa nilai itu dibiarkan (0)."""
+    lama = NAMA_MARKETPLACE_JUBELIO_TIKTOK.encode("utf-8")
+    baru = NAMA_MARKETPLACE_IRESIS_TIKTOK.encode("utf-8")
+    try:
+        with zipfile.ZipFile(file) as z:
+            isi = {i.filename: z.read(i.filename) for i in z.infolist()}
+            info = z.infolist()
+    except zipfile.BadZipFile:
+        return 0
+    jumlah = 0
+    for nama, data in isi.items():
+        if nama.startswith("xl/") and nama.endswith(".xml") and lama in data:
+            jumlah += data.count(lama)
+            isi[nama] = data.replace(lama, baru)
+    if not jumlah:
+        return 0
+    sementara = file.with_name(file.name + ".tmp")
+    with zipfile.ZipFile(sementara, "w", zipfile.ZIP_DEFLATED) as z:
+        for i in info:
+            z.writestr(i.filename, isi[i.filename])
+    os.replace(sementara, file)
+    return jumlah
+
+
 def unggah(file: Path, username: str, password: str) -> str:
     """Alur lengkap: login -> upload -> tunggu selesai. Mengembalikan ringkasan hasil."""
+    n = perbaiki_marketplace(file)
+    if n:
+        log.info("IRESIS: marketplace '%s' diganti '%s' (%d sel)",
+                 NAMA_MARKETPLACE_JUBELIO_TIKTOK, NAMA_MARKETPLACE_IRESIS_TIKTOK, n)
     sesi = login(username, password)
     hasil = upload_faktur(sesi, file)
     token = (hasil.get("data") or {}).get("token")
