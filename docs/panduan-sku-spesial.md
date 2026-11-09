@@ -104,6 +104,10 @@ Lalu:
    `per_sku` dihitung. Resinya tidak masuk `resi_per_sku`/`resi_spesial_semua`, sehingga otomatis
    mengalir ke jalur "sisa reguler" (`proses_label.pisah_reguler()`) dan — karena masing-masing
    tetap 1 SKU qty 1 — berakhir sebagai picklist **SATUAN** (subfolder `SATUAN`), bukan SPESIAL.
+5b. **SKU berawalan `BM-MK` juga dikecualikan** (permintaan tim 09-11-2026, mis. `BM-MK01`,
+   `BM-MK02`, `BM-MK02A`), **kecuali** awalan `BM-MKB` (mis. `BM-MKB02`) yang tetap boleh spesial.
+   Pengecualian-dari-pengecualian ada di `AWALAN_SKU_BOLEH_SPESIAL`; semua jalur (Excel, `items-to-pick`,
+   pilah satuan) memakai `sku_dikecualikan_spesial()` di `sku_spesial.py`.
 6. **Spesial dari penggabungan satuan beberapa sesi** (`src/pilah_satuan.py`, tab "Pilah") memakai
    syarat yang SAMA dengan spesial biasa (15-10-2026; sebelumnya SKU `C225-UB` dan bundle ikut
    terhitung): kurir J&T/SPX, awalan `C225-UB` dikecualikan (`AWALAN_SKU_DIKECUALIKAN_SPESIAL`),

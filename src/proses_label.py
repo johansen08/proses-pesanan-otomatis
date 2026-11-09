@@ -103,8 +103,8 @@ import peringatan_gagal
 import peringatan_picklist
 import peringatan_resi
 import rekap_master_excel
-from sku_spesial import (AWALAN_JNT_NDD, AWALAN_KOMPONEN_DIABAIKAN, AWALAN_SKU_DIKECUALIKAN_SPESIAL,
-                         KURIR_DIIZINKAN, MIN_RESI)
+from sku_spesial import (AWALAN_JNT_NDD, AWALAN_KOMPONEN_DIABAIKAN, KURIR_DIIZINKAN, MIN_RESI,
+                         sku_dikecualikan_spesial)
 
 # Host server report (Telerik) Jubelio, urut dari yang dicoba PERTAMA. report.jubelio.com lebih
 # stabil; report-prod.jubelio.com (host bawaan URL dari API Jubelio) sering bermasalah (410/504/
@@ -892,14 +892,13 @@ def pisah_spesial_per_sku(k: Klien, pesanan: list[dict]) -> tuple[dict[str, list
     except Exception as e:      # noqa: BLE001 - spesial hanya tambahan, lantai tetap jalan
         log.warning("  Gagal cek SKU spesial GTL-SiCepat (%s) - semua pesanan dipecah per lantai", e)
         return {}, pesanan
-    awalan = tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL)
     per_sku: dict[str, list[dict]] = {}
     for o in kandidat:
         xs = per_so.get(o["salesorder_id"], [])
         if len(xs) != 1 or xs[0].get("bundle_item_id") or _angka(xs[0].get("qty_ordered")) != 1:
             continue
         sku = _sku_item(xs[0])
-        if sku and not sku.upper().startswith(awalan):
+        if sku and not sku_dikecualikan_spesial(sku):
             per_sku.setdefault(sku, []).append(o)
     layak = [s for s in per_sku if len(per_sku[s]) >= MIN_RESI]
     rak = _rak_per_sku(k, layak)

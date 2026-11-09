@@ -42,7 +42,7 @@ from pypdf import PdfReader, PdfWriter
 import kurasi_satuan
 import nama_sesi as pola_sesi
 import proses_label
-from sku_spesial import AWALAN_SKU_DIKECUALIKAN_SPESIAL, KURIR_DIIZINKAN, MIN_RESI
+from sku_spesial import KURIR_DIIZINKAN, MIN_RESI, sku_dikecualikan_spesial
 
 ROOT = Path(__file__).resolve().parent.parent
 FOLDER_LABEL = ROOT / "label-pengiriman"
@@ -200,7 +200,7 @@ def _angka(v) -> float:
 
 def sku_dikecualikan(sku: str) -> bool:
     """Awalan SKU yang tidak pernah jadi spesial (sama dengan spesial biasa, mis. C225-UB)."""
-    return str(sku or "").upper().startswith(tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL))
+    return sku_dikecualikan_spesial(sku)
 
 
 def item_picklist(k, nomor: int) -> list[dict]:

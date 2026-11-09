@@ -48,7 +48,21 @@ KURIR_KECUALI_HITUNG = {"jnt-event": AWALAN_JNT_NDD}
 # "C225-UB11-1"/"C225-UB11-2"/"C225-UB10-1" ikut dikecualikan. Resinya tetap mengalir ke jalur
 # "satuan" (1qty reguler) lewat pisah_reguler() di proses_label.py, karena tidak termasuk
 # resi_spesial_semua (kondisi khusus tim, 06-10-2026).
-AWALAN_SKU_DIKECUALIKAN_SPESIAL = ("C225-UB",)
+#
+# "BM-MK" (mis. BM-MK01, BM-MK02, BM-MK02A) juga dikecualikan (permintaan tim 09-11-2026), TETAPI
+# awalan yang lebih spesifik di AWALAN_SKU_BOLEH_SPESIAL tetap boleh jadi spesial: "BM-MKB"
+# (mis. BM-MKB02) boleh, sedangkan BM-MK02 tidak. Selalu pakai sku_dikecualikan_spesial().
+AWALAN_SKU_DIKECUALIKAN_SPESIAL = ("C225-UB", "BM-MK")
+AWALAN_SKU_BOLEH_SPESIAL = ("BM-MKB",)
+
+
+def sku_dikecualikan_spesial(sku) -> bool:
+    """True kalau SKU tidak boleh jadi spesial (awalan di AWALAN_SKU_DIKECUALIKAN_SPESIAL, kecuali
+    ada pengecualian di AWALAN_SKU_BOLEH_SPESIAL). Tidak peka huruf besar/kecil."""
+    s = str(sku or "").strip().upper()
+    if s.startswith(tuple(a.upper() for a in AWALAN_SKU_BOLEH_SPESIAL)):
+        return False
+    return s.startswith(tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL))
 
 
 # ---------------------------------------------------------------- 1. baca data
@@ -271,8 +285,7 @@ def hitung_sku_spesial(df: pd.DataFrame, nilai_pesanan: dict[str, float] | None 
         resi_tanpa_nilai = int(nilai.isna().sum())
 
     # lihat AWALAN_SKU_DIKECUALIKAN_SPESIAL
-    f4 = f4[~f4["SKU"].astype(str).str.upper().str.startswith(
-        tuple(a.upper() for a in AWALAN_SKU_DIKECUALIKAN_SPESIAL))]
+    f4 = f4[~f4["SKU"].map(sku_dikecualikan_spesial).astype(bool)]
 
     per_sku = f4.groupby("SKU").size().rename("Jumlah Resi").reset_index()
     rak_per_sku = f4.groupby("SKU")["Rak"].agg(_rak_dominan).rename("No Rak").reset_index()

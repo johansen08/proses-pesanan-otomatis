@@ -240,6 +240,23 @@ def uji_sku_dikecualikan_tidak_pernah_spesial():
           "masing-masing (SKU lain tetap dihitung normal)")
 
 
+def uji_sku_bm_mk_dikecualikan_kecuali_bm_mkb():
+    # BM-MK* (BM-MK01, BM-MK02, BM-MK02A, ...) tidak boleh spesial; BM-MKB* (BM-MKB02) boleh
+    df = (
+        [(f"A{i}", "BM-MK02", 1, "SPX Hemat") for i in range(5)]
+        + [(f"B{i}", "BM-MK02A", 1, "J&T Express Hemat") for i in range(5)]
+        + [(f"C{i}", "bm-mk11", 1, "SPX Hemat") for i in range(5)]
+        + [(f"D{i}", "BM-MKB02", 1, "SPX Hemat") for i in range(3)]
+        + [(f"E{i}", "BM-AKS28-5", 1, "SPX Hemat") for i in range(3)]
+    )
+    tabel, ringkasan = ss.hitung_sku_spesial(_df(df))
+    assert sorted(tabel["SKU"]) == ["BM-AKS28-5", "BM-MKB02"], tabel
+    for sku in ("BM-MK02", "BM-MK02A", "bm-mk11"):
+        assert sku not in ringkasan["resi_per_sku"], sku
+    assert ss.sku_dikecualikan_spesial("BM-MK01") and not ss.sku_dikecualikan_spesial("BM-MKB02")
+    print("  BM-MK*: dikecualikan dari spesial, BM-MKB* (mis. BM-MKB02) tetap boleh")
+
+
 def uji_min_resi_tepat_batas():
     df2 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(2)])
     df3 = _df([(f"R{i}", "X", 1, "SPX Hemat") for i in range(3)])
